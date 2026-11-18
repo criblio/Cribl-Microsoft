@@ -1287,6 +1287,14 @@ or REST collector, is `source.manage`.
 > security API may refuse an unlicensed tenant; one token re-mint per audit; the
 > probe operations sit in a `feature` function, not the core permission check;
 > and the enabler fallbacks name no role the generated request leaves out.
+> REVIEW R3 (2026-11-18, pins): the one-mint budget now also covers the mint a
+> probe makes on a fresh page load (that token is never re-minted on its own
+> 401/403), so the stated cost - at most one mint and three GETs - holds. Two
+> limits recorded for AZR-4: `policy.assign` is measured at the SUBSCRIPTION and
+> proves nothing about a management-group assignment, and the three enablers
+> are not the complete set - the assignment identity's role grants need
+> `role.assign`, and a user-assigned identity reference probably needs
+> `userAssignedIdentities/assign/action` (CAP-12, unconfirmed).
 
 > AZR-12 VERDICT 2026-10-21 (decided by reading code in the AZR-18 design
 > workflow, so verified none): EXTEND the existing Event Hub surface; do not build

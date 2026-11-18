@@ -264,7 +264,10 @@ const FUNCTIONS = [
   },
   // PLANNED (AZR-4): nothing performs this yet. Listed so the CAP-2 / CAP-3
   // writes the capability model measures ahead of the feature are not orphan
-  // facts; no change request asks for them until the feature ships.
+  // facts; no change request asks for them until the feature ships. NOT the
+  // complete set AZR-4 needs: granting the assignment identity its roles is a
+  // role-assignment write, and referencing a user-assigned identity probably
+  // needs userAssignedIdentities/assign/action (CAP-12; see enabler-actions).
   {
     id: "policy-logging",
     label: "Assign the Azure Policy logging initiatives and remediate existing resources",

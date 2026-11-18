@@ -192,10 +192,15 @@ export async function subscriptionScopeVerdicts(
  * other 403 nothing (AZR-111). A shell whose GraphDirectory has no probe, or
  * no GraphDirectory at all, records nothing; so does a probe that rejects.
  *
- * COST per audit that runs: two Graph GETs when both are answered first time;
- * a refused probe (401/403) re-mints the token and retries, so at most ONE
- * token mint (a token request plus a KV write) and THREE Graph GETs - the
- * re-mint is allowed only until one probe in this audit has spent it.
+ * COST per audit that runs: two Graph GETs when both are answered first time.
+ * At most ONE token mint (a token request plus a KV write) and THREE Graph
+ * GETs, because every mint counts against one per-audit budget: the mint the
+ * adapter makes before the first GET when it holds no token for this tenant
+ * (every fresh page load, after a secret is written, after a tenant switch)
+ * is reported as `reminted` and never followed by a 401/403 re-mint of its
+ * own; a refused probe on a token held from earlier re-mints and retries
+ * once. Either way the re-mint is allowed only until one probe in this audit
+ * has spent it. (Review r2: a fresh page load used to cost two mints.)
  */
 export async function graphPermissionVerdicts(
   graph: GraphDirectory | undefined,

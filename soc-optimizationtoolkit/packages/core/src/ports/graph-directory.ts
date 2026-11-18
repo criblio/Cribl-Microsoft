@@ -97,6 +97,11 @@ export type GraphPermissionProbe = "subscribed-skus" | "security-incidents";
 export interface GraphProbeResponse {
   status: number;
   body: unknown;
-  /** True when the adapter re-minted the token before this answer. */
+  /**
+   * True when the adapter minted the Graph token for this probe - before its
+   * first GET (no token for this tenant was held) or as the 401/403 retry -
+   * so the answer already reflects current consent and the audit spends its
+   * one-mint budget on it.
+   */
   reminted?: boolean;
 }

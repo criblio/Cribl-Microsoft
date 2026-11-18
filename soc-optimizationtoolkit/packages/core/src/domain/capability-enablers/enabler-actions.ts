@@ -5,11 +5,22 @@
  * backlog.md 6h decided (2026-08-12) to add capabilities and their
  * measurements before the Azure onboarding features that use them, so the
  * nav and the How-to can say what an identity can do the day the feature
- * lands. The Azure Policy logging initiatives (6a, AZR-4) need three writes:
- * assign the initiative, start a remediation task for the resources that
- * existed before it (DeployIfNotExists acts only on NEW resources), and create
- * the user-assigned managed identity every DeployIfNotExists assignment runs
- * as.
+ * lands. The Azure Policy logging initiatives (6a, AZR-4) need at least these
+ * three writes: assign the initiative, start a remediation task for the
+ * resources that existed before it (DeployIfNotExists acts only on NEW
+ * resources), and create the user-assigned managed identity every
+ * DeployIfNotExists assignment runs as.
+ *
+ * NOT THE COMPLETE SET. Outside the portal the assignment's identity must be
+ * granted the definition's roleDefinitionIds by hand (Microsoft Learn,
+ * "Remediate non-compliant resources"), which is
+ * Microsoft.Authorization/roleAssignments/write - the existing `role.assign`
+ * capability, not an enabler here. Referencing a user-assigned identity on the
+ * assignment probably also needs
+ * Microsoft.ManagedIdentity/userAssignedIdentities/assign/action (Managed
+ * Identity Operator), which Managed Identity Contributor does not carry -
+ * unconfirmed, carded as CAP-12. Reading these three as granted does not mean
+ * AZR-4 can run.
  *
  * WHY THESE ARE NOT IN REQUIRED_ACTIONS. That table lists only actions the app
  * calls ("the list is not aspirational"), and it is what the RBAC preflight

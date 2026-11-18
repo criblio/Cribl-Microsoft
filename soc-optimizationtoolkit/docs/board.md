@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**101 in the backlog, 39 in progress, 228 done.**
+**102 in the backlog, 39 in progress, 228 done.**
 
 ## By menu item
 
@@ -34,7 +34,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Labs | 2 | 3 | 1 |
 | Data Volume Inventory | 4 | 22 | 1 |
 | SIEM Migration | 1 | 8 | 1 |
-| Permission Verification | 7 | 9 | 0 |
+| Permission Verification | 8 | 9 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
 | Azure Native Source Onboarding | 32 | 51 | 8 |
 | Azure Logging Map | 3 | 2 | 1 |
@@ -42,7 +42,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 140.
+Open work totals 141.
 
 ## Epics and features
 
@@ -101,13 +101,13 @@ Maintaining a pack after it is built, including a silent data-loss defect
 |---|---|---|---|
 | `PK-F1` Pack maintenance parity | Pack Maintenance | 0/3 | PK-1, PK-2, D-6 |
 
-### `CAP` Capability taxonomy extension _(enabler)_ - 44% (4/9)
+### `CAP` Capability taxonomy extension _(enabler)_ - 40% (4/10)
 
 ENABLER EPIC: exists to unblock other work rather than to deliver on its own. Its capabilities and probes are what the Azure onboarding epic waits on
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `CAP-F1` Capability taxonomy extension | Permission Verification | 4/9 | CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-8, CAP-11, CAP-7 |
+| `CAP-F1` Capability taxonomy extension | Permission Verification | 4/10 | CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-8, CAP-11, CAP-12, CAP-7 |
 
 ### `REL` Ship what is built _(enabler)_ - 0% (0/2)
 
@@ -2421,7 +2421,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (40)
+## Backlog - later (41)
 
 Settled, gated on something above.
 
@@ -2437,6 +2437,24 @@ Settled, gated on something above.
   mapping rule records only measurements), and the [[AZR-19]] route requires
   it.
 
+- **CAP-12** Confirm and measure the managed-identity assign action a policy assignment needs
+  `CAP-F1` `enabler` `settled`
+  FOUND 2026-11-18 in review r2 of CAP-2..CAP-5. Assigning a DeployIfNotExists
+  initiative that references a user-assigned managed identity probably
+  requires Microsoft.ManagedIdentity/userAssignedIdentities/assign/action on
+  that identity (least role Managed Identity Operator). Managed Identity
+  Contributor, the least role CAP-3 measures for creating the identity, does
+  not carry it, so an operator whose policy.assign, policy.remediate and
+  identity.create all read granted could still see the assignment PUT fail.
+  TODO: (1) confirm against Microsoft Learn (Azure Policy remediation and
+  managed identity docs) or a live assignment that ARM checks assign/action
+  when a policy assignment names a user-assigned identity; (2) if it does, add
+  a registry operation and an identity.assign capability, measured grant-only
+  like identity.create (the identity lives in an operator-chosen resource
+  group), add it to the planned policy-logging function, and keep it out of
+  every change request until AZR-4 calls it. Gates AZR-4. Not a defect in
+  shipped behaviour: nothing assigns a policy today.
+
 - **AZR-8** Blob-only sources as visible unavailable rows
   `AZR-F6` `story` `settled`
   vNet and NSG Flow Logs have no Event Hub path; the blob path already exists
@@ -2448,14 +2466,33 @@ Settled, gated on something above.
   licating them. Natural place to surface WIN. `backlog.md#6f`.
 
 - **AZR-4** Azure Policy initiatives - the bulk of the platform
-  `AZR-F2` `story` `settled`
+  `AZR-F2` `story` `settled` `blocked by CAP-12`
   Built-in Audit or AllLogs (one or the other), eight community tiers with a
   per-service expander, plus Activity Log, AKS and PostgreSQLFlexible as
   visible checkboxes because the bundled initiative excludes them silently.
   DeployIfNotExists fires only for new resources, so bulk remediation is
   mandatory. Compliance data lags 15-30 minutes, so a fresh deployment reads
   as non-compliant and the UI has to say why rather than look broken. No
-  policy modelling exists in the repo today. `backlog.md#6a`.
+  policy modelling exists in the repo today. `backlog.md#6a`. CAPABILITY
+  LIMITS (recorded 2026-11-18, CAP-2/CAP-3 review r3). (1) policy.assign and
+  policy.remediate are measured at the configured SUBSCRIPTION, from its
+  effective actions; the registry operations are scoped managementGroup. A
+  miss there is a denial at the subscription and every management group above
+  it, but a GRANT there proves nothing about a management group. Before
+  assigning at a management group, AZR-4 must evaluate that scope itself (or
+  record the subscription grant as unmeasured for an MG-scoped assignment, as
+  the AZR-85 unmeasured rule does for a read taken at the wrong scope) -
+  otherwise the nav reads granted and the assignment answers 403. (2) The
+  CAP-2/CAP-3 enablers are NOT the complete set. Outside the portal the
+  assignment's managed identity must be granted the definition's
+  roleDefinitionIds by hand (Microsoft Learn, Azure Policy "Remediate
+  non-compliant resources"): that is
+  Microsoft.Authorization/roleAssignments/write, the existing role.assign
+  capability, and the policy-logging function in least-privilege functions.ts
+  must gain a role-assignment operation when this is built. Referencing a
+  user-assigned identity on the assignment probably also needs
+  userAssignedIdentities/assign/action (Managed Identity Operator), which
+  Managed Identity Contributor does not carry - CAP-12.
 
 - **AZR-5** Diagnostic-settings cleanup, preview only
   `AZR-F2` `story` `settled`
@@ -2991,25 +3028,34 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   (domain/capability-enablers). Writes are never probed: the background
   capability audit evaluates them at the SUBSCRIPTION in the same single
   permissions read that already measures the Defender actions on existing-rg
-  (capability-audit subscriptionScopeVerdicts), so they cost no request.
-  Two-sided there: a management group's grants are inherited and visible at
-  the subscription, so a miss is a denial at the subscription and above it; a
-  grant at the subscription proves nothing about a management group, which
-  AZR-4 must evaluate itself when it assigns there. Not in REQUIRED_ACTIONS
-  (nothing calls them) and asked for by no change request until AZR-4 ships
-  (pinned). Fallback: a role-assignment request naming Resource Policy
-  Contributor. NOT VERIFIED LIVE: one audit against an identity holding
-  Resource Policy Contributor at the subscription (granted) and one with plain
-  Contributor (policy.assign denied, policy.remediate granted). REVIEW R1
-  2026-11-17 (pins): the enablers are now measured on EVERY setup path, not
-  only existing-rg - on the subscription-scope paths (existing-subscription,
-  lab-new-rg-subscription) against the preflight's own subscription read
-  (report.azure.scopePermissions, no extra request), on lab-byo-rg by the same
-  single subscription GET as existing-rg. The fallback no longer names
-  Resource Policy Contributor, because the role-assignment request generated
-  today is the setup path's and leaves it out (pinned: no role-assignment
-  fallback names a role no setup path's request contains); AZR-4 adds the role
-  to the request and the name to the offer together.
+  (capability-audit subscriptionScopeVerdicts), so they cost no request
+  [SUPERSEDED by REVIEW R1 below: measured on every setup path, and lab-byo-rg
+  spends one subscription GET]. Two-sided there: a management group's grants
+  are inherited and visible at the subscription, so a miss is a denial at the
+  subscription and above it; a grant at the subscription proves nothing about
+  a management group, which AZR-4 must evaluate itself when it assigns there.
+  Not in REQUIRED_ACTIONS (nothing calls them) and asked for by no change
+  request until AZR-4 ships (pinned). Fallback: a role-assignment request
+  naming Resource Policy Contributor [SUPERSEDED by REVIEW R1 below: the
+  fallback names no role]. NOT VERIFIED LIVE: one audit against an identity
+  holding Resource Policy Contributor at the subscription (granted) and one
+  with plain Contributor (policy.assign denied, policy.remediate granted).
+  REVIEW R1 2026-11-17 (pins): the enablers are now measured on EVERY setup
+  path, not only existing-rg - on the subscription-scope paths
+  (existing-subscription, lab-new-rg-subscription) against the preflight's own
+  subscription read (report.azure.scopePermissions, no extra request), on
+  lab-byo-rg by the same single subscription GET as existing-rg. The fallback
+  no longer names Resource Policy Contributor, because the role-assignment
+  request generated today is the setup path's and leaves it out (pinned: no
+  role-assignment fallback names a role no setup path's request contains);
+  AZR-4 adds the role to the request and the name to the offer together.
+  REVIEW R3 2026-11-18 (prose): the bracketed SUPERSEDED markers above point
+  at the R1 note, which is the current behaviour. Two limits are now recorded
+  on AZR-4, where they will be picked up: policy.assign is measured at the
+  SUBSCRIPTION (the registry operation is scoped managementGroup), so a
+  subscription grant does not cover a management-group assignment; and these
+  enablers are not the complete set the initiatives need (role.assign, and
+  CAP-12).
 
 - **CAP-3** Add managed-identity creation plus probe
   `CAP-F1` `enabler` `settled` `verified: pins`
@@ -3066,15 +3112,17 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   /v1.0/subscribedSkus?$select=skuId and GET /v1.0/security/incidents?$top=1,
   same shared slot and single re-mint on 401/403 as the other Graph reads).
   Core decides (graphProbeVerdict): a 2xx with a row in value is granted, a
-  403 denied, and an empty 200 records NOTHING, per AZR-111 - the refusal
-  shape is unsettled and a tenant can have no incidents. 401/404/429/5xx and a
-  rejected probe record nothing. Organization.Read.All is kept in the sense
-  that it also satisfies the subscribedSkus probe, but no ticket asks for it:
-  LicenseAssignment.Read.All, already asked for the data allowances, is the
-  least privilege for the same read. New registry operation
+  403 denied [SUPERSEDED by REVIEW R1 below: only a 403 whose error code is
+  Authorization_RequestDenied], and an empty 200 records NOTHING, per AZR-111
+  - the refusal shape is unsettled and a tenant can have no incidents.
+  401/404/429/5xx and a rejected probe record nothing. Organization.Read.All
+  is kept in the sense that it also satisfies the subscribedSkus probe, but no
+  ticket asks for it: LicenseAssignment.Read.All, already asked for the data
+  allowances, is the least privilege for the same read. New registry operation
   graph.securityIncidents.read (SecurityIncident.Read.All).
   SecurityEvents.Read.All is asked for nowhere (pinned). Two Graph GETs per
-  audit that runs; none when the cached audit is reused. graph.microsoft.com
+  audit that runs; none when the cached audit is reused [SUPERSEDED by REVIEW
+  R1 and R3 below: up to three GETs and one token mint]. graph.microsoft.com
   was already in proxies.yml (no path allowlist); its comment now names the
   probes. NOT VERIFIED LIVE: the probes' answers in a tenant with and without
   each consent - which also measures part of AZR-111's open refusal shape for
@@ -3089,11 +3137,24 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   and the audit now allows that re-mint once per audit
   (GraphProbeOptions.remint), so at most one token mint (token request + KV
   write) and three Graph GETs per audit that runs, none when the cached audit
-  is reused. (3) The probe operations moved to the feature-necessity
+  is reused [CORRECTED by REVIEW R3 below: as built in R1 a fresh page load
+  cost two mints]. (3) The probe operations moved to the feature-necessity
   capability-probes function (see CAP-4). NOT VERIFIED LIVE (added): the 403
   body and error code of GET /v1.0/security/incidents without
   SecurityIncident.Read.All, and with it consented in a tenant without a
-  Defender XDR licence.
+  Defender XDR licence. REVIEW R3 2026-11-18 (pins): the R1 cost claim was
+  wrong - the adapter's ensureGraph mints before the first GET whenever the
+  slot holds no Graph token for this tenant (every fresh page load, after
+  noteSecretWritten, after a tenant switch), and that mint sat outside the
+  audit's re-mint budget, so a fresh audit whose first probe was refused cost
+  two mints and three GETs, the second mint repeating one made milliseconds
+  earlier. Fixed: credential-slot ensureGraph resolves whether it minted;
+  probePermission never re-mints a token it minted for that probe and reports
+  it as reminted, so the audit's one-mint budget covers it. The stated cost
+  now holds: at most one mint and three GETs (two GETs and one mint on a fresh
+  page load). Pinned in adapters.test (fresh slot +
+  Authorization_RequestDenied 403: one mint, one GET, reminted true),
+  mutation-checked.
 
 - **HON-6** Give the audit's AGE a home and add a manual re-check
   `HON-F1` `story` `settled` `verified: both`

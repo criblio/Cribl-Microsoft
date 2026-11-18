@@ -335,10 +335,20 @@ describe("PlatformGraphDirectory.probePermission (CAP-5)", () => {
       .filter((c) => (c[1] as RequestInit | undefined)?.method === "GET")
       .map((c) => c[0] as string);
 
+  /** A directory whose slot already holds this tenant's Graph token. */
+  async function warmed() {
+    const dir = directory();
+    script({ status: 200, body: { value: [{ id: "1" }] } });
+    await dir.probePermission("subscribed-skus");
+    fetchWithTimeout.mockClear();
+    return dir;
+  }
+
   it("sends the smallest read for each probe and returns the answer uninterpreted", async () => {
+    const dir = await warmed();
     script({ status: 200, body: { value: [] } }, { status: 200, body: { value: [{ id: "1" }] } });
-    expect(await directory().probePermission("subscribed-skus")).toEqual({ status: 200, body: { value: [] } });
-    expect(await directory().probePermission("security-incidents")).toEqual({
+    expect(await dir.probePermission("subscribed-skus")).toEqual({ status: 200, body: { value: [] } });
+    expect(await dir.probePermission("security-incidents")).toEqual({
       status: 200,
       body: { value: [{ id: "1" }] },
     });
@@ -346,10 +356,31 @@ describe("PlatformGraphDirectory.probePermission (CAP-5)", () => {
   });
 
   it("re-mints once on a 403 and returns the second answer, still a 403 when consent is missing", async () => {
+    const { acquireGraphToken } = await import("./http");
+    const mints = vi.mocked(acquireGraphToken);
+    const dir = await warmed();
+    mints.mockClear();
     script({ status: 403, body: {} }, { status: 403, body: { error: { code: "Forbidden" } } });
-    const result = await directory().probePermission("security-incidents");
-    expect(gets()).toHaveLength(2);
+    const result = await dir.probePermission("security-incidents");
+    expect(gets()).toEqual([URLS["security-incidents"], URLS["security-incidents"]]);
+    expect(mints).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ status: 403, body: { error: { code: "Forbidden" } }, reminted: true });
+  });
+
+  it("never re-mints a token it minted for this probe, and says it minted (review r2)", async () => {
+    const { acquireGraphToken } = await import("./http");
+    const mints = vi.mocked(acquireGraphToken);
+    mints.mockClear();
+    // Fresh page load: the slot holds no Graph token for this tenant.
+    script({ status: 403, body: { error: { code: "Authorization_RequestDenied" } } }, { status: 200, body: {} });
+    const result = await directory().probePermission("subscribed-skus");
+    expect(mints).toHaveBeenCalledTimes(1);
+    expect(gets()).toEqual([URLS["subscribed-skus"]]);
+    expect(result).toEqual({
+      status: 403,
+      body: { error: { code: "Authorization_RequestDenied" } },
+      reminted: true,
+    });
   });
 
   it("does not re-mint when told not to: one GET, no token request (review r1)", async () => {
