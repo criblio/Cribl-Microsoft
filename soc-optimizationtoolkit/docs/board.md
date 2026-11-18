@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**109 in the backlog, 33 in progress, 239 done.**
+**107 in the backlog, 35 in progress, 239 done.**
 
 ## By menu item
 
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (33)
+## In progress (35)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -968,6 +968,40 @@ Started. Anything here with an unfinished dependency is called out on its card.
   management group returns full ids) are recorded and closed HERE, with
   verified live or both. [[AZR-112]] points here and does not repeat them.
 
+- **AZR-121** The Activity Log setting's Remove disappears once the Activity Log is switched to How-to, so a setting the app created can no longer be removed from the app
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-17 while building [[AZR-99]]. AZR-105 put the Activity Log
+  diagnostic setting's Remove inside ActivityLogSection, and the screen
+  renders that section only while deployBlockView answers `deploy`: once the
+  Activity Log is chosen in How-to mode the section is replaced by the How-to
+  note (and when unchosen in How-to mode by nothing), so the Remove of a
+  setting the app recorded writing (progress.activityLogSettings) is no longer
+  offered anywhere, although the record and the setting remain. AZR-99 avoided
+  this for Entra ID by putting its Remove in the teardown panel
+  (TeardownPanel's `azure` slot, shown from the record whatever the choice).
+  FIX DIRECTION: move the Activity Log Remove into the same slot (an
+  ActivityLogRemovePanel beside EntraRemovePanel), keyed on the record for the
+  configured subscription, and pin that it is offered with the Activity Log in
+  How-to mode.
+
+- **AZR-122** Activity Log Deploy treats an empty, unverified subscription settings list as ours-absent and PUTs, so a setting of our name the list could not show would be replaced
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-18 in review of [[AZR-99]]. deployActivityLogExport
+  (packages/core/src/usecases/activity-log-export/activity-log-export.ts, step
+  1) classifies ours with classifyOursSetting(settings.listing) and goes
+  straight to the PUT when ours is absent, including when the listing kind is
+  `empty` (a raw ARM list with no rows, which under RBAC is not a measured
+  none). A diagnostic-setting PUT replaces whatever sits at the name, so an
+  identity whose list returns 200 with value: [] while a setting of our name
+  exists would overwrite it, and the app would then record it as its own, so
+  Remove would later delete it. AZR-99 closed the same gap for Entra ID in
+  review round 3 (deployEntraSetting: on an empty list GET ours by name, go on
+  only on a 404, judge a found setting as a listed one, stop at a
+  `setting-read` step otherwise). FIX DIRECTION: the same by-name GET in
+  deployActivityLogExport (buildActivityLogSettingGetRequest exists), with
+  pins for 404 then PUT, found matching -> already-exists, found differing ->
+  present-differs, denied -> stops with nothing written, and a mutation check.
+
 - **AZR-89** The lab TTL Logic App identity is granted Contributor on the lab resource group, where it only reads and deletes the group
   `AZR-F10` `bug` `settled`
   Not now because: Over-granting to an identity that lives only as long as the
@@ -1013,7 +1047,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (15)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1237,40 +1271,6 @@ Next to pick up. Nothing blocks these.
   config-json warning when an imported connectivity value is coerced to full;
   Batch's template-only export is gated on the identity fields, so
   Disconnected cannot reach it from Batch (fallback routing).
-
-- **AZR-121** The Activity Log setting's Remove disappears once the Activity Log is switched to How-to, so a setting the app created can no longer be removed from the app
-  `AZR-F9` `bug` `settled`
-  FOUND 2026-11-17 while building [[AZR-99]]. AZR-105 put the Activity Log
-  diagnostic setting's Remove inside ActivityLogSection, and the screen
-  renders that section only while deployBlockView answers `deploy`: once the
-  Activity Log is chosen in How-to mode the section is replaced by the How-to
-  note (and when unchosen in How-to mode by nothing), so the Remove of a
-  setting the app recorded writing (progress.activityLogSettings) is no longer
-  offered anywhere, although the record and the setting remain. AZR-99 avoided
-  this for Entra ID by putting its Remove in the teardown panel
-  (TeardownPanel's `azure` slot, shown from the record whatever the choice).
-  FIX DIRECTION: move the Activity Log Remove into the same slot (an
-  ActivityLogRemovePanel beside EntraRemovePanel), keyed on the record for the
-  configured subscription, and pin that it is offered with the Activity Log in
-  How-to mode.
-
-- **AZR-122** Activity Log Deploy treats an empty, unverified subscription settings list as ours-absent and PUTs, so a setting of our name the list could not show would be replaced
-  `AZR-F9` `bug` `settled`
-  FOUND 2026-11-18 in review of [[AZR-99]]. deployActivityLogExport
-  (packages/core/src/usecases/activity-log-export/activity-log-export.ts, step
-  1) classifies ours with classifyOursSetting(settings.listing) and goes
-  straight to the PUT when ours is absent, including when the listing kind is
-  `empty` (a raw ARM list with no rows, which under RBAC is not a measured
-  none). A diagnostic-setting PUT replaces whatever sits at the name, so an
-  identity whose list returns 200 with value: [] while a setting of our name
-  exists would overwrite it, and the app would then record it as its own, so
-  Remove would later delete it. AZR-99 closed the same gap for Entra ID in
-  review round 3 (deployEntraSetting: on an empty list GET ours by name, go on
-  only on a 404, judge a found setting as a listed one, stop at a
-  `setting-read` step otherwise). FIX DIRECTION: the same by-name GET in
-  deployActivityLogExport (buildActivityLogSettingGetRequest exists), with
-  pins for 404 then PUT, found matching -> already-exists, found differing ->
-  present-differs, denied -> stops with nothing written, and a mutation check.
 
 - **AZR-117** The Event Hub rule note recommends a Send-only rule while the Activity Log deploy refuses one
   `AZR-F9` `bug` `settled`
