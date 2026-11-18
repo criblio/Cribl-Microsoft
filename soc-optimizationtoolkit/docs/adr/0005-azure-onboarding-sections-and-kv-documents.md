@@ -355,8 +355,12 @@ Appended; nothing above is edited.
   rule with it - and the disabled create-rule button reads "Create Manage
   rule". With the Defender export alone, both are unchanged. The rule is
   still one pick for every source; the note never recommends a rule a chosen
-  source's own deploy refuses. Not measured live: a Send-only PUT of a
-  diagnostic setting has not been tried (AZR-116).
+  source's own deploy refuses. While WHICH sources are chosen is not known
+  (the progress document is loading or could not be read), the note is a
+  neutral one that recommends neither kind of rule, and the button reads
+  "Create authorization rule": an unknown choice is not "none chosen". Not
+  measured live: a Send-only PUT of a diagnostic setting has not been tried
+  (AZR-116).
 - **The Activity Log's subscription actions are measured.** The capability
   audit evaluates Microsoft.Insights/diagnosticSettings read, write and delete
   at the subscription, in the same single read as the Defender actions, as
@@ -364,6 +368,9 @@ Appended; nothing above is edited.
   not grant-only: the setting is an extension resource on the subscription
   itself, so no role below the subscription reaches it. The Activity Log
   section lists each with what the cached check found; read and write are
-  core (a measured denial is the error banner plus a caution beside Deploy,
-  which stays clickable), delete is informational (Remove's). The rule's
+  core (a measured denial is the error banner plus a caution beside Deploy;
+  the check never disables it, and the caution says exactly that rather than
+  "Deploy stays available", because the section's own gate - a settings read
+  that failed, a rule without Manage - can disable Deploy at the same time),
+  delete is informational (Remove's). The rule's
   listKeys stays listed as not measured until CAP-9.

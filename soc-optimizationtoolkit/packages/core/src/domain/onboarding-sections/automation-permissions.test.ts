@@ -187,7 +187,8 @@ describe("automationPermissionView", () => {
     const v = view(audited({ read: "denied" }), CONNECTED, { nowIso: "2026-11-06T10:00:00.000Z" });
     expect(v.banner?.text).toMatch(/^The permission check 3 days ago found/);
     expect(v.deployCaution).toMatch(/^Azure will likely refuse this deploy: the permission check 3 days ago found/);
-    expect(v.deployCaution).toContain("Deploy stays available");
+    expect(v.deployCaution).toContain("This check never disables Deploy; Azure's answer decides.");
+    expect(v.deployCaution).not.toContain("stays available");
     const reason = v.deployCaution ?? "";
     expect(reason.indexOf("Re-check permissions")).toBeGreaterThan(-1);
     expect(reason.indexOf("Re-check permissions")).toBeLessThan(reason.indexOf("How-to"));
@@ -352,7 +353,7 @@ describe("the Activity Log declaration (CAP-10): the subscription actions are me
     );
     expect(v.deployCaution).toBe(
       "Azure will likely refuse this deploy: the last permission check found your Azure identity cannot create the Activity Log " +
-        "diagnostic setting (Microsoft.Insights/diagnosticSettings/write). Deploy stays available because Azure's answer decides. " +
+        "diagnostic setting (Microsoft.Insights/diagnosticSettings/write). This check never disables Deploy; Azure's answer decides. " +
         "Re-check permissions if the role was granted since, or switch it to How-to in section 8.",
     );
   });

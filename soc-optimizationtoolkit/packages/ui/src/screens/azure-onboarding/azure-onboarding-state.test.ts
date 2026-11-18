@@ -74,6 +74,7 @@ import {
   ruleListMessage,
   MANAGE_RULE_SOURCE_IDS,
   createRuleLabel,
+  RULE_NOTE_SOURCES_UNKNOWN,
   ruleNote,
   sourcesNeedingManageRule,
   sendableRules,
@@ -652,6 +653,21 @@ describe("Event Hub picker messages reuse the shared empty-inventory wording", (
       expect(createRuleLabel(sources)).toBe("Create Manage rule");
     });
 
+    it("sources not known (null): one neutral note for every rule, and a label naming no kind", () => {
+      const NEUTRAL =
+        "Which sources are chosen is not known yet, so this note cannot say which rule they need. " +
+        "A source that streams through a diagnostic setting needs a rule with Manage rights; " +
+        "the Defender for Cloud alert export alone does not.";
+      expect(RULE_NOTE_SOURCES_UNKNOWN).toBe(NEUTRAL);
+      for (const rule of [
+        { name: "cribl-send", rights: ["Send"] },
+        { name: "ops", rights: ["Listen", "Manage", "Send"] },
+        { name: "RootManageSharedAccessKey", rights: ["Listen", "Manage", "Send"] },
+      ]) {
+        expect(ruleNote(rule, null)).toEqual({ tone: "info", text: NEUTRAL });
+      }
+      expect(createRuleLabel(null)).toBe("Create authorization rule");
+    });
   });
 });
 

@@ -305,6 +305,10 @@ export interface AutomationPermissionView {
    * Shown beside Deploy for a measured denial of a core capability; null
    * otherwise. A caution, never a block: Deploy stays clickable and Azure's
    * own answer at the write is what decides (operator decision 2026-11-03).
+   * The copy says the CHECK never disables Deploy, not that Deploy is
+   * available: the section's own gate (a rule without Manage, a settings read
+   * that failed) can disable it at the same time, and the caution renders
+   * beside that reason.
    */
   readonly deployCaution: string | null;
 }
@@ -434,7 +438,7 @@ export function automationPermissionView(input: AutomationPermissionInput): Auto
       },
       deployCaution:
         `Azure will likely refuse this deploy: ${check} found your Azure identity cannot ${does} (${actions}). ` +
-        `Deploy stays available because Azure's answer decides. Re-check permissions if the role was ` +
+        `This check never disables Deploy; Azure's answer decides. Re-check permissions if the role was ` +
         `granted since, or switch it to How-to in section ${howtoSection}.`,
     };
   }

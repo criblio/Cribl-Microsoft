@@ -641,7 +641,12 @@ export function AzureOnboardingScreen({
     [progress, selection],
   );
   // AZR-117: the rule note and create-rule label follow the chosen sources.
-  const manageSources = useMemo(() => sourcesNeedingManageRule(chosen), [chosen]);
+  // `chosen` is [] while progress is not loaded, which is NOT "nothing chosen":
+  // null tells the section the choice is unknown, so it recommends no rule.
+  const manageSources = useMemo(
+    () => (progress === null ? null : sourcesNeedingManageRule(chosen)),
+    [progress, chosen],
+  );
   const subSelectionOf = useCallback(
     (id: OnboardingSourceId): readonly string[] => selection?.subSelections[id] ?? [],
     [selection],

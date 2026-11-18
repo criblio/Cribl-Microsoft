@@ -98,8 +98,10 @@ export interface EventHubPrerequisiteSectionProps {
    * The titles of the chosen sources whose diagnostic setting needs a Manage
    * rule (sourcesNeedingManageRule). Drives the rule note and the create-rule
    * label, so neither recommends a rule a chosen source's deploy refuses.
+   * Null when which sources are chosen is not known (progress not loaded):
+   * the note and the label then recommend neither kind.
    */
-  manageSources?: readonly string[];
+  manageSources?: readonly string[] | null;
 }
 
 const NO_SOURCES: readonly string[] = [];

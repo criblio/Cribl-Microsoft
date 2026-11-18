@@ -880,6 +880,32 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
     expect(screen.queryByText(/safer/)).toBeNull();
   });
 
+  // Review round 2: while progress is unread the chosen sources are unknown,
+  // which is not "none chosen" - the note must not fall back to Send-only advice.
+  it("with progress unreadable, the rule note recommends neither kind of rule", async () => {
+    const store = new FakeKvDocumentStore().scriptLoad(PROGRESS_KEY, {
+      kind: "unknown",
+      reason: "HTTP 403",
+      status: 403,
+    });
+    mount({ store });
+    await loaded();
+    expect(button("Create authorization rule").disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Create Send-only rule" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create Manage rule" })).toBeNull();
+    const NEUTRAL =
+      "Which sources are chosen is not known yet, so this note cannot say which rule they need. " +
+      "A source that streams through a diagnostic setting needs a rule with Manage rights; " +
+      "the Defender for Cloud alert export alone does not.";
+    await chooseTarget();
+    choose("Authorization rule", "RootManageSharedAccessKey");
+    expect(screen.getByText(NEUTRAL)).toBeTruthy();
+    expect(screen.queryByText(/safer/)).toBeNull();
+    choose("Authorization rule", "SendOnly");
+    expect(screen.getByText(NEUTRAL)).toBeTruthy();
+    expect(screen.queryByText(/safer|Choose a rule with Manage rights/)).toBeNull();
+  });
+
   it("a pasted hub a complete listing does not contain is dropped, named, and cannot be deployed to", async () => {
     const azure = new RoutingAzure({ hubs: [OTHER_HUB] });
     mount({ azure });

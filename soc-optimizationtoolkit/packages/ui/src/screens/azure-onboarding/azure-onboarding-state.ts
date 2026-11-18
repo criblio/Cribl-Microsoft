@@ -908,6 +908,17 @@ const MANAGE_RULE_WHY =
   "a diagnostic setting streams to an Event Hub only through a rule with Manage, Send and Listen rights";
 
 /**
+ * The note while WHICH sources are chosen is not known (the progress document
+ * is loading, could not be read, or there is no store): it recommends neither
+ * kind of rule, because either recommendation could be the one a chosen
+ * source's deploy refuses.
+ */
+export const RULE_NOTE_SOURCES_UNKNOWN =
+  "Which sources are chosen is not known yet, so this note cannot say which rule they need. " +
+  "A source that streams through a diagnostic setting needs a rule with Manage rights; " +
+  "the Defender for Cloud alert export alone does not.";
+
+/**
  * A note beside a chosen rule, or null. PER SOURCE, so it never recommends a
  * rule a chosen source's own deploy refuses:
  *
@@ -915,6 +926,9 @@ const MANAGE_RULE_WHY =
  *     Manage is warned about in the same terms as that source's deploy gate,
  *     and a rule with Manage is said to be what it needs - never "Send-only is
  *     safer";
+ *   - which sources are chosen is NOT KNOWN (`manageSources` null): a
+ *     neutral note, RULE_NOTE_SOURCES_UNKNOWN, for any rule - never "Send-only
+ *     is safer", which a chosen Manage source would refuse;
  *   - otherwise (the Defender export alone, or nothing chosen yet): a rule
  *     with Manage rights (including the namespace's built-in rule, noted by
  *     name) works, but a dedicated Send-only rule is safer.
@@ -923,8 +937,9 @@ const MANAGE_RULE_WHY =
  */
 export function ruleNote(
   rule: { readonly name: string; readonly rights: readonly string[] },
-  manageSources: readonly string[] = [],
+  manageSources: readonly string[] | null = [],
 ): PickerMessage | null {
+  if (manageSources === null) return { tone: "info", text: RULE_NOTE_SOURCES_UNKNOWN };
   const manages = rule.rights.some((r) => r.toLowerCase() === "manage");
   if (manageSources.length > 0) {
     const who = listed(manageSources);
@@ -953,8 +968,10 @@ export function ruleNote(
 /**
  * The label of the (not yet available) create-rule button: the kind of rule
  * the chosen sources need, so it never offers what a chosen source refuses.
+ * Null (which sources are chosen is not known) names no kind.
  */
-export function createRuleLabel(manageSources: readonly string[]): string {
+export function createRuleLabel(manageSources: readonly string[] | null): string {
+  if (manageSources === null) return "Create authorization rule";
   return manageSources.length > 0 ? "Create Manage rule" : "Create Send-only rule";
 }
 

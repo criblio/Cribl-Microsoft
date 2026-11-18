@@ -260,6 +260,45 @@ describe("Activity Log section - what the permission check measured (CAP-10)", (
     await waitFor(() => expect(azure.puts()).toHaveLength(1));
   });
 
+  it("read denied too: the caution beside a DISABLED Deploy never claims the button is available", async () => {
+    // A measured read denial and the section's own 403 on the list meet at the
+    // same button: the gate disables Deploy with its reason, and the caution
+    // beside it must not contradict that.
+    class ForbiddenList extends RoutingAzure {
+      override async request(r: AzureManagementRequest): Promise<PortHttpResponse> {
+        if (r.method === "GET" && r.path === SETTINGS) {
+          this.calls.push(r);
+          return { status: 403, body: { error: { code: "AuthorizationFailed", message: "no" } } } as unknown as PortHttpResponse;
+        }
+        return super.request(r);
+      }
+    }
+    mount(new ForbiddenList(), audited("denied", "denied", "granted"));
+    await loaded();
+    expect(rows()).toEqual([`${READ}:denied`, `${WRITE}:denied`, `${DELETE}:granted`]);
+    const CAUTION =
+      "Azure will likely refuse this deploy: the last permission check found your Azure identity cannot " +
+      `list the subscription's diagnostic settings and create the Activity Log diagnostic setting (${READ}, ${WRITE}). ` +
+      "This check never disables Deploy; Azure's answer decides. " +
+      "Re-check permissions if the role was granted since, or switch it to How-to in section 2.";
+    // Before any read: the gate's reason and the caution, side by side.
+    expect(deployButton().disabled).toBe(true);
+    expect(within(block()).getByText(CAUTION)).toBeTruthy();
+    expect(within(block()).getByText("Read the subscription's diagnostic settings first.")).toBeTruthy();
+    await chooseTarget("DiagManage");
+    fireEvent.click(within(block()).getByRole("button", { name: "Read diagnostic settings" }));
+    const REASON =
+      "The subscription's diagnostic settings could not be read - List the subscription's diagnostic settings: HTTP 403 - no";
+    await waitFor(() => expect(within(block()).getByText(REASON)).toBeTruthy());
+    expect(deployButton().disabled).toBe(true);
+    const caution = within(block()).getByText(CAUTION);
+    const reason = within(block()).getByText(REASON);
+    expect(deployButton().getAttribute("aria-describedby")).toBe(`${reason.id} ${caution.id}`);
+    // No sentence beside the button says it can be pressed.
+    const controls = deployButton().closest(".panel-controls")?.textContent ?? "";
+    expect(controls).not.toMatch(/stays available|stays clickable|still works/);
+  });
+
   it("unknown: an audit that did not measure them is a soft note, rows say not measured, no caution", async () => {
     mount(new RoutingAzure(), audited());
     await loaded();

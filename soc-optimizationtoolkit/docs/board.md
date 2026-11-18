@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**105 in the backlog, 33 in progress, 243 done.**
+**106 in the backlog, 33 in progress, 243 done.**
 
 ## By menu item
 
@@ -34,7 +34,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Labs | 2 | 3 | 1 |
 | Data Volume Inventory | 4 | 22 | 1 |
 | SIEM Migration | 1 | 8 | 1 |
-| Permission Verification | 8 | 11 | 0 |
+| Permission Verification | 9 | 11 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
 | Azure Native Source Onboarding | 29 | 62 | 3 |
 | Azure Logging Map | 3 | 2 | 1 |
@@ -42,7 +42,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 18 | 18 | 6 |
 
-Open work totals 138.
+Open work totals 139.
 
 ## Epics and features
 
@@ -101,13 +101,13 @@ Maintaining a pack after it is built, including a silent data-loss defect
 |---|---|---|---|
 | `PK-F1` Pack maintenance parity | Pack Maintenance | 0/3 | PK-1, PK-2, D-6 |
 
-### `CAP` Capability taxonomy extension _(enabler)_ - 50% (6/12)
+### `CAP` Capability taxonomy extension _(enabler)_ - 46% (6/13)
 
 ENABLER EPIC: exists to unblock other work rather than to deliver on its own. Its capabilities and probes are what the Azure onboarding epic waits on
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `CAP-F1` Capability taxonomy extension | Permission Verification | 6/12 | CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-8, CAP-11, CAP-12, CAP-7, CAP-9, CAP-10 |
+| `CAP-F1` Capability taxonomy extension | Permission Verification | 6/13 | CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-8, CAP-11, CAP-12, CAP-7, CAP-9, CAP-10, CAP-13 |
 
 ### `REL` Ship what is built _(enabler)_ - 0% (0/2)
 
@@ -1240,7 +1240,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (54)
+## Backlog - next (55)
 
 Settled and unblocked, sequenced behind now.
 
@@ -2211,6 +2211,28 @@ Settled and unblocked, sequenced behind now.
   parts needs persistence: (a) evaluates at the namespace the picker holds,
   (b) at the resource group AZR-22's form supplies, (c) at the chosen
   namespace. dependsOn is now [[AZR-11]], which supplies the namespace.
+
+- **CAP-13** Live-verify a measured denial on the Defender and Activity Log sections (CAP-7a, CAP-10)
+  `CAP-F1` `enabler` `settled`
+  SPLIT 2026-11-18 from [[CAP-10]], which closed on pins with its LIVE CHECK
+  not run; it also carries [[CAP-7]]'s unobserved case (CAP-7a closed on pins
+  and handed its measured-denial observation to CAP-10's live check). A
+  measured Defender or Activity Log denial has never been seen in Live
+  Preview, and that is the case the rule 'audits inform, never forbid' depends
+  on. SCOPE (the LIVE CHECK as CAP-10 wrote it): in Live Preview, with an
+  identity lacking Microsoft.Insights/diagnosticSettings/write and
+  Microsoft.Security/automations/read at the subscription (a role assignment
+  the operator makes or removes by hand, outside the app), run Re-check
+  permissions and confirm (1) the Defender for Cloud alert export section and
+  the Activity Log export section each show the DENIED error banner naming the
+  action, the role and the How-to section; (2) each Deploy button stays
+  clickable, with the caution 'This check never disables Deploy; Azure's
+  answer decides.' beside it and in its aria-describedby; (3) if the identity
+  also lacks diagnosticSettings/read, the Activity Log section's own list read
+  fails and disables its Deploy with that reason, and the caution beside it
+  does not claim the button is available. Nothing needs deploying: the
+  two-step confirm writes only on its second click. Done = verified live, with
+  what was observed recorded here.
 
 ---
 
@@ -5435,7 +5457,8 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   CAP-9 instead of this card, because the namespace write it needs is in the
   moved half. Unverified live: a MEASURED DENIAL of a Defender action has
   never been seen in Live Preview (AZR-60's live note: nothing in the lab
-  measures as denied); CAP-10's live check covers it.
+  measures as denied); CAP-10's live check covers it, and since 2026-11-18
+  that check is its own card, [[CAP-13]].
 
 - **DBT-148** listAllPages reads a 2xx page with no `value` array as zero items
   `DBT-F1` `bug` `settled` `verified: pins`
@@ -10019,7 +10042,22 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   eh-rule-diagnostic's sourceIds; the initiative-only case (exact warning and
   info strings, 'Create Manage rule') and the community initiative + Defender
   case. Mutation-checked: list cut back to the two sources (3 pins fail);
-  eh-rule-diagnostic's sources drifting from the list (1).
+  eh-rule-diagnostic's sources drifting from the list (1). REVIEW ROUND 2
+  (2026-11-18): while the progress document is not loaded (loading,
+  unreadable, foreign, no store) the screen's chosen list is [], which read as
+  'nothing chosen' and brought back 'Send-only is safer' and 'Create Send-only
+  rule' although the saved selection may choose the Activity Log. The screen
+  now passes null for an unknown choice; ruleNote(rule, null) is one neutral
+  info line for every rule ('Which sources are chosen is not known yet, so
+  this note cannot say which rule they need. A source that streams through a
+  diagnostic setting needs a rule with Manage rights; the Defender for Cloud
+  alert export alone does not.') and the button reads 'Create authorization
+  rule'. Pins: azure-onboarding-state.test.ts (null: exact note for three
+  rules, the label); azure-onboarding-screen.dom.test.tsx (progress load
+  refused: exact note for the built-in and the Send-only rule, no 'safer',
+  'Create authorization rule' and neither other label). Mutation-checked: the
+  screen passing the empty list (DOM pin fails), ruleNote treating null as
+  none (2 fail).
 
 - **CAP-10** Measure the Activity Log diagnostic-setting write so its section stops reading 'not measured'
   `CAP-F1` `enabler` `settled` `verified: pins`
@@ -10081,4 +10119,17 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   dropping the measured list (4), caution disabling Deploy (1). LIVE CHECK
   STILL OPEN as written above (an identity lacking diagnosticSettings/write
   and automations/read shows DENIED on both sections with Deploy clickable):
-  not run, no Live Preview in this session.
+  not run, no Live Preview in this session. It is now its own card,
+  [[CAP-13]]. REVIEW ROUND 2 (2026-11-18): the live check had no open owner
+  (CAP-7 and this card each pointed at it), so it moved to [[CAP-13]]. The
+  denial caution said 'Deploy stays available because Azure's answer decides.'
+  while a measured read denial goes with the section's own list 403, which
+  disables Deploy with 'could not be read' (and before any read, 'Read the
+  subscription's diagnostic settings first.'), so the two sentences beside one
+  button contradicted each other. It now reads 'This check never disables
+  Deploy; Azure's answer decides.' (automation-permissions.ts; the Defender
+  caution shares it). Pins: automation-permissions.test.ts exact caution;
+  activity-log-section.dom.test.tsx read-denied case (rows, exact caution
+  beside a disabled Deploy before and after a 403 read, the exact
+  could-not-be-read reason, aria-describedby naming both, no 'stays available'
+  text). Mutation-checked: the old wording fails 2 core pins and the DOM pin.
