@@ -130,6 +130,12 @@ export interface RoleAssignmentRequestInput {
    * {@link MONITORING_METRICS_PUBLISHER_ROLE_ID}.
    */
   roleDefinitionId?: string;
+  /**
+   * The assignment's description, when the caller stamps one (AZR-103: the
+   * Data Receiver grant writes the app's ownership stamp here). Absent = no
+   * description property, exactly as before.
+   */
+  description?: string;
 }
 
 /** The ARM PUT a role assignment deploys (built pure; the adapter sends it). */
@@ -146,6 +152,8 @@ export interface RoleAssignmentArmRequest {
       principalId: string;
       /** Always "ServicePrincipal" (suppresses the Graph pre-flight). */
       principalType: "ServicePrincipal";
+      /** Present only when {@link RoleAssignmentRequestInput.description} is given. */
+      description?: string;
     };
   };
 }
@@ -180,6 +188,7 @@ export function buildRoleAssignmentRequest(
         roleDefinitionId,
         principalId: input.principalId,
         principalType: "ServicePrincipal",
+        ...(input.description === undefined ? {} : { description: input.description }),
       },
     },
   };

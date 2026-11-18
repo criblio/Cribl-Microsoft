@@ -375,6 +375,21 @@ describe("resourceCreationRequest", () => {
     expect(EVENT_HUB_RECEIVER_ROLES.map((r) => r.roleName)).toEqual(["Azure Event Hubs Data Receiver"]);
   });
 
+  it("offers the in-app grant with the same role and condition as the app-registration request (AZR-103)", () => {
+    const out = resourceCreationRequest(ctxFor("existing"));
+    const lines = out.split("\n");
+    const at = lines.findIndex((l) => l.includes("make this assignment itself, behind a confirm:"));
+    expect(at).toBeGreaterThan(0);
+    expect(lines.slice(at + 1, at + 4)).toEqual([
+      "  grant its identity RBAC Administrator on the hub or namespace",
+      "  with this condition:",
+      "  Constrain roles and principal types: only Azure Event Hubs Data Receiver, only to service principals.",
+    ]);
+    // The ticket's role is the registry's least role for the write, and the
+    // condition is the one the app-registration request prints.
+    expect(privilegeOperation("eventhub.receiverGrant.write").leastRole).toBe("RBAC Administrator");
+  });
+
   it("renders placeholders for a blank context", () => {
     const out = resourceCreationRequest(emptyCtx("lab-new-rg"));
     expect(out).toContain("<resource group>");

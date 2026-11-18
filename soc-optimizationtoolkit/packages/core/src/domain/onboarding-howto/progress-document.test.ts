@@ -31,6 +31,9 @@ import {
   withLakeRouteAfterTeardown,
   withoutActivityLogSetting,
   withoutCriblSource,
+  receiverGrantRecord,
+  withReceiverGrant,
+  withoutReceiverGrant,
 } from "./index";
 import type { OnboardingProgress } from "./index";
 
@@ -474,5 +477,52 @@ describe("Entra ID setting records (AZR-99)", () => {
     const { progress, dropped } = decodeProgress(raw);
     expect(progress.entraSettings).toEqual([{ tenantId: "t1", settingName: "CriblEntraIDLogs", ruleId: RULE }]);
     expect(dropped).toEqual(["entraSettings[1]", "entraSettings[2]"]);
+  });
+});
+
+describe("Data Receiver grant records (AZR-103)", () => {
+  const HUB = "/subscriptions/s/resourceGroups/r/providers/Microsoft.EventHub/namespaces/n/eventhubs/h";
+  const NS = "/subscriptions/s/resourceGroups/r/providers/Microsoft.EventHub/namespaces/n";
+  const P = "0f1e2d3c-4b5a-4968-8776-655443322110";
+
+  it("keeps one record per scope and principal, round-trips, and forgets one without touching the other", () => {
+    let p = withReceiverGrant(emptyProgress(), { scopeId: HUB.toUpperCase(), principalId: P, assignmentName: "n1" });
+    // The same scope and principal, compared as ARM does: replaces, never adds.
+    p = withReceiverGrant(p, { scopeId: `${HUB}/`, principalId: P.toUpperCase(), assignmentName: "n2" });
+    p = withReceiverGrant(p, { scopeId: NS, principalId: P, assignmentName: "n3" });
+    expect(p.receiverGrants?.map((r) => r.assignmentName)).toEqual(["n2", "n3"]);
+    expect(receiverGrantRecord(p, HUB, P)?.assignmentName).toBe("n2");
+    expect(receiverGrantRecord(p, HUB, "someone-else")).toBeNull();
+    const back = decodeProgress(JSON.parse(encodeProgress(p))).progress;
+    // Sorted by key, so the same records always encode to the same text.
+    expect(back.receiverGrants).toEqual([
+      { scopeId: `${HUB}/`, principalId: P.toUpperCase(), assignmentName: "n2" },
+      { scopeId: NS, principalId: P, assignmentName: "n3" },
+    ]);
+    expect(encodeProgress(back)).toBe(encodeProgress(p));
+    const one = withoutReceiverGrant(back, HUB, P);
+    expect(one.receiverGrants?.map((r) => r.assignmentName)).toEqual(["n3"]);
+    const gone = withoutReceiverGrant(one, NS, P);
+    expect(gone).not.toHaveProperty("receiverGrants");
+    expect(JSON.parse(encodeProgress(gone))).not.toHaveProperty("receiverGrants");
+  });
+
+  it("encodes a document without grants exactly as before", () => {
+    expect(JSON.parse(encodeProgress(sample()))).not.toHaveProperty("receiverGrants");
+  });
+
+  it("drops and reports malformed and duplicate records, never inventing one", () => {
+    const raw = JSON.parse(encodeProgress(emptyProgress()));
+    raw.receiverGrants = [
+      { scopeId: HUB, principalId: P, assignmentName: "n1" },
+      { scopeId: HUB.toUpperCase(), principalId: P, assignmentName: "n2" },
+      { scopeId: NS, principalId: P },
+    ];
+    const { progress, dropped } = decodeProgress(raw);
+    expect(progress.receiverGrants).toEqual([{ scopeId: HUB, principalId: P, assignmentName: "n1" }]);
+    expect(dropped).toEqual(["receiverGrants[1]", "receiverGrants[2]"]);
+    const notArray = decodeProgress({ ...JSON.parse(encodeProgress(emptyProgress())), receiverGrants: "x" });
+    expect(notArray.dropped).toEqual(["receiverGrants"]);
+    expect(notArray.progress).not.toHaveProperty("receiverGrants");
   });
 });

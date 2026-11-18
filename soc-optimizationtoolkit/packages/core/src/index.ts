@@ -78,6 +78,9 @@ export * from "./domain/defender-export";
 export * from "./domain/capability-enablers";
 // AZR-98: the subscription Activity Log diagnostic setting (create-only).
 export * from "./domain/activity-log-export";
+// AZR-103: the Cribl principal's Azure Event Hubs Data Receiver grant.
+export * from "./domain/eventhub-receiver-grant";
+export * from "./domain/name-based-guid";
 // AZR-105: Remove and Pause for what the onboarding screen created (pure plan).
 export * from "./domain/onboarding-teardown";
 // AZR-18: the Azure onboarding screen's section layout and item availability.

@@ -40,7 +40,9 @@
 
 import type { AzureManagement } from "../../ports/azure-management";
 import type { CriblClient } from "../../ports/cribl-client";
-import type { GraphDirectory, ServicePrincipalRef } from "../../ports/graph-directory";
+import type { GraphDirectory } from "../../ports/graph-directory";
+import { crossCheckPrincipal } from "../cribl-principal/cribl-principal";
+import type { PrincipalCheck } from "../cribl-principal/cribl-principal";
 import type { Logger } from "../../ports/logger";
 import {
   EVENT_HUB_RECEIVER_ROLES,
@@ -254,7 +256,7 @@ export interface ReadyCriblSource {
 }
 
 /** Whether the directory tied an entra-id client id to the object id whose role was read. */
-export type PrincipalCheck = "matched" | "not-cross-checked";
+export type { PrincipalCheck };
 
 export type PlanCriblSourceResult =
   | { readonly kind: "ready"; readonly ready: ReadyCriblSource }
@@ -497,56 +499,6 @@ async function readReceiverRole(
     };
   }
   return { kind: "ok", role: found.roleName, scope: found.scope };
-}
-
-/**
- * Tie the client id the input signs in as to the object id whose role the
- * plan reads, through the directory (AZR-59 review). A directory entry for the
- * client id with ANOTHER object id refuses; the object id being this app's own
- * service principal refuses. No directory, a refused read, or a client id the
- * listing does not hold (it may be truncated, or the principal may live in
- * another tenant) is "not-cross-checked", never a match.
- */
-async function crossCheckPrincipal(
-  graph: GraphDirectory | undefined,
-  clientId: string,
-  objectId: string,
-  appClientId: string,
-): Promise<
-  | { readonly kind: "ok"; readonly check: PrincipalCheck }
-  | { readonly kind: "refused"; readonly reason: "principal-mismatch" | "app-principal"; readonly detail: string }
-> {
-  if (graph === undefined) return { kind: "ok", check: "not-cross-checked" };
-  let sps: readonly ServicePrincipalRef[];
-  try {
-    sps = await graph.listServicePrincipals();
-  } catch {
-    return { kind: "ok", check: "not-cross-checked" };
-  }
-  const lc = (v: string): string => v.trim().toLowerCase();
-  const obj = lc(objectId);
-  if (appClientId !== "" && sps.some((sp) => lc(sp.appId) === appClientId && lc(sp.id) === obj)) {
-    return {
-      kind: "refused",
-      reason: "app-principal",
-      detail:
-        `Object ID ${objectId} is this app's own service principal. Its secret in a Cribl secret would give the worker group ` +
-        "this app's Azure rights; use a service principal dedicated to Cribl.",
-    };
-  }
-  const byClient = sps.find((sp) => lc(sp.appId) === lc(clientId));
-  if (byClient === undefined) return { kind: "ok", check: "not-cross-checked" };
-  if (lc(byClient.id) !== obj) {
-    return {
-      kind: "refused",
-      reason: "principal-mismatch",
-      detail:
-        `Client ID ${clientId} belongs to the service principal with object ID ${byClient.id}, not ${objectId}. ` +
-        "The role would be checked for one principal while the source signs in as another. " +
-        "Set the Cribl principal object ID in the plan values to the one that matches the client ID.",
-    };
-  }
-  return { kind: "ok", check: "matched" };
 }
 
 /**

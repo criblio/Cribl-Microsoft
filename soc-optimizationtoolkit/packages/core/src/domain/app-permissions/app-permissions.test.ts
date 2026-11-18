@@ -405,6 +405,32 @@ describe("AZR-84 - grants on resources outside the configured scope", () => {
     );
   };
 
+  it("asks for RBAC Administrator on the Event Hub, conditioned to Data Receiver, for the in-app grant (AZR-103)", () => {
+    const row = appPermissionPlan("existing").find((p) => p.key === "RBAC Administrator (Event Hub)");
+    expect(row).toEqual({
+      kind: "azure-rbac",
+      name: "RBAC Administrator",
+      key: "RBAC Administrator (Event Hub)",
+      scopeLevel: "resource",
+      feature: "Grant the Cribl principal Azure Event Hubs Data Receiver",
+      justification: expect.stringContaining("Attach the condition below"),
+      withoutIt: expect.stringContaining("Listen-only shared access rule"),
+      necessity: "feature",
+      condition: "Constrain roles and principal types: only Azure Event Hubs Data Receiver, only to service principals.",
+      resource: "the Event Hub the Cribl principal reads, or its namespace when that scope is chosen",
+      scopeCaveat: OUTSIDE_SCOPE_CAVEAT,
+      assignViaPortal: true,
+    });
+    // The DCR grant's resource-group RBAC Administrator is conditioned to another
+    // role, so it never suppresses this one; and no lab path asks for it.
+    expect(appPermissionPlan("existing").filter((p) => p.name === "RBAC Administrator").map((p) => p.key)).toEqual([
+      "RBAC Administrator",
+      "RBAC Administrator (Event Hub)",
+    ]);
+    expect(appPermissionPlan("lab-new-rg").some((p) => p.key === "RBAC Administrator (Event Hub)")).toBe(false);
+    expect(appPermissionPlan("lab-byo-rg").some((p) => p.key === "RBAC Administrator (Event Hub)")).toBe(false);
+  });
+
   it("asks the existing-resources path for exactly these roles on exactly these resources, and no lab path for the new ones", () => {
     const rows = (path: AzureSetupPath) =>
       appPermissionPlan(path)
@@ -415,6 +441,7 @@ describe("AZR-84 - grants on resources outside the configured scope", () => {
       "Monitoring Contributor @ the Azure Monitor Private Link Scope, which may sit in another resource group or subscription",
       "Monitoring Reader @ the DCE, which a DCR may name in another resource group or subscription",
       "Reader @ the Event Hub namespace",
+      "RBAC Administrator @ the Event Hub the Cribl principal reads, or its namespace when that scope is chosen",
     ]);
     // A lab creates them in its own group (review of AZR-84). listKeys stays on
     // byo as before: its resource-group Contributor does not reach a resource row.

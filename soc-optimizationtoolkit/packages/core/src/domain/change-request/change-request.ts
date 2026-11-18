@@ -59,6 +59,10 @@ import type { AppPermission } from "../app-permissions";
 import { leastRoleFor } from "../least-privilege";
 import { adminStepsForSetupPath } from "../role-plan";
 import { EVENT_HUB_RECEIVER_ROLES } from "../eventhub-arm";
+import {
+  RECEIVER_GRANT_ADMIN_CONDITION,
+  RECEIVER_GRANT_ADMIN_ROLE,
+} from "../eventhub-receiver-grant/receiver-grant-permissions";
 import type { PermissionNecessity } from "../azure-permissions";
 import {
   authFlowMermaid,
@@ -822,6 +826,12 @@ export function resourceCreationRequest(
     "  registration, and not Azure Event Hubs Data Owner: the app refuses",
     "  both. Skip this if the source will use a Listen-only shared access",
     "  rule instead.",
+    // AZR-103: the app can make this one assignment itself when its own
+    // identity holds RBAC Administrator there, conditioned to this role.
+    "  Or let " + n.appName + " make this assignment itself, behind a confirm:",
+    "  grant its identity " + RECEIVER_GRANT_ADMIN_ROLE + " on the hub or namespace",
+    "  with this condition:",
+    "  " + RECEIVER_GRANT_ADMIN_CONDITION,
   );
 
   const parts: string[] = [

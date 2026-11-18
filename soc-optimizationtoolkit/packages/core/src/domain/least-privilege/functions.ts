@@ -193,6 +193,15 @@ const FUNCTIONS = [
     ],
   },
   {
+    // AZR-103: the Cribl principal's receive role, granted from the onboarding
+    // screen behind a confirm. The directory read only resolves or cross-checks
+    // the principal; without it the operator types the object id.
+    id: "eventhub-receiver-grant",
+    label: "Grant the Cribl principal Azure Event Hubs Data Receiver on the hub or namespace",
+    necessity: "feature",
+    operations: ["rbac.roleAssignments.read", "eventhub.receiverGrant.write", "graph.servicePrincipals.read"],
+  },
+  {
     id: "entra-diagnostic-export",
     label: "Deploy (and remove) the Entra ID tenant diagnostic setting",
     necessity: "feature",

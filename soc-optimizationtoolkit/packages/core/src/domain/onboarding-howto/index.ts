@@ -77,10 +77,15 @@ export {
   withLakeRouteAfterTeardown,
   withoutActivityLogSetting,
   withoutCriblSource,
+  receiverGrantKey,
+  receiverGrantRecord,
+  withReceiverGrant,
+  withoutReceiverGrant,
 } from "./progress-document";
 export type {
   ActivityLogSettingRecord,
   EntraSettingRecord,
+  ReceiverGrantRecord,
   CriblSourceRecord,
   LakeRouteRecord,
   DecodedProgress,

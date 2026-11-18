@@ -40,6 +40,7 @@ import { rolePlanForSetupPath } from "../role-plan";
 import type { RoleScopeLevel } from "../role-plan";
 import { LEAST_PRIVILEGE_FUNCTIONS, leastRoleFor, privilegeOperation } from "../least-privilege";
 import type { OperationId } from "../least-privilege";
+import { RECEIVER_GRANT_ADMIN_CONDITION } from "../eventhub-receiver-grant/receiver-grant-permissions";
 
 /**
  * Where a permission applies.
@@ -378,6 +379,24 @@ export const FEATURE_ROLES: readonly FeatureRole[] = Object.freeze([
     outsideConfiguredScope: true,
     unmeasured:
       "On a resource the configuration does not name, so no preflight scope reaches it.",
+  }),
+  // AZR-103: the onboarding screen grants the Cribl principal Azure Event
+  // Hubs Data Receiver on the hub (or the namespace, when chosen). Creating a
+  // role assignment is privileged and Contributor does not include it, so the
+  // ask is RBAC Administrator ON THAT RESOURCE, conditioned to this one role.
+  featureRole("eventhub.receiverGrant.write", {
+    key: "RBAC Administrator (Event Hub)",
+    existingOnly: true,
+    feature: "Grant the Cribl principal Azure Event Hubs Data Receiver",
+    justification:
+      "The Cribl Event Hubs source signs in with Entra ID as a service principal dedicated to Cribl, which needs Azure Event Hubs Data Receiver on the hub it reads. The onboarding screen can make that one assignment itself (PUT .../providers/Microsoft.Authorization/roleAssignments/{name} on the hub, or on the namespace when chosen), behind a confirm. Attach the condition below so this grant cannot be used to assign anything else.",
+    withoutIt:
+      "An administrator assigns Data Receiver to the Cribl principal by hand (the How-to step and the resource-creation request say how), or the source uses a Listen-only shared access rule. Nothing else is affected.",
+    necessity: "feature" as const,
+    condition: RECEIVER_GRANT_ADMIN_CONDITION,
+    assignViaPortal: true,
+    outsideConfiguredScope: true,
+    unmeasured: "On a resource the configuration does not name, so no preflight scope reaches it.",
   }),
   // AZR-61 audit discrepancy 10 (AZR-82): Validate's policy checks and the
   // Logging Map read at the customer's management group. Reader there is the
