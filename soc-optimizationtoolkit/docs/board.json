@@ -4686,7 +4686,7 @@
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [
         "AZR-63"
@@ -4696,7 +4696,8 @@
       "priority": "later",
       "menu": "tenant-gaps",
       "title": "Tenant gap Read all: swap tenant to tenant and restore the active credential once at the end",
-      "detail": "AZR-63 review follow-up. runTenantSession restores the active connection after EVERY tenant, so a Read all mints the active tenant's ARM and Graph tokens once per tenant for no gain (two proxied requests each). AZR-63 made every session request spend the run's pacer, so this costs budget time, not 429s. Fix: a batch form of the session that holds one lease and one exclusive section across the run, swaps A to B to C with a proof before and after each, and restores once. Reasoning in backlog.md section 6i."
+      "detail": "AZR-63 review follow-up. runTenantSession restores the active connection after EVERY tenant, so a Read all mints the active tenant's ARM and Graph tokens once per tenant for no gain (two proxied requests each). AZR-63 made every session request spend the run's pacer, so this costs budget time, not 429s. Fix: a batch form of the session that holds one lease and one exclusive section across the run, swaps A to B to C with a proof before and after each, and restores once. Reasoning in backlog.md section 6i. DONE 2026-11-17: core runTenantSessionBatch (port TenantSession.runBatch) holds one lease (re-read and renewed before each tenant after the first) and one exclusive section across a Read all, swaps tenant to tenant with each tenant still proven before and after its work, and restores the active credential ONCE when the batch settles - also after a half-way swap failure, a cancel, or the body throwing (restore decided by what the slot holds). runTenantSession is now the batch of one with its sequence unchanged. The tenant gap screen runs Read all as one batch and shows a failed final restore. Pinned in run-tenant-session.test.ts (9 batch pins, mutation-checked: a per-tenant restore and a restore outside finally both fail them) and tenant-gap-screen.dom.test.tsx. NOT verified live: the Read all against real tenants in Live Preview.",
+      "verified": "pins"
     },
     {
       "epic": "AZR",

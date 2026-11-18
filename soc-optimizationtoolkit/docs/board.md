@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**100 in the backlog, 43 in progress, 224 done.**
+**100 in the backlog, 42 in progress, 225 done.**
 
 ## By menu item
 
@@ -38,11 +38,11 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Event Hub Discovery | 0 | 1 | 0 |
 | Azure Native Source Onboarding | 32 | 51 | 8 |
 | Azure Logging Map | 3 | 2 | 1 |
-| Tenant Logging Gaps | 2 | 1 | 0 |
+| Tenant Logging Gaps | 1 | 2 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 143.
+Open work totals 142.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 62% (62/100)
+### `AZR` Azure native source onboarding - 63% (63/100)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -65,7 +65,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
 | `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 39/57 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
-| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 20/24 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 21/24 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (43)
+## In progress (42)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1330,16 +1330,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   still says a Send-only rule is safer, which is wrong for this deploy (the
   section and its gate say Manage); no permission-audit capability covers
   diagnostic settings yet (the section shows a not-measured banner).
-
-- **AZR-90** Tenant gap Read all: swap tenant to tenant and restore the active credential once at the end
-  `AZR-F10` `story` `settled`
-  AZR-63 review follow-up. runTenantSession restores the active connection
-  after EVERY tenant, so a Read all mints the active tenant's ARM and Graph
-  tokens once per tenant for no gain (two proxied requests each). AZR-63 made
-  every session request spend the run's pacer, so this costs budget time, not
-  429s. Fix: a batch form of the session that holds one lease and one
-  exclusive section across the run, swaps A to B to C with a proof before and
-  after each, and restores once. Reasoning in backlog.md section 6i.
 
 - **AZR-91** Tenant gap grid: one tab stop with arrow-key navigation between cells
   `AZR-F10` `story` `settled`
@@ -2973,7 +2963,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (224)
+## Done (225)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -8644,6 +8634,28 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   of 4, 25%); XDR, resource logs and flow logs "not checked yet". One defect
   seen live and fixed before merge: the hub destination named the
   authorization rule instead of the namespace.
+
+- **AZR-90** Tenant gap Read all: swap tenant to tenant and restore the active credential once at the end
+  `AZR-F10` `story` `settled` `verified: pins`
+  AZR-63 review follow-up. runTenantSession restores the active connection
+  after EVERY tenant, so a Read all mints the active tenant's ARM and Graph
+  tokens once per tenant for no gain (two proxied requests each). AZR-63 made
+  every session request spend the run's pacer, so this costs budget time, not
+  429s. Fix: a batch form of the session that holds one lease and one
+  exclusive section across the run, swaps A to B to C with a proof before and
+  after each, and restores once. Reasoning in backlog.md section 6i. DONE
+  2026-11-17: core runTenantSessionBatch (port TenantSession.runBatch) holds
+  one lease (re-read and renewed before each tenant after the first) and one
+  exclusive section across a Read all, swaps tenant to tenant with each tenant
+  still proven before and after its work, and restores the active credential
+  ONCE when the batch settles - also after a half-way swap failure, a cancel,
+  or the body throwing (restore decided by what the slot holds).
+  runTenantSession is now the batch of one with its sequence unchanged. The
+  tenant gap screen runs Read all as one batch and shows a failed final
+  restore. Pinned in run-tenant-session.test.ts (9 batch pins,
+  mutation-checked: a per-tenant restore and a restore outside finally both
+  fail them) and tenant-gap-screen.dom.test.tsx. NOT verified live: the Read
+  all against real tenants in Live Preview.
 
 - **AZR-92** While one tab reads a tenant through the shared credential slot, other tabs' ordinary Azure reads go out as that tenant
   `AZR-F10` `bug` `settled` `verified: pins`

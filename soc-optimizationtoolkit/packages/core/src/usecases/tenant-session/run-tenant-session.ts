@@ -10,8 +10,8 @@
  *   2. Take the KV lease (best effort, no compare-and-swap): refuse while
  *      another holder's lease is unexpired, and refuse on an unreadable lease.
  *   3. Inside the slot's exclusive section: mark the owner record SWITCHING,
- *      write the target's credential (only when it is not already the active
- *      one), mint ARM and Graph tokens for the target tenant, and only then
+ *      write the target's credential (only when the slot does not already hold
+ *      it), mint ARM and Graph tokens for the target tenant, and only then
  *      record the target as the owner.
  *   4. PROVE: GET /subscriptions/{sub} must answer with the target's tenantId.
  *      A mismatch or a refusal makes the batch unknown and the work never runs.
@@ -26,6 +26,17 @@
  *      - the same order: switching, credential, tokens, owner.
  *   7. Release the lease, unless it has already expired (it may be someone
  *      else's by then).
+ *
+ * THE BATCH FORM (AZR-90). {@link runTenantSessionBatch} holds ONE lease and
+ * ONE exclusive section across many tenants: steps 3 to 5b run per tenant,
+ * swapping straight from the last tenant read to the next (A to B to C), and
+ * steps 6 and 7 run ONCE when the batch's body settles. Before every tenant
+ * after the first the lease is re-read and renewed, so a long Read all never
+ * outlives it unnoticed. A Read all of N tenants used to restore N times (two
+ * paced token mints each) for no gain. The restore is decided by what the slot
+ * holds, not by what was asked: any swap that STARTED - even one that failed
+ * half-way - leaves the slot in doubt, and the active credential goes back.
+ * {@link runTenantSession} is the batch of one, so both forms share every rule.
  *
  * What the proof cannot prove is written down in domain/tenancy (a delegated
  * subscription is unknown; the Graph token is not proven).
@@ -48,7 +59,9 @@
  * it aborts (the run is then unknown); the restore is paced but never handed
  * the signal, so the active credential goes back whatever happened.
  *
- * Never rejects. The clock is injected; core reads no clock of its own.
+ * runTenantSession never rejects; runTenantSessionBatch rejects only when its
+ * body does, after the restore and release. The clock is injected; core reads
+ * no clock of its own.
  */
 
 import type { KvDocumentStore } from "../../ports/kv-document-store";
@@ -56,11 +69,14 @@ import type { Logger } from "../../ports/logger";
 import type { PacingSignal, RequestPacer } from "../../ports/request-pacer";
 import type {
   CredentialSlot,
+  TenantBatchRun,
   TenantPorts,
   TenantProfile,
   TenantRestore,
   TenantRun,
+  TenantRunOptions,
   TenantRunStage,
+  TenantSession,
 } from "../../ports/tenant-session";
 import {
   CREDENTIAL_LEASE_KEY,
@@ -77,7 +93,7 @@ import {
   tenantProofRequest,
 } from "../../domain/tenancy";
 
-/** Default lease lifetime: long enough for one tenant's scan at the shared budget. */
+/** Default lease lifetime: long enough for one tenant's scan at the shared budget (renewed per tenant in a batch). */
 const DEFAULT_TENANT_LEASE_TTL_MS = 10 * 60 * 1000;
 
 export interface TenantSessionDeps {
@@ -101,6 +117,13 @@ export interface TenantSessionDeps {
 /** Proxied requests one {@link CredentialSlot.mintTokens} sends: ARM and Graph. */
 const REQUESTS_PER_MINT = 2;
 
+const NOT_NEEDED: TenantRestore = { kind: "not-needed" };
+const DEFERRED: TenantRestore = { kind: "deferred" };
+
+/** What the slot holds: a known profile's credential, nothing set by this run, or in doubt. */
+const IN_DOUBT = Symbol("in-doubt");
+type SlotHolds = TenantProfile | null | typeof IN_DOUBT;
+
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -109,71 +132,95 @@ function label(profile: TenantProfile): string {
   return profile.name !== undefined && profile.name.trim() !== "" ? profile.name : profile.id;
 }
 
-/** Run `work` against `profile`'s tenant through the shared credential slot. */
+function unknownRun<T>(
+  tenantId: string,
+  stage: TenantRunStage,
+  reason: string,
+  restore: TenantRestore = NOT_NEEDED,
+): TenantRun<T> {
+  return { kind: "unknown", tenantId, stage, reason, restore };
+}
+
+/** Step 1: the refusals that touch nothing. Null when the run may go ahead. */
+function refusal<T>(slot: CredentialSlot, active: TenantProfile | null, profile: TenantProfile): TenantRun<T> | null {
+  const tenantId = normalizeTenantId(profile.config.tenantId);
+  if (tenantId === "") return unknownRun(tenantId, "identity", `${label(profile)} has no tenant id.`);
+  if (tenantProofRequest(profile.config.subscriptionId) === null) {
+    return unknownRun(
+      tenantId,
+      "identity",
+      `${label(profile)} names no subscription, so there is nothing to prove the tenant against.`,
+    );
+  }
+  const isActive = active !== null && active.id === profile.id;
+  if (!isActive && !slot.hasCredential(profile)) {
+    return unknownRun(
+      tenantId,
+      "credential",
+      `${label(profile)}'s client secret was not entered in this session (or its tenant or client id was edited since). Stored secrets can never be read back, so it has to be entered again before this tenant can be read.`,
+    );
+  }
+  if (!isActive && active !== null && !slot.hasCredential(active)) {
+    return unknownRun(
+      tenantId,
+      "credential",
+      `The active connection ${label(active)}'s client secret was not entered in this session, so it could not be put back after reading ${label(profile)}. Enter it on Setup first.`,
+    );
+  }
+  return null;
+}
+
+/** Run `work` against `profile`'s tenant through the shared credential slot: the batch of one. */
 export async function runTenantSession<T>(
   deps: TenantSessionDeps,
   profile: TenantProfile,
   work: (ports: TenantPorts) => Promise<T>,
 ): Promise<TenantRun<T>> {
-  const tenantId = normalizeTenantId(profile.config.tenantId);
-  const NOT_NEEDED: TenantRestore = { kind: "not-needed" };
-  const unknown = (stage: TenantRunStage, reason: string, restore: TenantRestore = NOT_NEEDED): TenantRun<T> => ({
-    kind: "unknown",
-    tenantId,
-    stage,
-    reason,
-    restore,
-  });
+  // Refuse before the lease is even read: a refused single run touches nothing.
+  const refused = refusal<T>(deps.slot, deps.activeProfile, profile);
+  if (refused !== null) return refused;
+  const options: TenantRunOptions = {
+    ...(deps.pacer !== undefined ? { pacer: deps.pacer } : {}),
+    ...(deps.signal !== undefined ? { signal: deps.signal } : {}),
+  };
+  // The body never rejects (runForTenant does not), so neither does this.
+  const batch = await runTenantSessionBatch(deps, (session) => session.runForTenant(profile, work, options));
+  return { ...batch.value, restore: batch.restore };
+}
+
+/**
+ * Run `body` with a session that reads tenant after tenant under one lease and
+ * one exclusive section, restoring the active credential ONCE at the end.
+ * `deps.pacer` paces that restore; each run's own options (falling back to
+ * `deps`) pace and cancel its swap and proofs.
+ */
+export async function runTenantSessionBatch<R>(
+  deps: TenantSessionDeps,
+  body: (session: TenantSession) => Promise<R>,
+): Promise<TenantBatchRun<R>> {
   const { slot, documents, logger } = deps;
-  const spend = async (count: number, signal: PacingSignal | undefined): Promise<void> => {
-    for (let i = 0; i < count; i++) await deps.pacer?.acquire(signal);
+  const active = deps.activeProfile;
+  const spend = async (pacer: RequestPacer | undefined, count: number, signal: PacingSignal | undefined): Promise<void> => {
+    for (let i = 0; i < count; i++) await pacer?.acquire(signal);
   };
 
-  // 1. Refusals that touch nothing.
-  if (tenantId === "") return unknown("identity", `${label(profile)} has no tenant id.`);
-  const proof = tenantProofRequest(profile.config.subscriptionId);
-  if (proof === null) {
-    return unknown(
-      "identity",
-      `${label(profile)} names no subscription, so there is nothing to prove the tenant against.`,
-    );
-  }
-  const proofRequest = proof;
-  const active = deps.activeProfile;
-  const swap = active === null || active.id !== profile.id;
-  if (swap && !slot.hasCredential(profile)) {
-    return unknown(
-      "credential",
-      `${label(profile)}'s client secret was not entered in this session (or its tenant or client id was edited since). Stored secrets can never be read back, so it has to be entered again before this tenant can be read.`,
-    );
-  }
-  if (swap && active !== null && !slot.hasCredential(active)) {
-    return unknown(
-      "credential",
-      `The active connection ${label(active)}'s client secret was not entered in this session, so it could not be put back after reading ${label(profile)}. Enter it on Setup first.`,
-    );
-  }
-
-  // 2. The lease.
+  // 2. The lease. Refused: every run says why, nothing else is touched.
   const takenAt = deps.now();
-  const leaseRead = await documents.load(CREDENTIAL_LEASE_KEY);
-  const verdict = leaseHeldByOther(leaseRead, deps.holderId, takenAt);
-  if (verdict.held === "unknown") {
-    return unknown("lease", `The credential lease could not be read (${verdict.reason}).`);
-  }
-  if (verdict.held) {
-    return unknown(
-      "lease",
-      "Another tab of this app is reading a tenant through the shared credential right now. Try again when it finishes.",
-    );
+  const leaseRefusal = await takeLease();
+  if (leaseRefusal !== null) {
+    const refusedSession: TenantSession = {
+      runForTenant: async <T>(profile: TenantProfile) =>
+        refusal<T>(slot, active, profile) ??
+        unknownRun<T>(normalizeTenantId(profile.config.tenantId), "lease", leaseRefusal),
+      runBatch: async <S>(inner: (session: TenantSession) => Promise<S>) => ({
+        value: await inner(refusedSession),
+        restore: NOT_NEEDED,
+      }),
+    };
+    return { value: await body(refusedSession), restore: NOT_NEEDED };
   }
   const ttl = deps.leaseTtlMs ?? DEFAULT_TENANT_LEASE_TTL_MS;
-  const expiresAt = takenAt + ttl;
-  try {
-    await documents.save(CREDENTIAL_LEASE_KEY, takenLease(deps.holderId, takenAt, ttl));
-  } catch (err) {
-    return unknown("lease", `The credential lease could not be taken (${errText(err)}).`);
-  }
+  let expiresAt = takenAt + ttl;
 
   let ownerWrites = 0;
   const writeId = (): string => `${deps.holderId}:${takenAt}:${++ownerWrites}`;
@@ -195,14 +242,26 @@ export async function runTenantSession<T>(
   const markSwitching = (): Promise<void> =>
     documents.save(CREDENTIAL_OWNER_KEY, switchingCredentialOwner(writeId(), takenAt));
 
-  let outcome: TenantRun<T>;
+  // What the slot holds now. It starts as the active connection's.
+  let holds: SlotHolds = active;
+  let runs = 0;
+
+  const session: TenantSession = {
+    runForTenant: runOne,
+    // Already inside a batch: the outer batch restores.
+    runBatch: async <S>(inner: (s: TenantSession) => Promise<S>) => ({ value: await inner(session), restore: DEFERRED }),
+  };
+
+  let restored: TenantRestore = NOT_NEEDED;
+  let value: R;
   try {
-    outcome = await slot.exclusive(async () => {
-      // swapProveAndWork never rejects, so the restore below always runs.
-      const result = await swapProveAndWork();
-      // 6. Restore, whatever happened.
-      const restored = swap && active !== null ? await restore(active) : NOT_NEEDED;
-      return { ...result, restore: restored };
+    value = await slot.exclusive(async () => {
+      try {
+        return await body(session);
+      } finally {
+        // 6. Restore ONCE, whatever happened - body threw, a swap failed half-way, a cancel.
+        restored = await restoreIfNeeded();
+      }
     });
   } finally {
     // 7. Release, unless expired - an expired lease may be someone else's now.
@@ -214,29 +273,95 @@ export async function runTenantSession<T>(
       }
     }
   }
-  return outcome;
+  return { value, restore: restored };
 
-  // -- the exclusive section's steps ---------------------------------------
+  // -- the steps ------------------------------------------------------------
 
-  async function swapProveAndWork(): Promise<TenantRun<T>> {
-    // 3. Swap.
+  /** Null once the lease is this holder's; otherwise why not. */
+  async function takeLease(): Promise<string | null> {
+    const leaseRead = await documents.load(CREDENTIAL_LEASE_KEY);
+    const verdict = leaseHeldByOther(leaseRead, deps.holderId, takenAt);
+    if (verdict.held === "unknown") return `The credential lease could not be read (${verdict.reason}).`;
+    if (verdict.held) {
+      return "Another tab of this app is reading a tenant through the shared credential right now. Try again when it finishes.";
+    }
+    try {
+      await documents.save(CREDENTIAL_LEASE_KEY, takenLease(deps.holderId, takenAt, deps.leaseTtlMs ?? DEFAULT_TENANT_LEASE_TTL_MS));
+    } catch (err) {
+      return `The credential lease could not be taken (${errText(err)}).`;
+    }
+    return null;
+  }
+
+  /**
+   * Before every tenant after the first: the lease must still be this
+   * holder's and unexpired, and is renewed for the next tenant's scan. Null
+   * when renewed; otherwise why this tenant is not read.
+   */
+  async function renewLease(profile: TenantProfile): Promise<string | null> {
+    const at = deps.now();
+    const lost = `The credential lease was no longer this tab's before ${label(profile)} was read, so another tab may be using the shared credential; it was not read.`;
+    if (at >= expiresAt) return lost;
+    const read = await documents.load(CREDENTIAL_LEASE_KEY);
+    if (read.kind === "unknown") {
+      return `The credential lease could not be re-read before ${label(profile)} was read (${read.reason}), so it was not read.`;
+    }
+    const lease = read.kind === "value" ? decodeLease(read.value) : null;
+    if (lease === null || lease.holder !== deps.holderId) return lost;
+    try {
+      await documents.save(CREDENTIAL_LEASE_KEY, takenLease(deps.holderId, at, ttl));
+    } catch (err) {
+      return `The credential lease could not be renewed before ${label(profile)} was read (${errText(err)}), so it was not read.`;
+    }
+    expiresAt = at + ttl;
+    return null;
+  }
+
+  async function runOne<T>(
+    profile: TenantProfile,
+    work: (ports: TenantPorts) => Promise<T>,
+    options: TenantRunOptions = {},
+  ): Promise<TenantRun<T>> {
+    const refused = refusal<T>(slot, active, profile);
+    if (refused !== null) return refused;
+    const tenantId = normalizeTenantId(profile.config.tenantId);
+    const proofRequest = tenantProofRequest(profile.config.subscriptionId)!;
+    const pacer = options.pacer ?? deps.pacer;
+    const signal = options.signal ?? deps.signal;
+    // Inside a batch the active credential goes back once, at the end.
+    const own = (run: TenantRun<T>): TenantRun<T> => ({ ...run, restore: DEFERRED });
+    const unknown = (stage: TenantRunStage, reason: string): TenantRun<T> => unknownRun(tenantId, stage, reason, DEFERRED);
+
+    if (runs++ > 0) {
+      const lost = await renewLease(profile);
+      if (lost !== null) return unknown("lease", lost);
+    }
+
+    // 3. Swap - unless the slot already holds this profile's credential.
+    const swap = holds === null || holds === IN_DOUBT || holds.id !== profile.id;
     try {
       if (swap) {
+        // From here the slot is in doubt until the new owner is recorded: a
+        // failure part-way still gets the active credential put back.
+        holds = IN_DOUBT;
         // Before the slot changes, so no other tab's batch is admitted by a
         // record naming the tenant whose credential is leaving.
         await markSwitching();
         await slot.installCredential(profile);
       }
-      await spend(REQUESTS_PER_MINT, deps.signal);
+      await spend(pacer, REQUESTS_PER_MINT, signal);
       await slot.mintTokens(tenantId);
-      if (swap) await recordOwner(profile);
+      if (swap) {
+        await recordOwner(profile);
+        holds = profile;
+      }
     } catch (err) {
       return unknown("swap", `Switching the shared credential to ${label(profile)} failed: ${errText(err)}`);
     }
     // 4. Prove.
     const ports = slot.portsFor(tenantId);
     const before = await prove(ports, "before");
-    if (before !== null) return before;
+    if (before !== null) return own(before);
     // 5. Work.
     let value: T;
     try {
@@ -246,34 +371,34 @@ export async function runTenantSession<T>(
     }
     // 5b. Prove again, and check the lease is still ours.
     const after = await prove(ports, "after");
-    if (after !== null) return after;
+    if (after !== null) return own(after);
     const still = await leaseStillOurs();
     if (still !== null) return unknown("lease", still);
-    return { kind: "done", tenantId, value, restore: NOT_NEEDED };
-  }
+    return { kind: "done", tenantId, value, restore: DEFERRED };
 
-  /** Null when the slot answered as the target; otherwise the unknown result. */
-  async function prove(ports: TenantPorts, when: "before" | "after"): Promise<TenantRun<T> | null> {
-    const which = when === "before" ? "The tenant proof read" : "The tenant proof read after the work";
-    let answer;
-    try {
-      await spend(1, deps.signal);
-      answer = await ports.azure.request(proofRequest);
-    } catch (err) {
-      return unknown("proof", `${which} failed: ${errText(err)}`);
+    /** Null when the slot answered as the target; otherwise the unknown result. */
+    async function prove(p: TenantPorts, when: "before" | "after"): Promise<TenantRun<T> | null> {
+      const which = when === "before" ? "The tenant proof read" : "The tenant proof read after the work";
+      let answer;
+      try {
+        await spend(pacer, 1, signal);
+        answer = await p.azure.request(proofRequest);
+      } catch (err) {
+        return unknown("proof", `${which} failed: ${errText(err)}`);
+      }
+      const proven = proveTenant(answer, tenantId);
+      if (proven.kind === "mismatch") {
+        logger?.warn("tenant-session: proof mismatch", { when, expected: tenantId, actual: proven.actual });
+        return unknown(
+          "proof",
+          `${which} answered for tenant ${proven.actual}, not ${tenantId} - something else changed the shared credential, so nothing read in this batch can be trusted.`,
+        );
+      }
+      if (proven.kind === "unknown") {
+        return unknown("proof", `${which} could not prove the tenant: ${proven.reason}.`);
+      }
+      return null;
     }
-    const proven = proveTenant(answer, tenantId);
-    if (proven.kind === "mismatch") {
-      logger?.warn("tenant-session: proof mismatch", { when, expected: tenantId, actual: proven.actual });
-      return unknown(
-        "proof",
-        `${which} answered for tenant ${proven.actual}, not ${tenantId} - something else changed the shared credential, so nothing read in this batch can be trusted.`,
-      );
-    }
-    if (proven.kind === "unknown") {
-      return unknown("proof", `${which} could not prove the tenant: ${proven.reason}.`);
-    }
-    return null;
   }
 
   /** Null while this holder's lease is unexpired; otherwise why the batch is unknown. */
@@ -308,6 +433,13 @@ export async function runTenantSession<T>(
     return last;
   }
 
+  /** The active credential goes back only when the slot is not already known to hold it. */
+  async function restoreIfNeeded(): Promise<TenantRestore> {
+    if (active === null) return NOT_NEEDED;
+    if (holds !== IN_DOUBT && holds !== null && holds.id === active.id) return NOT_NEEDED;
+    return restore(active);
+  }
+
   async function restore(to: TenantProfile): Promise<TenantRestore> {
     try {
       // Never install a credential under a record naming another tenant: a
@@ -327,9 +459,10 @@ export async function runTenantSession<T>(
       }
       await slot.installCredential(to);
       // Paced, but never handed the signal: the restore is not cancellable.
-      await spend(REQUESTS_PER_MINT, undefined);
+      await spend(deps.pacer, REQUESTS_PER_MINT, undefined);
       await slot.mintTokens(normalizeTenantId(to.config.tenantId));
       await recordOwner(to);
+      holds = to;
       return { kind: "restored" };
     } catch (err) {
       logger?.error("tenant-session: the active connection's credential was not restored", { error: errText(err) });

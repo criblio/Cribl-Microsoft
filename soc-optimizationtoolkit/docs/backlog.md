@@ -1445,10 +1445,20 @@ holds across every tenant instead of restarting per tenant, and the tenant
 session's own proxied requests - each proof read, and two per token mint -
 spend it too. A cancelled read sends nothing more (the pacer re-checks the
 signal after every wait), and never replaces a tenant's earlier complete
-answer. Two follow-ups are left on purpose: AZR-90 (restore the active
+answer. Two follow-ups were left on purpose: AZR-90 (restore the active
 credential once per Read all, not once per tenant - budget time, not
 correctness, now that the mints are paced) and AZR-91 (a roving tabindex
 over the grid; every tip is already named for its tenant, source and side).
+
+AZR-90 DONE 2026-11-17: a Read all is ONE tenant-session batch
+(`runTenantSessionBatch`, `TenantSession.runBatch`): one lease (re-read and
+renewed before each tenant after the first), one exclusive section, the slot
+swapped tenant to tenant with each tenant still proven before and after its
+work, and the active credential restored ONCE when the batch settles. The
+restore is decided by what the slot holds, so a swap that failed half-way, a
+cancel, or the batch body throwing still puts the active credential back
+(pinned in `run-tenant-session.test.ts`). A single-tenant Read is the batch of
+one and keeps its old sequence exactly.
 
 ## 7. Verification gaps
 

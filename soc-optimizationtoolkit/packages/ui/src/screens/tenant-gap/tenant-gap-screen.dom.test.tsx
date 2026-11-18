@@ -36,14 +36,16 @@ import type {
   CriblRequest,
   GraphDirectory,
   PortHttpResponse,
+  TenantBatchRun,
   TenantPorts,
   TenantProfile,
+  TenantRestore,
   TenantRun,
   TenantSession,
 } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
-import { TenantGapScreen } from "./tenant-gap-screen";
+import { RESTORE_FAILED, TenantGapScreen } from "./tenant-gap-screen";
 import { TenantGapCache } from "./tenant-gap-state";
 
 afterEach(cleanup);
@@ -106,6 +108,22 @@ class FakeSession implements TenantSession {
     }
     const value = await work({ azure: this.azure, graph: {} as GraphDirectory });
     return { kind: "done", tenantId: profile.config.tenantId, value, restore: { kind: "not-needed" } };
+  }
+  /** Each batch: the profiles its runs read (AZR-90: a Read all is ONE batch). */
+  readonly batches: string[][] = [];
+  batchRestore: TenantRestore = { kind: "restored" };
+  async runBatch<R>(body: (session: TenantSession) => Promise<R>): Promise<TenantBatchRun<R>> {
+    const runs: string[] = [];
+    this.batches.push(runs);
+    const inner: TenantSession = {
+      runForTenant: (profile, work) => {
+        runs.push(profile.id);
+        return this.runForTenant(profile, work);
+      },
+      runBatch: (b) => this.runBatch(b),
+    };
+    const value = await body(inner);
+    return { value, restore: this.batchRestore };
   }
 }
 
@@ -185,6 +203,23 @@ describe("TenantGapScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Read all tenants" }));
     await waitFor(() => expect(session?.runs).toEqual(["pa", "pb"]));
     await waitFor(() => expect(screen.getAllByText(/^Read at /).length).toBe(2));
+  });
+
+  // AZR-90: the active credential went back after EVERY tenant (two paced
+  // token mints each); a Read all is now one batch with one restore.
+  it("Read all reads every tenant inside ONE session batch", async () => {
+    const { session } = mount();
+    fireEvent.click(screen.getByRole("button", { name: "Read all tenants" }));
+    await waitFor(() => expect(screen.getAllByText(/^Read at /).length).toBe(2));
+    expect(session?.batches).toEqual([["pa", "pb"]]);
+  });
+
+  it("says so when the run's one restore of the active credential failed", async () => {
+    const session = new FakeSession(new CountingAzure());
+    session.batchRestore = { kind: "failed", reason: "AADSTS700016" };
+    mount({ session });
+    fireEvent.click(screen.getByRole("button", { name: "Read all tenants" }));
+    await waitFor(() => expect(screen.getByText(`${RESTORE_FAILED} (AADSTS700016)`)).toBeTruthy());
   });
 
   it("a tenant whose proof fails is unknown in every cell, both indicators, with the reason", async () => {

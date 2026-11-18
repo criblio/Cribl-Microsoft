@@ -6,6 +6,9 @@ import type { KvDocumentLoad, KvDocumentStore } from "../../ports/kv-document-st
 import type { TenantPorts, TenantProfile, TenantRun, TenantRunOptions, TenantSession } from "../../ports/tenant-session";
 import type { RequestPacer } from "../../ports/request-pacer";
 import type { GraphDirectory } from "../../ports/graph-directory";
+
+/** The one method a scan uses (ScanTenantGapPorts.session; a Read all hands in its batch's session). */
+type ScanSession = Pick<TenantSession, "runForTenant">;
 import { ONBOARDING_PROGRESS_KEY, encodeProgress, emptyProgress, withCriblSource, withPlanValues } from "../../domain/onboarding-howto/progress-document";
 import { COVERAGE_SELECTION_KEY } from "../../domain/coverage-model/coverage-selection";
 import { TENANT_CRIBL_MAPPING_KEY, encodeTenantCriblMapping } from "../../domain/tenant-cribl-mapping";
@@ -52,7 +55,7 @@ const GRAPH: GraphDirectory = {} as GraphDirectory;
 
 function sessionDone(
   azure: AzureManagement,
-): TenantSession & { runs: TenantProfile[]; runOptions: (TenantRunOptions | undefined)[] } {
+): ScanSession & { runs: TenantProfile[]; runOptions: (TenantRunOptions | undefined)[] } {
   const runs: TenantProfile[] = [];
   const runOptions: (TenantRunOptions | undefined)[] = [];
   return {
@@ -71,7 +74,7 @@ function sessionDone(
   };
 }
 
-function sessionUnknown(stage: "proof" | "credential", reason: string): TenantSession & { runs: TenantProfile[] } {
+function sessionUnknown(stage: "proof" | "credential", reason: string): ScanSession & { runs: TenantProfile[] } {
   const runs: TenantProfile[] = [];
   return {
     runs,
@@ -298,7 +301,7 @@ describe("scanTenantGap", () => {
   });
 
   it("warns when the active connection's credential could not be put back", async () => {
-    const session: TenantSession = {
+    const session: ScanSession = {
       async runForTenant<T>(profile: TenantProfile, work: (p: TenantPorts) => Promise<T>): Promise<TenantRun<T>> {
         const value = await work({ azure: azureAnswering(403), graph: GRAPH });
         return { kind: "done", tenantId: profile.config.tenantId, value, restore: { kind: "failed", reason: "mint refused" } };

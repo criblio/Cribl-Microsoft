@@ -12,7 +12,9 @@
  *     every Azure request - the work's reads and the session's proof reads and
  *     token mints - inside ONE pacer per run: Validate's rate for the whole
  *     run, not per tenant, and the budget every screen shares. Cancel ends a
- *     wait for room at once and sends nothing more.
+ *     wait for room at once and sends nothing more. The run is ONE
+ *     tenant-session batch (AZR-90): the slot swaps tenant to tenant and the
+ *     active credential is restored once at the end, not after every tenant.
  *     Without a session or the shell's pacing the reads are disabled with the
  *     reason - nothing goes out unpaced.
  *   - ANSWERS ARE CACHED per tenant with their time, in a cache the shell
@@ -69,7 +71,8 @@ const PANEL_TIP =
 
 const READ_ALL_TIP =
   `Reads every tenant in turn, never two at once: each one's credential is put in the app's single Azure slot, ` +
-  `proven to be that tenant's, used, and the active connection's put back. Azure reads go at most ` +
+  `proven to be that tenant's before and after it is used, and the active connection's credential is put back ` +
+  `once, when the run ends - also when it is cancelled or a tenant fails. Azure reads go at most ` +
   `${VALIDATE_REQUESTS_PER_MINUTE} a minute for the whole run, counting each tenant's proof reads and sign-ins, ` +
   `inside the budget every screen shares. Nothing in Azure or Cribl ` +
   "is changed. Each tenant needs its client secret entered in this session.";
@@ -98,7 +101,11 @@ function stamp(ms: number): string {
   return `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
 }
 
-const EARLIER_RUN = "An earlier read is still finishing. Reads can start again once it has.";
+/** The run's one restore failed: the operator's own connection is not back. */
+export const RESTORE_FAILED =
+  "The active connection's credential could not be put back after reading. Save and connect on Setup before using other screens.";
+
+const EARLIER_RUN ="An earlier read is still finishing. Reads can start again once it has.";
 
 function Indicator(props: { side: "azure" | "cribl"; indicator: GapIndicator; sourceId: string; where: string }) {
   const { side, indicator, sourceId, where } = props;
@@ -175,8 +182,10 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
       // spends the app-wide shared budget.
       const pacer = createRequestPacer({ ...pacing, maxRequestsPerMinute: VALIDATE_REQUESTS_PER_MINUTE });
       let interrupted: string | null = null;
-      const run = async (): Promise<void> => {
-      try {
+      // Every tenant of the run inside ONE batch (AZR-90): the slot swaps
+      // tenant to tenant and the active credential goes back once, at the end
+      // - also when a tenant fails half-way or the run is cancelled.
+      const scanAll = async (batch: Pick<TenantSession, "runForTenant">): Promise<void> => {
         for (let index = 0; index < targets.length; index++) {
           if (controller.signal.aborted) break;
           const profile = targets[index]!;
@@ -184,7 +193,7 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
           let row: TenantGapRow;
           try {
             row = await scanTenantGap(
-              { session, documents: store, cribl: ports.cribl, pacer, ...(logger !== undefined ? { logger } : {}) },
+              { session: batch, documents: store, cribl: ports.cribl, pacer, ...(logger !== undefined ? { logger } : {}) },
               profile,
               {
                 signal: controller.signal,
@@ -205,13 +214,28 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
           if (kept !== null) setEntries((prev) => ({ ...prev, [profile.id]: kept }));
           logger?.info("tenant-gap: tenant read", { status: row.status.state, cancelled: row.cancelled });
         }
+      };
+      const run = async (): Promise<void> => {
+      try {
+        let restoreFailed: string | null = null;
+        try {
+          const batch = await session.runBatch(scanAll, { pacer });
+          if (batch.restore.kind === "failed") restoreFailed = batch.restore.reason;
+        } catch (error) {
+          // scanAll catches each tenant's failure, so this is unexpected; the
+          // batch has already put the active credential back by now.
+          setMessage(`Reading stopped: ${errorText(error)}`);
+        }
+        const notes: string[] = [];
         if (controller.signal.aborted) {
-          setMessage(
+          notes.push(
             interrupted === null
               ? "Reading was cancelled; tenants not reached keep their earlier answer."
               : `Reading was cancelled while reading ${interrupted}; ${interrupted} and the tenants not reached keep their earlier answer, if they had one.`,
           );
         }
+        if (restoreFailed !== null) notes.push(`${RESTORE_FAILED} (${restoreFailed})`);
+        if (notes.length > 0) setMessage(notes.join(" "));
       } finally {
         if (abort.current === controller) abort.current = null;
         setProgress(null);

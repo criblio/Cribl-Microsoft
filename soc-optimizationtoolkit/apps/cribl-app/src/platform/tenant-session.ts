@@ -6,10 +6,12 @@
 // only supplies what core may not touch - the clock, the tab's holder id, and
 // which connection is active at the moment a run starts.
 
-import { runTenantSession } from '@soc/core';
+import { runTenantSession, runTenantSessionBatch } from '@soc/core';
 import type {
   KvDocumentStore,
   Logger,
+  TenantBatchRun,
+  TenantSessionDeps,
   TenantPorts,
   TenantProfile,
   TenantRun,
@@ -43,21 +45,29 @@ export class PlatformTenantSession implements TenantSession {
     work: (ports: TenantPorts) => Promise<T>,
     options: TenantRunOptions = {},
   ): Promise<TenantRun<T>> {
+    return runTenantSession(this.deps(options), profile, work);
+  }
+
+  runBatch<R>(
+    body: (session: TenantSession) => Promise<R>,
+    options: TenantRunOptions = {},
+  ): Promise<TenantBatchRun<R>> {
+    return runTenantSessionBatch(this.deps(options), body);
+  }
+
+  /** The active connection is read when a run or batch STARTS: its credential is the one put back. */
+  private deps(options: TenantRunOptions): TenantSessionDeps {
     const { slot, documents, holderId, now, leaseTtlMs, logger } = this.options;
-    return runTenantSession(
-      {
-        slot,
-        documents,
-        holderId,
-        now,
-        activeProfile: this.options.getActiveProfile(),
-        ...(leaseTtlMs !== undefined ? { leaseTtlMs } : {}),
-        ...(logger !== undefined ? { logger } : {}),
-        ...(options.pacer !== undefined ? { pacer: options.pacer } : {}),
-        ...(options.signal !== undefined ? { signal: options.signal } : {}),
-      },
-      profile,
-      work,
-    );
+    return {
+      slot,
+      documents,
+      holderId,
+      now,
+      activeProfile: this.options.getActiveProfile(),
+      ...(leaseTtlMs !== undefined ? { leaseTtlMs } : {}),
+      ...(logger !== undefined ? { logger } : {}),
+      ...(options.pacer !== undefined ? { pacer: options.pacer } : {}),
+      ...(options.signal !== undefined ? { signal: options.signal } : {}),
+    };
   }
 }

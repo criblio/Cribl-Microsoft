@@ -64,11 +64,22 @@ export type TenantRunStage =
   /** The work itself threw. */
   | "work";
 
-/** Whether the ACTIVE connection's credential is back in the slot afterwards. */
+/**
+ * Whether the ACTIVE connection's credential is back in the slot afterwards.
+ * `deferred` is a run inside {@link TenantSession.runBatch}: the batch puts
+ * the active credential back ONCE, at its end, and reports it there.
+ */
 export type TenantRestore =
   | { readonly kind: "not-needed" }
+  | { readonly kind: "deferred" }
   | { readonly kind: "restored" }
   | { readonly kind: "failed"; readonly reason: string };
+
+/** What {@link TenantSession.runBatch} hands back: the body's value and the one restore. */
+export interface TenantBatchRun<R> {
+  readonly value: R;
+  readonly restore: TenantRestore;
+}
 
 /** The outcome of one tenant's run. */
 export type TenantRun<T> =
@@ -111,6 +122,22 @@ export interface TenantSession {
     work: (ports: TenantPorts) => Promise<T>,
     options?: TenantRunOptions,
   ): Promise<TenantRun<T>>;
+  /**
+   * Run `body` with a session whose runs swap tenant to tenant (A to B to C)
+   * under ONE lease and ONE exclusive section, and put the active
+   * connection's credential back ONCE when `body` settles (AZR-90). Each run
+   * inside is still proven before and after its work, and reports its
+   * restore as `deferred`; the returned `restore` is the batch's one.
+   *
+   * The restore runs whatever happened - a run that failed half-way through a
+   * swap, a cancel, or `body` itself throwing. Rejects only when `body`
+   * rejects, and only after the restore and the lease release.
+   * `options.pacer` paces the final restore, which is never cancelled.
+   */
+  runBatch<R>(
+    body: (session: TenantSession) => Promise<R>,
+    options?: TenantRunOptions,
+  ): Promise<TenantBatchRun<R>>;
 }
 
 /**

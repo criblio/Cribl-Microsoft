@@ -93,7 +93,12 @@ export interface TenantGapProfile extends TenantProfile {
 }
 
 export interface ScanTenantGapPorts {
-  readonly session: TenantSession;
+  /**
+   * One tenant's run. A Read all hands in the session its runBatch gave it
+   * (AZR-90): each run's restore is then `deferred` and the batch reports the
+   * one restore, so this scan warns only about a restore it was told failed.
+   */
+  readonly session: Pick<TenantSession, "runForTenant">;
   /** The app KV store; read only. */
   readonly documents: KvDocumentStore;
   readonly cribl: CriblClient;
