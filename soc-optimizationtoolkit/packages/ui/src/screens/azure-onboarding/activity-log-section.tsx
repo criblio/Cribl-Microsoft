@@ -33,7 +33,9 @@
  * remained. It lives in "Remove or pause what this app created"
  * (activity-log-remove-panel.tsx), shown from the record whatever the choice.
  * A read the screen makes after a removal replaces `state`, which disarms an
- * armed Deploy here.
+ * armed Deploy here. The two never run together: the screen holds both
+ * running flags, so Deploy is off while a Remove runs and Remove is off while
+ * a Deploy runs (as on main, where both lived here).
  *
  * WHAT IT DOES NOT DO. Unchoosing makes no Azure call. The hub chosen in the Event Hub section is not used: Azure writes
  * the Activity Log to the hub it creates, insights-activity-logs.
@@ -88,6 +90,14 @@ export interface ActivityLogSectionProps {
   howtoSection: number;
   /** Scroll to and focus this source's How-to row. */
   onShowHowto: () => void;
+  /** The teardown panel's Remove is running; Deploy is off meanwhile (AZR-121 review). */
+  removing: boolean;
+  /**
+   * Told when a Deploy starts and when its write finishes, so the screen can
+   * keep the teardown panel's Remove off meanwhile. Called after unmount too:
+   * switching the source to How-to mid-deploy must not leave Remove stuck off.
+   */
+  onRunningChange: (running: boolean) => void;
 }
 
 export function ActivityLogSection({
@@ -98,6 +108,8 @@ export function ActivityLogSection({
   onDeployed,
   howtoSection,
   onShowHowto,
+  removing,
+  onRunningChange,
 }: ActivityLogSectionProps) {
   const { ports, config, capabilities, capabilityContext } = usePorts();
   const subscriptionId = config.subscriptionId;
@@ -111,7 +123,11 @@ export function ActivityLogSection({
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState("");
   const [readSeq, setReadSeq] = useState(0);
-  const [armedFor, setArmedFor] = useState<string | null>(null);
+  // The arm records the read it was made against as well as the inputs, so a
+  // read made elsewhere (the screen's, after a removal) disarms it by
+  // derivation. An effect that reset the arm on every new `state` raced a
+  // click made just after a read: the deferred reset swallowed the arm.
+  const [armedFor, setArmedFor] = useState<{ readonly key: string; readonly state: ActivityLogState | null } | null>(null);
   const [running, setRunning] = useState(false);
   const [outcome, setOutcome] = useState<ActivityLogDeployOutcome | null>(null);
 
@@ -135,36 +151,43 @@ export function ActivityLogSection({
 
   const namespace = target.namespace;
   const rule = target.rule;
-  const reason = activityLogDeployDisabledReason({ running, choice, state, subscriptionId, namespace, rule });
+  const reason = activityLogDeployDisabledReason({
+    running,
+    removing,
+    choice,
+    state,
+    subscriptionId,
+    namespace,
+    rule,
+  });
   const armKey = JSON.stringify([
     subscriptionId,
     namespace === null ? null : [namespace.subscriptionId, namespace.resourceGroup, namespace.name],
     rule?.name ?? "",
     choice,
     readSeq,
+    // A Remove in the teardown panel drops an armed Deploy outright, so the
+    // arm does not come back when a Remove that changed nothing finishes.
+    removing,
   ]);
-  const armed = reason === null && armedFor === armKey;
+  const armed = reason === null && armedFor !== null && armedFor.key === armKey && armedFor.state === state;
   // Drop a stale arm outright: otherwise reverting the change would re-arm it.
   useEffect(() => {
-    setArmedFor((current) => (current !== null && current !== armKey ? null : current));
-  }, [armKey]);
-
-  // A read made elsewhere (the screen's, after a removal) is a new read too:
-  // a confirm armed against the old one is dropped.
-  useEffect(() => {
-    setArmedFor(null);
-  }, [state]);
+    setArmedFor((current) => (current !== null && (current.key !== armKey || current.state !== state) ? null : current));
+  }, [armKey, state]);
 
   async function confirmDeploy(): Promise<void> {
     if (reason !== null || namespace === null || rule === null) return;
     setArmedFor(null);
     setRunning(true);
+    onRunningChange(true);
     setOutcome(null);
     const input = { subscriptionId, namespace, ruleName: rule.name };
     ports.logger?.info("azure-onboarding: activity log deploy confirmed", { namespace: namespace.name, rule: rule.name });
     const result = await deployActivityLogExport(ports.azure, input, ports.logger);
     setOutcome(result);
     setRunning(false);
+    onRunningChange(false);
     ports.logger?.info("azure-onboarding: activity log deploy finished", { outcome: result.kind });
     if (result.kind === "written-and-read-back" || result.kind === "accepted-not-verified") {
       onDeployed?.({ source: "activityLog", outcome: result.kind, input });
@@ -311,7 +334,7 @@ export function ActivityLogSection({
           className="next-action-button"
           disabled={reason !== null || armed}
           aria-describedby={reason !== null ? reasonId : undefined}
-          onClick={() => setArmedFor(armKey)}
+          onClick={() => setArmedFor({ key: armKey, state })}
         >
           {running ? "Deploying..." : "Deploy Activity Log setting"}
         </button>

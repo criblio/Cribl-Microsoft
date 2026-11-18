@@ -43,6 +43,12 @@ import type { PickerMessage, RowChoice } from "./azure-onboarding-state";
 /** Everything the gate looks at. No capability set, on purpose: the audit never forbids. */
 export interface ActivityLogDeployGate {
   readonly running: boolean;
+  /**
+   * The teardown panel's Remove of the setting is running (AZR-121 review).
+   * Remove moved out of this section, so the section learns of it from the
+   * screen; a Deploy started under a Remove would race its by-name read.
+   */
+  readonly removing: boolean;
   /** The source's choice as the chooser answers it (rowChoices). */
   readonly choice: RowChoice;
   /** The last read, or null when none has been made. */
@@ -83,7 +89,7 @@ export function oursForTarget(
 
 /**
  * Why Deploy is disabled, or null when it may run. ONE reason, in this fixed
- * priority: running; no subscription; selection not loaded; not chosen; ours
+ * priority: running; a removal running; no subscription; selection not loaded; not chosen; ours
  * exists and matches; ours differs; another setting feeds the namespace; the
  * subscription is full; state not read or unreadable; no namespace; no rule;
  * the rule cannot Manage.
@@ -93,6 +99,7 @@ export function oursForTarget(
  */
 export function activityLogDeployDisabledReason(gate: ActivityLogDeployGate): string | null {
   if (gate.running) return "A deploy is already running.";
+  if (gate.removing) return `A removal of ${ACTIVITY_LOG_SETTING_NAME} is running. Deploy is off until it finishes.`;
   if (gate.subscriptionId === "") return "No Azure subscription is configured for this connection.";
   const blocked = choiceDeployBlock(gate.choice, "Azure Activity Log");
   if (blocked !== null) return blocked;

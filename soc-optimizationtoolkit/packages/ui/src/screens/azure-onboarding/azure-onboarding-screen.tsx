@@ -416,6 +416,10 @@ export function AzureOnboardingScreen({
   const [target, setTarget] = useState<EventHubTarget>(EMPTY_EVENTHUB_TARGET);
   const [defenderState, setDefenderState] = useState<DefenderState | null>(null);
   const [activityLogState, setActivityLogState] = useState<ActivityLogState | null>(null);
+  // AZR-121 review: Deploy (the section) and Remove (the teardown panel) live
+  // apart, so the screen holds both running flags and each turns the other off.
+  const [activityLogDeploying, setActivityLogDeploying] = useState(false);
+  const [activityLogRemoving, setActivityLogRemoving] = useState(false);
   const [entraState, setEntraState] = useState<EntraSettingState | null>(null);
   // AZR-99: the next Entra read follows the app's own write (see onEntraState).
   const entraReadAfterDeploy = useRef(false);
@@ -1380,6 +1384,8 @@ export function AzureOnboardingScreen({
                   onDeployed={onActivityLogDeployed}
                   howtoSection={CHOOSER_SECTION_NUMBER}
                   onShowHowto={() => showHowto(ACTIVITY_LOG_ITEM_ID)}
+                  removing={activityLogRemoving}
+                  onRunningChange={setActivityLogDeploying}
                 />
               ))}
             {view.rows.some((r) => r.kind === "item" && r.id === ENTRA_ITEM_ID) &&
@@ -1514,6 +1520,8 @@ export function AzureOnboardingScreen({
                 <ActivityLogRemovePanel
                   record={activityLogSettingRecord(progress, config.subscriptionId)}
                   onRemoved={onActivityLogRemoved}
+                  deploying={activityLogDeploying}
+                  onRunningChange={setActivityLogRemoving}
                 />
                 <EntraRemovePanel record={entraSettingRecord(progress, config.tenantId)} onRemoved={onEntraRemoved} />
               </>

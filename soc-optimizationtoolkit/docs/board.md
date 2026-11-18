@@ -9088,7 +9088,22 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   re-read after an already-gone Remove disarms an armed Deploy.
   Mutation-checked (gating the panel on the deploy block kind fails the two
   How-to pins; dropping the re-read fails two; dropping the disarm fails one).
-  NOT VERIFIED LIVE: the removal itself (AZR-105's live caveats stand).
+  NOT VERIFIED LIVE: the removal itself (AZR-105's live caveats stand). REVIEW
+  ROUND 1: moving Remove out of the section had dropped main's mutual
+  exclusion (Remove was disabled while the section's Deploy ran). The screen
+  now holds both running flags: Remove is off while a Deploy runs and Deploy
+  is off while a Remove runs (new gate reason "A removal of cribl-activity-log
+  is running. Deploy is off until it finishes."), and each drops the other's
+  armed confirm instead of masking it, so an arm made before does not come
+  back after. Pins: a held Deploy PUT disables Remove and drops its arm; a
+  held Remove GET disables Deploy with the exact reason; a Remove denied 403
+  (no re-read) does not leave Deploy re-armed; the gate's priority order.
+  Mutation-checked: six mutations, each failed at least one pin. Also: the
+  section's reset-the-arm-on-every-new-state effect raced a click made just
+  after a read (the deferred reset swallowed the arm; seen once as a flake in
+  the full test run). The arm now records the state it was made against and
+  staleness is derived, so the screen's re-read still disarms it (mutation:
+  ignoring the recorded state fails 5 pins).
 
 - **AZR-122** Activity Log Deploy treats an empty, unverified subscription settings list as ours-absent and PUTs, so a setting of our name the list could not show would be replaced
   `AZR-F9` `bug` `settled` `verified: pins`

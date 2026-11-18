@@ -73,11 +73,26 @@ class RoutingAzure implements AzureManagement {
   constructor(settings: unknown[] = []) {
     this.settings = [...settings];
   }
+  private held: { method: string; path: string; gate: Promise<void> } | null = null;
   puts(): AzureManagementRequest[] {
     return this.calls.filter((c) => c.method === "PUT");
   }
+  /** Hold the NEXT request with this method and path until the returned release is called. */
+  hold(method: string, path: string): () => void {
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.held = { method, path, gate };
+    return release;
+  }
   async request(r: AzureManagementRequest): Promise<PortHttpResponse> {
     this.calls.push(r);
+    const held = this.held;
+    if (held !== null && held.method === r.method && held.path === r.path) {
+      this.held = null;
+      await held.gate;
+    }
     if (r.method === "GET" && r.path === `${NS_ID}/eventhubs`) {
       return ok({ value: [{ name: HUB, id: HUB_ID, properties: { partitionCount: 2 } }] });
     }
@@ -271,6 +286,84 @@ describe("Activity Log setting - remove, from the teardown panel (AZR-105, AZR-1
     expect(deletes(azure)).toEqual([]);
   });
 
+  // AZR-121 review round 1: Deploy and Remove now live apart, and each must
+  // still turn the other off, as on main where both lived in the section.
+  it("Remove is off while a Deploy's PUT is in flight, and back on when it lands", async () => {
+    const azure = await deployOurs();
+    const stored = (azure as unknown as { settings: unknown[] }).settings;
+    stored.splice(0, stored.length);
+    await readSettings();
+    await waitFor(() => expect(deployButton().disabled).toBe(false));
+    // Arm Remove first, so the only thing that can take it away is the Deploy.
+    fireEvent.click(removeButton());
+    expect(screen.getByRole("group", { name: "Confirm Activity Log removal" })).toBeTruthy();
+    const release = azure.hold("PUT", OURS);
+    fireEvent.click(deployButton());
+    fireEvent.click(within(screen.getByRole("group", { name: "Confirm Activity Log deploy" })).getByRole("button", { name: "Confirm deploy" }));
+    await waitFor(() => expect(azure.puts()).toHaveLength(2));
+    await waitFor(() => expect(removeButton().disabled).toBe(true));
+    expect(screen.queryByRole("group", { name: "Confirm Activity Log removal" })).toBeNull();
+    expect(within(teardown()).getByText("A change is already running.")).toBeTruthy();
+    release();
+    await waitFor(() => expect(within(block()).getByText(/was created and read back from Azure/)).toBeTruthy());
+    await waitFor(() => expect(removeButton().disabled).toBe(false));
+    expect(within(teardown()).queryByText("A change is already running.")).toBeNull();
+    // The Remove armed before the Deploy does not come back armed after it.
+    expect(screen.queryByRole("group", { name: "Confirm Activity Log removal" })).toBeNull();
+    expect(deletes(azure)).toEqual([]);
+  });
+
+  it("Deploy is off while a Remove is in flight, and back on when it finishes", async () => {
+    const azure = await deployOurs();
+    const stored = (azure as unknown as { settings: unknown[] }).settings;
+    stored.splice(0, stored.length);
+    await readSettings();
+    await waitFor(() => expect(deployButton().disabled).toBe(false));
+    fireEvent.click(deployButton());
+    expect(screen.getByRole("group", { name: "Confirm Activity Log deploy" })).toBeTruthy();
+    const release = azure.hold("GET", OURS);
+    fireEvent.click(removeButton());
+    fireEvent.click(within(screen.getByRole("group", { name: "Confirm Activity Log removal" })).getByRole("button", { name: "Confirm remove" }));
+    await waitFor(() => expect(deployButton().disabled).toBe(true));
+    expect(screen.queryByRole("group", { name: "Confirm Activity Log deploy" })).toBeNull();
+    expect(
+      within(block()).getByText("A removal of cribl-activity-log is running. Deploy is off until it finishes."),
+    ).toBeTruthy();
+    release();
+    await waitFor(() => expect(within(teardown()).getByText("Nothing was removed: cribl-activity-log is not on this subscription.")).toBeTruthy());
+    await waitFor(() => expect(deployButton().disabled).toBe(false));
+    expect(screen.queryByRole("group", { name: "Confirm Activity Log deploy" })).toBeNull();
+    expect(azure.puts()).toHaveLength(1);
+    expect(deletes(azure)).toEqual([]);
+  });
+
+  it("a Deploy confirm armed before a Remove that changes nothing does not come back armed after it", async () => {
+    const azure = await deployOurs();
+    const stored = (azure as unknown as { settings: unknown[] }).settings;
+    stored.splice(0, stored.length);
+    await readSettings();
+    await waitFor(() => expect(deployButton().disabled).toBe(false));
+    fireEvent.click(deployButton());
+    expect(screen.getByRole("group", { name: "Confirm Activity Log deploy" })).toBeTruthy();
+    // Azure refuses the Remove's by-name read: no re-read follows, so only the in-flight drop can disarm Deploy.
+    const original = azure.request.bind(azure);
+    azure.request = async (r) =>
+      r.method === "GET" && r.path === OURS
+        ? (azure.calls.push(r), { ok: false, status: 403, body: { error: { code: "AuthorizationFailed", message: "no" } } } as unknown as PortHttpResponse)
+        : original(r);
+    const lists = azure.calls.filter((c) => c.method === "GET" && c.path === SETTINGS).length;
+    fireEvent.click(removeButton());
+    fireEvent.click(within(screen.getByRole("group", { name: "Confirm Activity Log removal" })).getByRole("button", { name: "Confirm remove" }));
+    await waitFor(() =>
+      expect(within(teardown()).getByText("Remove stopped at reading the setting. Read cribl-activity-log: HTTP 403 - no")).toBeTruthy(),
+    );
+    await waitFor(() => expect(deployButton().disabled).toBe(false));
+    expect(azure.calls.filter((c) => c.method === "GET" && c.path === SETTINGS)).toHaveLength(lists);
+    expect(screen.queryByRole("group", { name: "Confirm Activity Log deploy" })).toBeNull();
+    expect(azure.puts()).toHaveLength(1);
+    expect(deletes(azure)).toEqual([]);
+  });
+
   it("with the Activity Log switched to How-to, the section is gone but the Remove of the recorded setting stays", async () => {
     const azure = await deployOurs();
     fireEvent.click(screen.getByRole("radio", { name: "How-to Azure Activity Log" }));
@@ -448,6 +541,8 @@ describe("Activity Log section - after a write", () => {
           onDeployed={onDeployed}
           howtoSection={9}
           onShowHowto={() => {}}
+          removing={false}
+          onRunningChange={() => {}}
         />
       );
     }

@@ -31,17 +31,28 @@ export interface ActivityLogRemovePanelProps {
   readonly record: ActivityLogSettingRecord | null;
   /** Called with every outcome, so the screen can forget a removed setting's record and re-read. */
   readonly onRemoved: (outcome: ActivityLogRemoveOutcome) => void;
+  /**
+   * The Activity Log section's Deploy is running. Remove is off meanwhile, as
+   * it was when both lived in that section: a Remove under an in-flight PUT
+   * either deletes the setting the deploy is reading back, or answers
+   * already-gone after the deploy recorded it and forgets the record.
+   */
+  readonly deploying: boolean;
+  /** Told when a Remove starts and finishes, so the screen keeps Deploy off meanwhile. */
+  readonly onRunningChange: (running: boolean) => void;
 }
 
-export function ActivityLogRemovePanel({ record, onRemoved }: ActivityLogRemovePanelProps) {
+export function ActivityLogRemovePanel({ record, onRemoved, deploying, onRunningChange }: ActivityLogRemovePanelProps) {
   const { ports, config } = usePorts();
   const subscriptionId = config.subscriptionId;
   const [armedFor, setArmedFor] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
   const [outcome, setOutcome] = useState<ActivityLogRemoveOutcome | null>(null);
 
-  const reason = activityLogRemoveDisabledReason({ running: removing, subscriptionId, record });
-  const key = JSON.stringify([subscriptionId, record?.ruleId ?? null]);
+  const reason = activityLogRemoveDisabledReason({ running: removing || deploying, subscriptionId, record });
+  // `deploying` is in the key so a Deploy drops an armed Remove outright:
+  // otherwise the arm, only masked while the Deploy ran, came back after it.
+  const key = JSON.stringify([subscriptionId, record?.ruleId ?? null, deploying]);
   const armed = reason === null && armedFor === key;
   // Drop a stale arm outright: otherwise reverting the change would re-arm it.
   useEffect(() => {
@@ -55,11 +66,13 @@ export function ActivityLogRemovePanel({ record, onRemoved }: ActivityLogRemoveP
     if (reason !== null) return;
     setArmedFor(null);
     setRemoving(true);
+    onRunningChange(true);
     setOutcome(null);
     ports.logger?.info("azure-onboarding: activity log remove confirmed", {});
     const result = await removeActivityLogExport(ports.azure, { subscriptionId, record }, ports.logger);
     setOutcome(result);
     setRemoving(false);
+    onRunningChange(false);
     onRemoved(result);
   }
 
