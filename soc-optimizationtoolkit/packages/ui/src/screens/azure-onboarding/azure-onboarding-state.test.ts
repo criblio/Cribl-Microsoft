@@ -20,6 +20,8 @@ import {
   defaultSelection,
   encodeSelection,
   defaultPlanValues,
+  AUTO_HUB_SOURCE_IDS,
+  howToStep,
   laneTopics,
   onboardingSource,
   toListing,
@@ -612,7 +614,42 @@ describe("Event Hub picker messages reuse the shared empty-inventory wording", (
     });
 
     it("names exactly the diagnostic-setting sources as needing Manage", () => {
-      expect(MANAGE_RULE_SOURCE_IDS).toEqual(["activityLog", "entraId"]);
+      expect(MANAGE_RULE_SOURCE_IDS).toEqual([
+        "diagnosticSettingsInitiative",
+        "communityPolicyInitiative",
+        "activityLog",
+        "entraId",
+      ]);
+      // The How-to guide's Manage-rule step (eh-rule-diagnostic) is shown for
+      // exactly these sources; the two lists cannot drift apart.
+      expect([...MANAGE_RULE_SOURCE_IDS]).toEqual([...AUTO_HUB_SOURCE_IDS]);
+      expect([...(howToStep("eh-rule-diagnostic")?.sourceIds ?? [])]).toEqual([...MANAGE_RULE_SOURCE_IDS]);
+    });
+
+    it("a policy initiative alone needs Manage too: warns on a Send-only rule, never 'safer'", () => {
+      const sources = sourcesNeedingManageRule(["diagnosticSettingsInitiative"]);
+      expect(sources).toEqual(["Microsoft Audit diagnostic-settings initiative"]);
+      expect(ruleNote({ name: "cribl-send", rights: ["Send"] }, sources)).toEqual({
+        tone: "warning",
+        text:
+          `The rule cribl-send has Send. Microsoft Audit diagnostic-settings initiative needs a rule with Manage rights, because ${WHY}. ` +
+          "Choose a rule with Manage rights.",
+      });
+      expect(ruleNote({ name: "RootManageSharedAccessKey", rights: ["Listen", "Manage", "Send"] }, sources)).toEqual({
+        tone: "info",
+        text: `Microsoft Audit diagnostic-settings initiative needs a rule with Manage rights, as this one has, because ${WHY}.`,
+      });
+      expect(createRuleLabel(sources)).toBe("Create Manage rule");
+    });
+
+    it("the community initiative with the Defender export: Manage, named after the initiative", () => {
+      const sources = sourcesNeedingManageRule([DEFENDER_EXPORT_ITEM_ID, "communityPolicyInitiative"]);
+      expect(sources).toEqual(["Community policy initiative"]);
+      expect(ruleNote({ name: "ops", rights: ["Manage", "Send", "Listen"] }, sources)).toEqual({
+        tone: "info",
+        text: `Community policy initiative needs a rule with Manage rights, as this one has, because ${WHY}.`,
+      });
+      expect(createRuleLabel(sources)).toBe("Create Manage rule");
     });
 
   });

@@ -65,10 +65,9 @@
  */
 
 import {
-  ACTIVITY_LOG_ITEM_ID,
+  AUTO_HUB_SOURCE_IDS,
   DEFAULT_NAMESPACE_RULE,
   DEFENDER_EXPORT_NAME,
-  ENTRA_ITEM_ID,
   onboardingSource,
   ONBOARDING_SECTIONS,
   anyStandard,
@@ -874,10 +873,18 @@ export function ruleListMessage(read: EventHubTargetRead<EventHubTargetRule>): P
  * permissions" (learn.microsoft.com/azure/azure-monitor/data-collection/
  * diagnostic-settings, Destinations table). The Activity Log and Entra ID
  * deploy gates refuse a rule without Manage for that reason
- * (activity-log-state, entra-setting-state); the Defender export is a
- * continuous export, not a diagnostic setting, and writes with Send.
+ * (activity-log-state, entra-setting-state), and the two policy initiatives
+ * deploy diagnostic settings of the same kind (their How-to step
+ * eh-rule-diagnostic creates a Manage rule and checks it). The Defender
+ * export is a continuous export, not a diagnostic setting, and writes with
+ * Send.
+ *
+ * Derived from the catalog, never retyped: these are exactly the Event Hub
+ * sources whose hubs Azure creates itself (core's AUTO_HUB_SOURCE_IDS), the
+ * same list the How-to guide's Manage-rule step is shown for, so a new
+ * auto-hub source cannot get one answer from the guide and another here.
  */
-export const MANAGE_RULE_SOURCE_IDS: readonly OnboardingItemId[] = [ACTIVITY_LOG_ITEM_ID, ENTRA_ITEM_ID];
+export const MANAGE_RULE_SOURCE_IDS: readonly OnboardingItemId[] = AUTO_HUB_SOURCE_IDS;
 
 /**
  * The titles of the CHOSEN sources that need a Manage rule, in

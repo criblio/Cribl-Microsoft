@@ -31,3 +31,4 @@ export type { RenderedStep } from "./render-instruction";
 export { CONNECTION_STRING_STAND_IN, defenderExportBody } from "./defender-steps";
 export { ENTRA_WARNING, entraCategoriesFor, entraDeployTarget, entraProfileFrom } from "./entra-activity-steps";
 export { LEGACY_POLICY_NAMES } from "./policy-steps";
+export { AUTO_HUB_SOURCE_IDS } from "./eventhub-steps";

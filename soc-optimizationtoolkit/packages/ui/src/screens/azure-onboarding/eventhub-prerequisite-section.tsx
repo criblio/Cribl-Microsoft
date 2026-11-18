@@ -16,10 +16,11 @@
  * allowed, but the operator picks it knowingly. Each option shows the rule's
  * rights. The note beside the chosen rule is PER SOURCE (ruleNote): with the
  * Defender export alone it says a dedicated Send-only rule is safer; once a
- * chosen source streams through a diagnostic setting (Activity Log, Entra ID),
- * which Azure documents as needing Manage, it says that source needs Manage
- * instead, and warns about a rule without it - the same refusal that source's
- * deploy gate makes. The disabled create-rule button names the same kind.
+ * chosen source streams through a diagnostic setting (Activity Log, Entra ID,
+ * either policy initiative), which Azure documents as needing Manage, it says
+ * that source needs Manage instead, and warns about a rule without it - the
+ * same refusal the Activity Log and Entra ID deploy gates make and the How-to
+ * Manage-rule check makes. The disabled create-rule button names the same kind.
  *
  * A PASTED HUB MUST EXIST. A hub id pasted in is checked against the
  * namespace's hub listing once it lands. When that listing is COMPLETE (2xx,

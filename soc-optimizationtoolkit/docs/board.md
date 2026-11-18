@@ -9981,7 +9981,9 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Activity Log gate (and Entra ID's, which landed with AZR-99 and has the same
   refusal) keep requiring Manage and nothing is relaxed. FIX: ruleNote
   (azure-onboarding-state.ts) now takes the titles of the chosen sources that
-  stream through a diagnostic setting (MANAGE_RULE_SOURCE_IDS = activityLog,
+  stream through a diagnostic setting (MANAGE_RULE_SOURCE_IDS = core's
+  AUTO_HUB_SOURCE_IDS, the Event Hub sources whose hubs Azure creates:
+  diagnosticSettingsInitiative, communityPolicyInitiative, activityLog,
   entraId; sourcesNeedingManageRule over the screen's chosen ids, either mode,
   because a How-to operator makes the same setting by hand). With one chosen:
   a rule without Manage gets a WARNING in the gate's terms ('The rule SendOnly
@@ -10006,7 +10008,18 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   note ignoring the sources (4 pins fail), label fixed to Send-only (1),
   screen not passing the sources (1). UNVERIFIED LIVE: whether Azure actually
   refuses a Send-only rule for a diagnostic setting (AZR-116 item 1); if it
-  accepts one, the gate and this note relax together.
+  accepts one, the gate and this note relax together. REVIEW ROUND 1
+  (2026-11-18): the first cut listed only activityLog and entraId, so choosing
+  a policy initiative alone (or with the Defender export) still showed
+  'Send-only is safer' and 'Create Send-only rule' while the How-to step
+  eh-rule-diagnostic told the operator to create a Manage rule and its
+  eh-rule-manage check refused a Send-only one - the same contradiction. The
+  list is now derived from the catalog (AUTO_HUB_SOURCE_IDS, exported from
+  core), not retyped. Pins: the list equals AUTO_HUB_SOURCE_IDS and
+  eh-rule-diagnostic's sourceIds; the initiative-only case (exact warning and
+  info strings, 'Create Manage rule') and the community initiative + Defender
+  case. Mutation-checked: list cut back to the two sources (3 pins fail);
+  eh-rule-diagnostic's sources drifting from the list (1).
 
 - **CAP-10** Measure the Activity Log diagnostic-setting write so its section stops reading 'not measured'
   `CAP-F1` `enabler` `settled` `verified: pins`

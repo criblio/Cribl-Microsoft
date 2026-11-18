@@ -344,7 +344,12 @@ Appended; nothing above is edited.
   "Streaming to event hubs requires Manage, Send, and Listen permissions"
   (learn.microsoft.com, Azure Monitor "Diagnostic settings", Destinations
   table). The Activity Log and Entra ID deploys refuse a rule without Manage
-  for that reason. So once either is chosen (in either mode), the note beside
+  for that reason, and the two policy initiatives deploy diagnostic settings
+  of the same kind (their How-to step creates a Manage rule and checks for
+  it). The list is not retyped: it is every Event Hub source whose hubs Azure
+  creates itself (core's AUTO_HUB_SOURCE_IDS), the same list the How-to
+  guide's Manage-rule step is shown for. So once any of the four is chosen
+  (in either mode), the note beside
   the chosen rule says that source needs a rule with Manage rights - a
   warning in the gate's own terms for a rule without it, an info line for a
   rule with it - and the disabled create-rule button reads "Create Manage
