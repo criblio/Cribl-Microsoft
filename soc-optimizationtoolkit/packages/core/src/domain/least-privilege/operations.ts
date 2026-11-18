@@ -149,6 +149,70 @@ const OPERATIONS = {
       "PUT /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.EventHub/namespaces/{ns}/eventhubs/{hub}/consumergroups/{group}",
     ],
   },
+  "eventhub.rule.read": {
+    id: "eventhub.rule.read",
+    calls: [
+      { method: "GET", path: "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.EventHub/namespaces/{ns}/authorizationRules/{rule}", api: "arm" },
+    ],
+    operation: "Microsoft.EventHub/namespaces/authorizationRules/read",
+    leastRole: "Reader",
+    alsoGrantedBy: ["Monitoring Reader", "Contributor", "Azure Event Hubs Data Owner"],
+    scope: "resource",
+    scopeNote: "the Event Hub namespace that holds the rule",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/permissions/integration",
+    confidence: "high",
+    audit: [],
+    auditGap:
+      "Added with AZR-36: the Listen rule create reads the rule by name first and writes only on a 404, so an existing rule is never replaced. The same action the audited rules list needs; documented, not measured.",
+  },
+  "eventhub.rule.write": {
+    id: "eventhub.rule.write",
+    calls: [
+      { method: "PUT", path: "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.EventHub/namespaces/{ns}/authorizationRules/{rule}", api: "arm" },
+    ],
+    operation: "Microsoft.EventHub/namespaces/authorizationRules/write",
+    leastRole: "Azure Event Hubs Data Owner",
+    alsoGrantedBy: ["Contributor", "Owner"],
+    scope: "resource",
+    scopeNote: "the Event Hub namespace the rule is created on",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/permissions/integration",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added with AZR-36: creates a namespace rule with Listen rights only for the Cribl Event Hubs source. Documented, not measured - CAP-9 is the card that measures it at the namespace.",
+  },
+  "eventhub.rule.delete": {
+    id: "eventhub.rule.delete",
+    calls: [
+      { method: "DELETE", path: "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.EventHub/namespaces/{ns}/authorizationRules/{rule}", api: "arm" },
+    ],
+    operation: "Microsoft.EventHub/namespaces/authorizationRules/delete",
+    leastRole: "Azure Event Hubs Data Owner",
+    alsoGrantedBy: ["Contributor", "Owner"],
+    scope: "resource",
+    scopeNote: "the Event Hub namespace that holds the rule",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/permissions/integration",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added with AZR-36: Remove deletes only the Listen rule this app created and proved its own. Documented, not measured - no delete has been made with a reduced identity.",
+  },
+  "eventhub.consumerGroup.delete": {
+    id: "eventhub.consumerGroup.delete",
+    calls: [
+      { method: "DELETE", path: "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.EventHub/namespaces/{ns}/eventhubs/{hub}/consumergroups/{group}", api: "arm" },
+    ],
+    operation: "Microsoft.EventHub/namespaces/eventHubs/consumergroups/delete",
+    leastRole: "Azure Event Hubs Data Owner",
+    alsoGrantedBy: ["Contributor", "Owner"],
+    scope: "resource",
+    scopeNote: "the event hub",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/permissions/integration",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added with AZR-36: Remove deletes only the consumer group this app created and stamped. Documented, not measured - no delete has been made with a reduced identity.",
+  },
   "eventhub.rules.list": {
     id: "eventhub.rules.list",
     calls: [

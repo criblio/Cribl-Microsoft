@@ -77,6 +77,8 @@ export {
   withLakeRouteAfterTeardown,
   withoutActivityLogSetting,
   withoutCriblSource,
+  withEventHubAccess,
+  withoutEventHubAccess,
 } from "./progress-document";
 export type {
   ActivityLogSettingRecord,

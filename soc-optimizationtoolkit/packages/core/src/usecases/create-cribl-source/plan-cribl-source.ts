@@ -772,7 +772,7 @@ export async function planCriblSource(
       return refused(
         "consumer-group-missing",
         `The consumer group ${consumerGroup} does not exist on ${missing.length === 1 ? "hub" : "hubs"} ${missing.join(", ")}, so the source would be created but could not read. ` +
-          "Create it (the How-to step for the consumer group says how), run Validate, then create the source.",
+          "Create it with Listen rule and consumer group above (or by the How-to step for the consumer group), then create the source.",
       );
     }
     readsFrom = { hubs: [...topics.topics], consumerGroup };
