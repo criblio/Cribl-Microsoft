@@ -162,6 +162,7 @@ export const ACTIVITY_LOG_DELIVERY_NOT_VERIFIED =
 
 const STEP_LABELS: Readonly<Record<ActivityLogDeployStep, string>> = {
   "setting-list": "listing the subscription's diagnostic settings",
+  "setting-read": `reading ${ACTIVITY_LOG_SETTING_NAME} by name`,
   "setting-put": "creating the diagnostic setting",
 };
 

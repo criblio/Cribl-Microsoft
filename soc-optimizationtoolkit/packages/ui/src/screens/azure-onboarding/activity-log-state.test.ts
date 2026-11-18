@@ -161,6 +161,19 @@ describe("activityLogOutcomeMessage", () => {
       text: "Deploy stopped at listing the subscription's diagnostic settings. List: HTTP 403 - no",
     });
     expect(message("failed").text).toBe("Deploy stopped at creating the diagnostic setting. Create: dns");
+    // AZR-122: the by-name read on an empty list is its own named step.
+    expect(
+      activityLogOutcomeMessage({
+        kind: "denied",
+        step: "setting-read",
+        status: 403,
+        code: "AuthorizationFailed",
+        message: "Read cribl-activity-log by name: HTTP 403 - no",
+      }),
+    ).toEqual({
+      tone: "error",
+      text: "Deploy stopped at reading cribl-activity-log by name. Read cribl-activity-log by name: HTTP 403 - no",
+    });
   });
 
   it("carries no project history", () => {

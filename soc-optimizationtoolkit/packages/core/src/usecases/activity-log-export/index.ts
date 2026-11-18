@@ -7,6 +7,7 @@
 
 export {
   ACTIVITY_LOG_ITEM_ID,
+  confirmEmptyListing,
   deployActivityLogExport,
   listDiagnosticSettings,
   readActivityLogState,
@@ -18,6 +19,7 @@ export type {
   ActivityLogOursReading,
   ActivityLogSettingsState,
   ActivityLogState,
+  ConfirmedListing,
 } from "./activity-log-export";
 
 // AZR-105: remove the setting the app created, once proven its own.
