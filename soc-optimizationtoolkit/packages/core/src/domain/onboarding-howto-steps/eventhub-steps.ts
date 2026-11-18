@@ -27,14 +27,14 @@ import {
   namespaceRuleResourceId,
   type NamespaceRef,
 } from "../eventhub-arm/eventhub-arm";
-import type { PlanValues } from "../onboarding-howto/plan-values";
+import { eventHubLocation, type PlanValues } from "../onboarding-howto/plan-values";
 import { leastRoleFor } from "../least-privilege";
 import { ONBOARDING_SOURCES, type OnboardingSourceId } from "../onboarding-howto/sources";
 import type { HowToStep } from "./steps";
 
 /** The namespace the plan values address. */
 export function planNamespace(v: PlanValues): NamespaceRef {
-  return { subscriptionId: v.subscriptionId, resourceGroup: v.resourceGroup, name: v.namespace };
+  return { ...eventHubLocation(v), name: v.namespace };
 }
 
 /** The ARM id of the plan's rule `ruleName` on the plan's namespace. */
@@ -87,11 +87,11 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
     why: "Azure writes the logs to a hub in this namespace and Cribl reads them from it over the Kafka protocol, which needs the Standard tier or higher. Diagnostic settings can only write to a namespace in the same region as the resource, so it lives in {{region}}.",
     portal: [
       "Open Event Hubs in the Azure portal and select Create.",
-      "Subscription {{subscriptionId}}, resource group {{resourceGroup}}, namespace name {{namespace}}, location {{region}}.",
+      "Subscription {{eventHubSubscriptionId}}, resource group {{eventHubResourceGroup}}, namespace name {{namespace}}, location {{region}}.",
       "Pricing tier: Standard (or Premium). Basic cannot be read by Cribl.",
       "Review and create. If the namespace already exists, open it and check its pricing tier instead.",
     ],
-    cli: "az eventhubs namespace create --subscription {{subscriptionId}} --resource-group {{resourceGroup}} --name {{namespace}} --location {{region}} --sku Standard",
+    cli: "az eventhubs namespace create --subscription {{eventHubSubscriptionId}} --resource-group {{eventHubResourceGroup}} --name {{namespace}} --location {{region}} --sku Standard",
     values: (v) => [
       { label: "Namespace resource ID", value: eventHubNamespacePath(planNamespace(v)) },
       { label: "Kafka endpoint Cribl connects to", value: `${v.namespace}.servicebus.windows.net:9093` },
@@ -99,7 +99,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
     ],
     rbac: [NS_WRITE],
     confirmHow: "The namespace {{namespace}} shows Status Active and Pricing tier Standard or Premium on its Overview page.",
-    dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "region"],
+    dependsOnValues: ["eventHubSubscriptionId", "eventHubResourceGroup", "namespace", "region"],
     checkKinds: ["eh-namespace"],
     provenance: "repo",
   },
@@ -113,14 +113,14 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
       "Name: {{hubName}}. Keep the default partition count unless you expect very high volume.",
       "Create.",
     ],
-    cli: "az eventhubs eventhub create --subscription {{subscriptionId}} --resource-group {{resourceGroup}} --namespace-name {{namespace}} --name {{hubName}}",
+    cli: "az eventhubs eventhub create --subscription {{eventHubSubscriptionId}} --resource-group {{eventHubResourceGroup}} --namespace-name {{namespace}} --name {{hubName}}",
     values: (v) => [
       { label: "Hub resource ID", value: eventHubResourceId(planNamespace(v), v.hubName) },
       { label: "Kafka topic", value: v.hubName },
     ],
     rbac: [`Microsoft.EventHub/namespaces/eventhubs/write on the namespace (${leastRoleFor("eventhub.hub.write")} includes it).`],
     confirmHow: "The hub {{hubName}} is listed under Event Hubs in the namespace {{namespace}}.",
-    dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "hubName"],
+    dependsOnValues: ["eventHubSubscriptionId", "eventHubResourceGroup", "namespace", "hubName"],
     checkKinds: ["eh-hub"],
     provenance: "repo",
   },
@@ -134,7 +134,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
       "Policy name: {{sendRule}}. Tick Send only.",
       "Create.",
     ],
-    cli: "az eventhubs namespace authorization-rule create --subscription {{subscriptionId}} --resource-group {{resourceGroup}} --namespace-name {{namespace}} --name {{sendRule}} --rights Send",
+    cli: "az eventhubs namespace authorization-rule create --subscription {{eventHubSubscriptionId}} --resource-group {{eventHubResourceGroup}} --namespace-name {{namespace}} --name {{sendRule}} --rights Send",
     values: (v) => [
       { label: "Rule resource ID", value: planRuleId(v, v.sendRule) },
       { label: "Rights", value: "Send" },
@@ -144,7 +144,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
       "Microsoft.EventHub/namespaces/authorizationRules/listKeys/action, to read the connection string when you create the export.",
     ],
     confirmHow: "The rule {{sendRule}} is listed under Shared access policies with the claim Send.",
-    dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "sendRule"],
+    dependsOnValues: ["eventHubSubscriptionId", "eventHubResourceGroup", "namespace", "sendRule"],
     checkKinds: ["eh-rule-send"],
     provenance: "repo",
     warning: "If you also choose a source whose hubs Azure creates itself, this guide replaces this step with one Manage rule of the same name: a Manage rule can also Send, so one rule serves both.",
@@ -159,14 +159,14 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
       "Policy name: {{sendRule}}. Tick Manage (which also selects Send and Listen).",
       "Create.",
     ],
-    cli: "az eventhubs namespace authorization-rule create --subscription {{subscriptionId}} --resource-group {{resourceGroup}} --namespace-name {{namespace}} --name {{sendRule}} --rights Manage Send Listen",
+    cli: "az eventhubs namespace authorization-rule create --subscription {{eventHubSubscriptionId}} --resource-group {{eventHubResourceGroup}} --namespace-name {{namespace}} --name {{sendRule}} --rights Manage Send Listen",
     values: (v) => [{ label: "Rule resource ID", value: planRuleId(v, v.sendRule) }],
     rbac: [
       "Microsoft.EventHub/namespaces/authorizationRules/write on the namespace.",
       "Whoever creates the diagnostic setting also needs Microsoft.EventHub/namespaces/authorizationRules/listKeys/action on this rule.",
     ],
     confirmHow: "The rule {{sendRule}} is listed under Shared access policies with the claims Manage, Send, Listen.",
-    dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "sendRule"],
+    dependsOnValues: ["eventHubSubscriptionId", "eventHubResourceGroup", "namespace", "sendRule"],
     // 'eh-rule-manage', not 'eh-rule-send': the rule must have Manage, and
     // 'eh-rule-send' accepts Send or Manage, so it would call a Send-only rule
     // done here - a false "done" on the very right this step grants (AZR-39).
@@ -184,7 +184,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
       "Policy name: {{listenRule}}. Tick Listen only.",
       "Create, then open the rule and copy its Connection string - primary key. You paste it into the Cribl source section of this page; the app stores it as a Cribl secret and never keeps it here.",
     ],
-    cli: "az eventhubs namespace authorization-rule create --subscription {{subscriptionId}} --resource-group {{resourceGroup}} --namespace-name {{namespace}} --name {{listenRule}} --rights Listen\naz eventhubs namespace authorization-rule keys list --subscription {{subscriptionId}} --resource-group {{resourceGroup}} --namespace-name {{namespace}} --name {{listenRule}} --query primaryConnectionString --output tsv",
+    cli: "az eventhubs namespace authorization-rule create --subscription {{eventHubSubscriptionId}} --resource-group {{eventHubResourceGroup}} --namespace-name {{namespace}} --name {{listenRule}} --rights Listen\naz eventhubs namespace authorization-rule keys list --subscription {{eventHubSubscriptionId}} --resource-group {{eventHubResourceGroup}} --namespace-name {{namespace}} --name {{listenRule}} --query primaryConnectionString --output tsv",
     values: (v) => [
       { label: "Rule resource ID", value: planRuleId(v, v.listenRule) },
       { label: "Rights", value: "Listen" },
@@ -194,7 +194,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
       "Microsoft.EventHub/namespaces/authorizationRules/listKeys/action to copy the connection string.",
     ],
     confirmHow: "The rule {{listenRule}} is listed under Shared access policies with the claim Listen.",
-    dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "listenRule"],
+    dependsOnValues: ["eventHubSubscriptionId", "eventHubResourceGroup", "namespace", "listenRule"],
     checkKinds: ["eh-rule-listen"],
     provenance: "repo",
     warning: "Only needed if the Cribl source uses a connection string. With Entra ID, the default, Cribl reads with the role the Cribl principal step assigns and no Listen rule is used.",
@@ -208,7 +208,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
       "Open the hub {{hubName}} in the namespace {{namespace}} and select Consumer groups, then + Consumer group.",
       "Name: {{consumerGroup}}. Create.",
     ],
-    cli: "az eventhubs eventhub consumer-group create --subscription {{subscriptionId}} --resource-group {{resourceGroup}} --namespace-name {{namespace}} --eventhub-name {{hubName}} --name {{consumerGroup}}",
+    cli: "az eventhubs eventhub consumer-group create --subscription {{eventHubSubscriptionId}} --resource-group {{eventHubResourceGroup}} --namespace-name {{namespace}} --eventhub-name {{hubName}} --name {{consumerGroup}}",
     values: (v) => [
       {
         label: "Consumer group resource ID",
@@ -217,7 +217,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
     ],
     rbac: ["Microsoft.EventHub/namespaces/eventhubs/consumergroups/write on the namespace."],
     confirmHow: "The consumer group {{consumerGroup}} is listed on the hub {{hubName}}.",
-    dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "hubName", "consumerGroup"],
+    dependsOnValues: ["eventHubSubscriptionId", "eventHubResourceGroup", "namespace", "hubName", "consumerGroup"],
     checkKinds: ["eh-consumer-group"],
     provenance: "repo",
   },
@@ -231,14 +231,14 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
       "For each of them: open it, select Consumer groups, then + Consumer group, and name it {{consumerGroup}}.",
       "Run Validate on this page afterwards: the Cribl source reads only the hubs Validate has seen.",
     ],
-    cli: "az eventhubs eventhub consumer-group create --subscription {{subscriptionId}} --resource-group {{resourceGroup}} --namespace-name {{namespace}} --eventhub-name <hub Azure created> --name {{consumerGroup}}",
+    cli: "az eventhubs eventhub consumer-group create --subscription {{eventHubSubscriptionId}} --resource-group {{eventHubResourceGroup}} --namespace-name {{namespace}} --eventhub-name <hub Azure created> --name {{consumerGroup}}",
     values: (v) => [
       { label: "Hub list to watch", value: `${eventHubNamespacePath(planNamespace(v))}/eventhubs` },
       { label: "Consumer group", value: v.consumerGroup },
     ],
     rbac: ["Microsoft.EventHub/namespaces/eventhubs/consumergroups/write on the namespace."],
     confirmHow: "Every hub Azure created in {{namespace}} lists the consumer group {{consumerGroup}}.",
-    dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "consumerGroup"],
+    dependsOnValues: ["eventHubSubscriptionId", "eventHubResourceGroup", "namespace", "consumerGroup"],
     checkKinds: ["eh-hub", "eh-consumer-group-auto"],
     provenance: "inferred",
   },
@@ -253,7 +253,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
       "Members: User, group, or service principal; select the service principal with object ID {{criblPrincipalObjectId}}.",
       "Review and assign.",
     ],
-    cli: `az role assignment create --assignee-object-id {{criblPrincipalObjectId}} --assignee-principal-type ServicePrincipal --role "${RECEIVER_ROLE}" --scope /subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}/eventhubs/{{hubName}}`,
+    cli: `az role assignment create --assignee-object-id {{criblPrincipalObjectId}} --assignee-principal-type ServicePrincipal --role "${RECEIVER_ROLE}" --scope /subscriptions/{{eventHubSubscriptionId}}/resourceGroups/{{eventHubResourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}/eventhubs/{{hubName}}`,
     values: (v) => [
       { label: "Role scope", value: eventHubResourceId(planNamespace(v), v.hubName) },
       { label: "Role", value: RECEIVER_ROLE },
@@ -263,7 +263,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
       `Microsoft.Authorization/roleAssignments/write on the hub. ${RECEIVER_RBAC_NOTE}`,
     ],
     confirmHow: "Access control (IAM), Role assignments on the hub {{hubName}} lists Azure Event Hubs Data Receiver for {{criblPrincipalObjectId}}.",
-    dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "hubName", "criblPrincipalObjectId"],
+    dependsOnValues: ["eventHubSubscriptionId", "eventHubResourceGroup", "namespace", "hubName", "criblPrincipalObjectId"],
     checkKinds: ["eh-role-receiver"],
     // Inferred, not live-confirmed: that a hub-scoped grant alone is enough for
     // the Kafka endpoint (ADR 0008 Unverified).
@@ -280,7 +280,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
       "Members: User, group, or service principal; select the service principal with object ID {{criblPrincipalObjectId}}.",
       "Review and assign.",
     ],
-    cli: `az role assignment create --assignee-object-id {{criblPrincipalObjectId}} --assignee-principal-type ServicePrincipal --role "${RECEIVER_ROLE}" --scope /subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}`,
+    cli: `az role assignment create --assignee-object-id {{criblPrincipalObjectId}} --assignee-principal-type ServicePrincipal --role "${RECEIVER_ROLE}" --scope /subscriptions/{{eventHubSubscriptionId}}/resourceGroups/{{eventHubResourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}`,
     values: (v) => [
       { label: "Role scope", value: eventHubNamespacePath(planNamespace(v)) },
       { label: "Role", value: RECEIVER_ROLE },
@@ -290,7 +290,7 @@ export const EVENTHUB_STEPS: readonly HowToStep[] = [
       `Microsoft.Authorization/roleAssignments/write on the namespace. ${RECEIVER_RBAC_NOTE}`,
     ],
     confirmHow: "Access control (IAM), Role assignments on the namespace {{namespace}} lists Azure Event Hubs Data Receiver for {{criblPrincipalObjectId}}.",
-    dependsOnValues: ["subscriptionId", "resourceGroup", "namespace", "criblPrincipalObjectId"],
+    dependsOnValues: ["eventHubSubscriptionId", "eventHubResourceGroup", "namespace", "criblPrincipalObjectId"],
     checkKinds: ["eh-role-receiver"],
     provenance: "inferred",
   },

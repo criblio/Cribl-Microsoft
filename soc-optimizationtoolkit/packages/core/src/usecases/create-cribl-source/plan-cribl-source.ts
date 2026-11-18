@@ -62,7 +62,7 @@ import { mapListRead, type ListRead } from "../../domain/logging-map/list-read";
 import { roleAssignmentsForPrincipalRequest } from "../../domain/logging-map/logging-map-requests";
 import { listingRows } from "../../domain/inventory-listing";
 import type { OnboardingSource } from "../../domain/onboarding-howto/sources";
-import type { PlanValues } from "../../domain/onboarding-howto/plan-values";
+import { eventHubLocation, type PlanValues } from "../../domain/onboarding-howto/plan-values";
 import type { CriblSourceRecord } from "../../domain/onboarding-howto/progress-document";
 import type { CriblInputType } from "../../domain/onboarding-howto/sources";
 import {
@@ -395,8 +395,10 @@ export async function readScope(
 }
 
 function namespaceOf(values: PlanValues): NamespaceRef | null {
-  const subscriptionId = values.subscriptionId.trim();
-  const resourceGroup = values.resourceGroup.trim();
+  // AZR-102: the namespace's own subscription and resource group, or the shared ones.
+  const loc = eventHubLocation(values);
+  const subscriptionId = loc.subscriptionId.trim();
+  const resourceGroup = loc.resourceGroup.trim();
   const name = values.namespace.trim();
   if (subscriptionId === "" || resourceGroup === "" || name === "") return null;
   return { subscriptionId, resourceGroup, name };

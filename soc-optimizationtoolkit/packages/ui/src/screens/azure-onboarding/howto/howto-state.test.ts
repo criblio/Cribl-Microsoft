@@ -15,6 +15,7 @@ import {
   howToStep,
   isAutomatable,
   otherNameAlsoFound,
+  renderStep,
   withPlanValues,
   withSourceChosen,
   withSourceMode,
@@ -32,13 +33,20 @@ import type { CopyEntry } from "../../../components/copy-rules";
 import {
   AGGREGATE_VERDICT_WORD,
   AUTOMATE_LOCKED_REASON,
+  EVENT_HUB_FOLLOWS_NOTE,
+  EVENT_HUB_FOLLOWS_NOTHING_PICKED_NOTE,
+  EVENT_HUB_OWN_NOTE,
   PROGRESS_FAILED_REASON,
   PROGRESS_LOADING_REASON,
   UNVERIFIED_TAG,
   applyPlanValues,
   canWriteProgress,
+  chooseEventHubSource,
   chooserRows,
   chosenSourceIds,
+  eventHubLinkView,
+  followPickedEventHub,
+  pickedEventHub,
   progressBanners,
   progressBlockedReason,
   progressLoadStateFrom,
@@ -493,5 +501,168 @@ describe("rowChoices - the method sections read the chooser's answer, never the 
       doc: "selection",
       cause: "not-ours",
     });
+  });
+});
+
+// AZR-102: the section 1 picker and the plan values held separate copies of
+// the Event Hub, so a deploy could write to one hub while the steps named another.
+describe("one Event Hub: the plan values derive from the section 1 picker", () => {
+  const NS = { subscriptionId: "sub-p", resourceGroup: "rg-p", name: "picked-ns" };
+  const PICKED = {
+    eventHubSubscriptionId: "sub-p",
+    eventHubResourceGroup: "rg-p",
+    namespace: "picked-ns",
+    hubName: "picked-hub",
+    sendRule: "send-p",
+  };
+  const FIRST_RUN = emptyProgress({ subscriptionId: "sub-1", resourceGroup: "rg-1" });
+
+  it("pickedEventHub names an Event Hub only once a namespace AND a hub are picked", () => {
+    expect(pickedEventHub({ namespace: null, hubName: "", rule: null })).toBeNull();
+    expect(pickedEventHub({ namespace: NS, hubName: "", rule: null })).toBeNull();
+    expect(pickedEventHub({ namespace: NS, hubName: "picked-hub", rule: null })).toEqual({ ...PICKED, sendRule: "" });
+    expect(pickedEventHub({ namespace: NS, hubName: "picked-hub", rule: { name: "send-p" } })).toEqual(PICKED);
+  });
+
+  it("a pick writes exactly the five Event Hub names into a first run's plan, and records that they follow section 1", () => {
+    const next = followPickedEventHub(ready(FIRST_RUN), PICKED);
+    expect(next).not.toBeNull();
+    expect(next?.planValues).toEqual({ ...FIRST_RUN.planValues, ...PICKED });
+    expect(next?.eventHubSource).toBe("section1");
+    // Nothing else about the plan moves, the shared subscription and resource group above all.
+    expect(next?.planValues.consumerGroup).toBe(FIRST_RUN.planValues.consumerGroup);
+    expect([next?.planValues.subscriptionId, next?.planValues.resourceGroup]).toEqual(["sub-1", "rg-1"]);
+  });
+
+  // Review of AZR-102: the picker wrote the SHARED subscription and resource
+  // group, which storage, Defender, flow-log and policy steps also read.
+  it("an operator's own subscription and resource group survive a pick, and the storage and Defender steps still name them", () => {
+    const typed = withPlanValues(FIRST_RUN, {
+      ...FIRST_RUN.planValues,
+      subscriptionId: "sub-operator",
+      resourceGroup: "rg-storage",
+      storageAccount: "acct1",
+      region: "eastus",
+    });
+    expect(typed.eventHubSource).toBeUndefined();
+    const next = followPickedEventHub(ready(typed), PICKED)!;
+    expect(next).not.toBeNull();
+    expect([next.planValues.subscriptionId, next.planValues.resourceGroup]).toEqual(["sub-operator", "rg-storage"]);
+
+    const render = (id: string) => renderStep(howToStep(id)!, next.planValues);
+    const storage = render("blob-storage-account");
+    expect(storage.cli).toContain("sub-operator");
+    expect(storage.cli).toContain("rg-storage");
+    expect(storage.cli).not.toContain("rg-p");
+    const plans = render("defender-plans");
+    expect(plans.title).toBe("Confirm a Defender for Cloud plan is on in sub-operator");
+    const exportStep = render("defender-export");
+    expect(exportStep.portal.join("\n")).toContain("Save the export configuration to the resource group rg-storage");
+    // ...while the Event Hub steps address the namespace where it lives.
+    const ns = render("eh-namespace");
+    expect(ns.cli).toBe(
+      "az eventhubs namespace create --subscription sub-p --resource-group rg-p --name picked-ns --location eastus --sku Standard",
+    );
+    expect(exportStep.portal.join("\n")).toContain("Export target: subscription sub-p, namespace picked-ns in resource group rg-p, Event Hub picked-hub");
+  });
+
+  it("with no namespace location set, the Event Hub steps use the shared subscription and resource group, as before", () => {
+    const legacy = withPlanValues(FIRST_RUN, { ...FIRST_RUN.planValues, namespace: "ns1", region: "eastus" });
+    expect(renderStep(howToStep("eh-namespace")!, legacy.planValues).cli).toBe(
+      "az eventhubs namespace create --subscription sub-1 --resource-group rg-1 --name ns1 --location eastus --sku Standard",
+    );
+  });
+
+  it("writes nothing when the plan already names exactly the picked hub and follows section 1", () => {
+    const synced = followPickedEventHub(ready(FIRST_RUN), PICKED)!;
+    expect(followPickedEventHub(ready(synced), PICKED)).toBeNull();
+    expect(followPickedEventHub(ready(synced), { ...PICKED, hubName: "hub-2" })?.planValues.hubName).toBe("hub-2");
+  });
+
+  it("MIGRATION: a plan saved before AZR-102 that names an Event Hub is the operator's own, and a pick never overwrites it", () => {
+    const legacy = withPlanValues(FIRST_RUN, { ...FIRST_RUN.planValues, namespace: "mine", hubName: "my-hub" });
+    expect(legacy.eventHubSource).toBeUndefined();
+    expect(followPickedEventHub(ready(legacy), PICKED)).toBeNull();
+    const view = eventHubLinkView(legacy, PICKED);
+    expect(view.follows).toBe(false);
+    expect(view.lockedKeys).toEqual([]);
+    expect(view.note).toBe(EVENT_HUB_OWN_NOTE);
+    expect(view.drift).toBe(
+      "Section 1 and these names differ (Event Hub subscription ID, Event Hub resource group, Event Hub namespace, Event Hub name, Send rule): a deploy on this page writes to section 1's Event Hub, picked-ns/picked-hub, while the How-to steps, Validate and the Cribl source use mine/my-hub.",
+    );
+  });
+
+  it("MIGRATION reads only the keys the picker writes: typed shared subscription and resource group alone still follow section 1", () => {
+    const typed = withPlanValues(FIRST_RUN, { ...FIRST_RUN.planValues, subscriptionId: "sub-x", resourceGroup: "rg-x" });
+    expect(eventHubLinkView(typed, null).follows).toBe(true);
+    const loc = withPlanValues(FIRST_RUN, { ...FIRST_RUN.planValues, eventHubResourceGroup: "rg-eh" });
+    expect(eventHubLinkView(loc, null).follows).toBe(false);
+  });
+
+  it("a blank namespace location equal to the picked one by way of the shared values is no difference", () => {
+    const own = withPlanValues(FIRST_RUN, { ...FIRST_RUN.planValues, namespace: "picked-ns", hubName: "picked-hub", sendRule: "send-p" });
+    expect(eventHubLinkView(own, { ...PICKED, eventHubSubscriptionId: "sub-1", eventHubResourceGroup: "rg-1" }).drift).toBeNull();
+    expect(eventHubLinkView(own, PICKED).drift).toContain("(Event Hub subscription ID, Event Hub resource group)");
+  });
+
+  it("nothing is written while progress writes are blocked or with no complete pick", () => {
+    expect(followPickedEventHub({ status: "read-unknown", reason: "HTTP 403" }, PICKED)).toBeNull();
+    expect(followPickedEventHub({ status: "loading" }, PICKED)).toBeNull();
+    expect(followPickedEventHub(ready(FIRST_RUN), null)).toBeNull();
+    expect(chooseEventHubSource({ status: "read-unknown", reason: "HTTP 403" }, "own", PICKED)).toBeNull();
+  });
+
+  it("choosing own keeps the names and stops a later pick; following again takes the pick at once", () => {
+    const synced = followPickedEventHub(ready(FIRST_RUN), PICKED)!;
+    const own = chooseEventHubSource(ready(synced), "own", PICKED)!;
+    expect(own.eventHubSource).toBe("own");
+    expect(own.planValues).toEqual(synced.planValues);
+    expect(chooseEventHubSource(ready(own), "own", PICKED)).toBeNull();
+    expect(followPickedEventHub(ready(own), { ...PICKED, hubName: "hub-2" })).toBeNull();
+
+    const back = chooseEventHubSource(ready(own), "section1", { ...PICKED, hubName: "hub-2" })!;
+    expect(back.eventHubSource).toBe("section1");
+    expect(back.planValues.hubName).toBe("hub-2");
+    // With nothing picked, following keeps the names until the next pick.
+    const noPick = chooseEventHubSource(ready(own), "section1", null)!;
+    expect(noPick.eventHubSource).toBe("section1");
+    expect(noPick.planValues).toEqual(own.planValues);
+  });
+
+  it("the view locks the five Event Hub keys while they follow, and has no drift once synced", () => {
+    const synced = followPickedEventHub(ready(FIRST_RUN), PICKED)!;
+    const view = eventHubLinkView(synced, PICKED);
+    expect(view).toEqual({
+      follows: true,
+      lockedKeys: ["eventHubSubscriptionId", "eventHubResourceGroup", "namespace", "hubName", "sendRule"],
+      note: EVENT_HUB_FOLLOWS_NOTE,
+      drift: null,
+    });
+    expect(eventHubLinkView(synced, null).drift).toBeNull();
+  });
+
+  // Review of AZR-102: following with nothing picked (normal after a reload)
+  // claimed the shown names came from section 1.
+  it("following with nothing picked says so, and that the names shown are the last saved", () => {
+    const synced = followPickedEventHub(ready(FIRST_RUN), PICKED)!;
+    const view = eventHubLinkView(synced, null);
+    expect(view.follows).toBe(true);
+    expect(view.note).toBe(EVENT_HUB_FOLLOWS_NOTHING_PICKED_NOTE);
+    expect(view.note).toBe(
+      "These Event Hub names follow section 1, Event Hub the sources send to, but no Event Hub is picked there yet (a pick is not kept when the page reloads). They show the names last saved; pick the Event Hub there to change them.",
+    );
+    expect(eventHubLinkView(synced, PICKED).note).toBe(EVENT_HUB_FOLLOWS_NOTE);
+  });
+
+  it("its copy carries no project history", () => {
+    const legacy = withPlanValues(FIRST_RUN, { ...FIRST_RUN.planValues, namespace: "mine" });
+    const entries: CopyEntry[] = [
+      { where: "follows", text: EVENT_HUB_FOLLOWS_NOTE },
+      { where: "follows-nothing-picked", text: EVENT_HUB_FOLLOWS_NOTHING_PICKED_NOTE },
+      { where: "own", text: EVENT_HUB_OWN_NOTE },
+      { where: "drift", text: eventHubLinkView(legacy, PICKED).drift ?? "" },
+    ];
+    const violations = findHistoryInCopy(entries);
+    expect(violations, describeViolations(violations)).toEqual([]);
   });
 });

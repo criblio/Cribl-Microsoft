@@ -41,6 +41,7 @@ import {
   ONBOARDING_SOURCES,
   emptyProgress,
   encodeProgress,
+  withPlanValues,
   withSourceChosen,
   withSourceMode,
   COVERAGE_SELECTION_KEY,
@@ -932,6 +933,93 @@ describe("AzureOnboardingScreen - the Defender deploy", () => {
     expect(document.body.innerHTML).not.toContain(SECRET_KEY);
     expect(JSON.stringify(logger.entries)).not.toContain(SECRET_KEY);
     expect(JSON.stringify(azure.puts()[0]?.body)).toContain(SECRET_KEY);
+  });
+
+  // AZR-102: the picker and the How-to plan values held separate copies of the
+  // Event Hub, so a deploy wrote to the picker's hub while the steps, Validate
+  // and the Cribl source read the plan's.
+  it("a deploy and the How-to plan name the same Event Hub: the pick writes the plan's Event Hub names", async () => {
+    const { azure, store } = mount();
+    await readyToDeploy();
+
+    const saved = (store?.saves ?? []).filter((s) => s.key === PROGRESS_KEY);
+    const plan = (saved.at(-1)?.value as { planValues: Record<string, string>; eventHubSource?: string } | undefined);
+    expect(plan?.eventHubSource).toBe("section1");
+    expect({
+      eventHubSubscriptionId: plan?.planValues["eventHubSubscriptionId"],
+      eventHubResourceGroup: plan?.planValues["eventHubResourceGroup"],
+      namespace: plan?.planValues["namespace"],
+      hubName: plan?.planValues["hubName"],
+      sendRule: plan?.planValues["sendRule"],
+    }).toEqual({ eventHubSubscriptionId: SUB, eventHubResourceGroup: EH_RG, namespace: NS_NAME, hubName: HUB, sendRule: "SendOnly" });
+    // The shared subscription and resource group are the operator's and are not written by the pick.
+    expect([plan?.planValues["subscriptionId"], plan?.planValues["resourceGroup"]]).toEqual([SUB, "rg-config"]);
+    // The How-to form shows them, read-only, as section 1's.
+    const hubField = screen.getByRole("textbox", { name: "Event Hub name" }) as HTMLInputElement;
+    expect(hubField.value).toBe(HUB);
+    expect(hubField.readOnly).toBe(true);
+    expect((screen.getByRole("textbox", { name: "Event Hub namespace" }) as HTMLInputElement).value).toBe(NS_NAME);
+    expect(screen.queryByTestId("azo-plan-eventhub")?.textContent).not.toMatch(/differ/);
+
+    fireEvent.click(button("Deploy alert export"));
+    fireEvent.click(button("Confirm deploy"));
+    await waitFor(() => expect(azure.puts().length).toBe(1));
+    // The export targets exactly the hub the plan names.
+    const target = `/subscriptions/${plan?.planValues["eventHubSubscriptionId"]}/resourceGroups/${plan?.planValues["eventHubResourceGroup"]}/providers/Microsoft.EventHub/namespaces/${plan?.planValues["namespace"]}/eventhubs/${plan?.planValues["hubName"]}`;
+    expect(target).toBe(HUB_ID);
+    expect(JSON.stringify(azure.puts()[0]?.body)).toContain(`"eventHubResourceId":"${HUB_ID}"`);
+  });
+
+  // Review of AZR-102: a pick made while progress was loading was never written.
+  it("a pick made while the progress document is still loading is written once it loads", async () => {
+    const store = new HeldLoadStore(PROGRESS_KEY, {});
+    mount({ store });
+    await waitFor(() => expect(screen.queryByText("Loading the saved selection...")).toBeNull());
+    await chooseTarget("SendOnly");
+    await settle();
+    expect(store.saves.filter((s) => s.key === PROGRESS_KEY)).toEqual([]);
+    store.release();
+    await waitFor(() => expect(store.saves.filter((s) => s.key === PROGRESS_KEY).length).toBe(1));
+    const written = store.saves.filter((s) => s.key === PROGRESS_KEY)[0]?.value as {
+      planValues: Record<string, string>;
+      eventHubSource: string;
+    };
+    expect(written.eventHubSource).toBe("section1");
+    expect([written.planValues["namespace"], written.planValues["hubName"], written.planValues["sendRule"]]).toEqual([
+      NS_NAME,
+      HUB,
+      "SendOnly",
+    ]);
+    // Once, not a loop.
+    await settle();
+    expect(store.saves.filter((s) => s.key === PROGRESS_KEY).length).toBe(1);
+  });
+
+  it("a saved plan that names its own Event Hub is kept, and the difference from section 1 is named", async () => {
+    const own = withPlanValues(emptyProgress(CONFIG), {
+      ...emptyProgress(CONFIG).planValues,
+      namespace: "my-ns",
+      hubName: "my-hub",
+    });
+    const store = new FakeKvDocumentStore({ [PROGRESS_KEY]: JSON.parse(encodeProgress(own)) });
+    mount({ store });
+    await loaded();
+    await chooseTarget("SendOnly");
+    await settle();
+    expect(store.saves.filter((s) => s.key === PROGRESS_KEY)).toEqual([]);
+    expect((screen.getByRole("textbox", { name: "Event Hub name" }) as HTMLInputElement).value).toBe("my-hub");
+    expect(screen.getByTestId("azo-plan-eventhub").textContent).toContain(
+      `a deploy on this page writes to section 1's Event Hub, ${NS_NAME}/${HUB}, while the How-to steps, Validate and the Cribl source use my-ns/my-hub.`,
+    );
+    // Following section 1 is one explicit click, and takes the pick at once.
+    fireEvent.click(button("Follow the Event Hub picked in section 1"));
+    await waitFor(() => expect(store.saves.filter((s) => s.key === PROGRESS_KEY).length).toBe(1));
+    const written = store.saves.filter((s) => s.key === PROGRESS_KEY)[0]?.value as {
+      planValues: Record<string, string>;
+      eventHubSource: string;
+    };
+    expect(written.eventHubSource).toBe("section1");
+    expect([written.planValues["namespace"], written.planValues["hubName"]]).toEqual([NS_NAME, HUB]);
   });
 
   /**
