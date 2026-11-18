@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**107 in the backlog, 33 in progress, 241 done.**
+**106 in the backlog, 34 in progress, 241 done.**
 
 ## By menu item
 
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (33)
+## In progress (34)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -920,6 +920,18 @@ Started. Anything here with an unfinished dependency is called out on its card.
   Pause/Remove exists yet for the three objects (they are recorded in progress
   so a remove can prove ownership).
 
+- **AZR-36** Create a Listen rule and a dedicated consumer group for the Cribl Event Hub source from the app
+  `AZR-F9` `story` `settled`
+  FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-34 requires an
+  EXISTING Listen-capable shared access rule (or a pasted connection string)
+  and defaults the consumer group to `cribl`, which in the How-to path the
+  operator creates by hand. Never `$Default`, which shares partitions with
+  other readers. This card lets the Automated path create both on the
+  namespace or hub (ARM PUT authorizationRules with rights [Listen], PUT
+  consumergroups) behind the screen's confirm, create-only, refusing a
+  differing existing rule or group. It also adds the How-to step text for
+  doing it by hand if AZR-31 has not already covered it.
+
 - **AZR-39** Validate the How-to steps that have no check kind yet
   `AZR-F9` `story` `settled`
   FILED 2026-10-26 by the AZR-30..34 final review. Four How-to steps carry
@@ -1263,7 +1275,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (55)
+## Backlog - next (54)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1798,18 +1810,6 @@ Settled and unblocked, sequenced behind now.
   decided here"). AZR-3 is create-only: on `present-differs` it refuses and
   warns rather than re-PUT, where legacy LOG-08 repaired drift on every run
   (ADR 0005 departure 6). This card adds an explicit, confirmed repair.
-
-- **AZR-36** Create a Listen rule and a dedicated consumer group for the Cribl Event Hub source from the app
-  `AZR-F9` `story` `settled`
-  FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-34 requires an
-  EXISTING Listen-capable shared access rule (or a pasted connection string)
-  and defaults the consumer group to `cribl`, which in the How-to path the
-  operator creates by hand. Never `$Default`, which shares partitions with
-  other readers. This card lets the Automated path create both on the
-  namespace or hub (ARM PUT authorizationRules with rights [Listen], PUT
-  consumergroups) behind the screen's confirm, create-only, refusing a
-  differing existing rule or group. It also adds the How-to step text for
-  doing it by hand if AZR-31 has not already covered it.
 
 - **GEN-22** Does a routable pack's output: default deliver to the group route's destination?
   `GEN-F1` `spike` `settled`

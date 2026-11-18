@@ -2618,7 +2618,7 @@
       "feature": "AZR-F9",
       "title": "Create a Listen rule and a dedicated consumer group for the Cribl Event Hub source from the app",
       "type": "story",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [
