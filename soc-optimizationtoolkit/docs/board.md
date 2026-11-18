@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**104 in the backlog, 39 in progress, 224 done.**
+**100 in the backlog, 43 in progress, 224 done.**
 
 ## By menu item
 
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (39)
+## In progress (43)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -201,6 +201,12 @@ Started. Anything here with an unfinished dependency is called out on its card.
   continuous export to Event Hub; test with a real alert. Microsoft
   continuous-export docs are silent. Delivery stays UNVERIFIED until a real
   alert is exported.
+
+- **AZR-8** Blob-only sources as visible unavailable rows
+  `AZR-F6` `story` `settled`
+  vNet and NSG Flow Logs have no Event Hub path; the blob path already exists
+  end to end. The `notSupported` block is a feature of the legacy config, not
+  an omission. Smallest sub-item by a wide margin. `backlog.md#6e`.
 
 - **AZR-18** Azure Native Source Onboarding screen exists - route, menu entry, and its first section
   `AZR-F9` `story` `settled`
@@ -1165,6 +1171,17 @@ Started. Anything here with an unfinished dependency is called out on its card.
   Pause/Remove exists yet for the three objects (they are recorded in progress
   so a remove can prove ownership).
 
+- **AZR-37** Persist when each onboarding source was last seen flowing, beyond the metrics lookback
+  `AZR-F9` `story` `settled`
+  FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-33 reads Cribl's
+  own metrics for each lane: a 300s window for 'flowing' / 'idle' and a
+  cumulative -24h lookback for 'never seen in the last 24 hours'. Anything
+  older than the lookback is invisible, so a source that last delivered three
+  days ago reads 'never seen in 24h', true but less useful than 'last seen 3
+  days ago'. This card persists a lastSeen per input (KV, written only from a
+  MEASURED non-zero row, never from an unknown) and shows it beside the
+  lookback verdict, labelled as remembered rather than measured.
+
 - **AZR-39** Validate the How-to steps that have no check kind yet
   `AZR-F9` `story` `settled` `blocked by AZR-32`
   FILED 2026-10-26 by the AZR-30..34 final review. Four How-to steps carry
@@ -1313,6 +1330,25 @@ Started. Anything here with an unfinished dependency is called out on its card.
   still says a Send-only rule is safer, which is wrong for this deploy (the
   section and its gate say Manage); no permission-audit capability covers
   diagnostic settings yet (the section shows a not-measured banner).
+
+- **AZR-90** Tenant gap Read all: swap tenant to tenant and restore the active credential once at the end
+  `AZR-F10` `story` `settled`
+  AZR-63 review follow-up. runTenantSession restores the active connection
+  after EVERY tenant, so a Read all mints the active tenant's ARM and Graph
+  tokens once per tenant for no gain (two proxied requests each). AZR-63 made
+  every session request spend the run's pacer, so this costs budget time, not
+  429s. Fix: a batch form of the session that holds one lease and one
+  exclusive section across the run, swaps A to B to C with a proof before and
+  after each, and restores once. Reasoning in backlog.md section 6i.
+
+- **AZR-91** Tenant gap grid: one tab stop with arrow-key navigation between cells
+  `AZR-F10` `story` `settled`
+  AZR-63 review follow-up. Every indicator carries an (i), so a keyboard user
+  passes about 28 stops per tenant row to reach the next row's Read button.
+  AZR-63 named every tip (tenant, source, side) so a screen reader can tell
+  them apart; the remaining fix is a roving tabindex over the grid (arrow keys
+  between cells, Enter opens the reason) so the Read buttons are a few
+  keystrokes away. Reasoning in backlog.md section 6i.
 
 - **AZR-89** The lab TTL Logic App identity is granted Contributor on the lab resource group, where it only reads and deletes the group
   `AZR-F10` `bug` `settled`
@@ -2417,7 +2453,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (40)
+## Backlog - later (36)
 
 Settled, gated on something above.
 
@@ -2432,12 +2468,6 @@ Settled, gated on something above.
   opens it. DONE WHEN: a capability exists with a real probe (the step-2
   mapping rule records only measurements), and the [[AZR-19]] route requires
   it.
-
-- **AZR-8** Blob-only sources as visible unavailable rows
-  `AZR-F6` `story` `settled`
-  vNet and NSG Flow Logs have no Event Hub path; the blob path already exists
-  end to end. The `notSupported` block is a feature of the legacy config, not
-  an omission. Smallest sub-item by a wide margin. `backlog.md#6e`.
 
 - **AZR-9** Link the AMA plus DCR path to the app's own DCR Automation and Integrate routes rather than dup
   `AZR-F7` `story` `settled`
@@ -2911,17 +2941,6 @@ Settled, gated on something above.
   `CriblDefenderExport` must be deleted by hand, and until then it blocks a
   new deploy with `already-exists`.
 
-- **AZR-37** Persist when each onboarding source was last seen flowing, beyond the metrics lookback
-  `AZR-F9` `story` `settled`
-  FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-33 reads Cribl's
-  own metrics for each lane: a 300s window for 'flowing' / 'idle' and a
-  cumulative -24h lookback for 'never seen in the last 24 hours'. Anything
-  older than the lookback is invisible, so a source that last delivered three
-  days ago reads 'never seen in 24h', true but less useful than 'last seen 3
-  days ago'. This card persists a lastSeen per input (KV, written only from a
-  MEASURED non-zero row, never from an unknown) and shows it beside the
-  lookback verdict, labelled as remembered rather than measured.
-
 - **AZR-106** Automate the VNet and NSG flow-log sources on the Azure side: flow log, storage queue and Event Grid subscription
   `AZR-F9` `story` `settled` `blocked by AZR-8`
   FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
@@ -2938,25 +2957,6 @@ Settled, gated on something above.
   being retired by Microsoft in favour of VNet flow logs - decide whether NSG
   gets automation at all. Later because the permission bugs [[AZR-81]] (Event
   Grid provider registration, NetworkWatcherRG) block it.
-
-- **AZR-90** Tenant gap Read all: swap tenant to tenant and restore the active credential once at the end
-  `AZR-F10` `story` `settled`
-  AZR-63 review follow-up. runTenantSession restores the active connection
-  after EVERY tenant, so a Read all mints the active tenant's ARM and Graph
-  tokens once per tenant for no gain (two proxied requests each). AZR-63 made
-  every session request spend the run's pacer, so this costs budget time, not
-  429s. Fix: a batch form of the session that holds one lease and one
-  exclusive section across the run, swaps A to B to C with a proof before and
-  after each, and restores once. Reasoning in backlog.md section 6i.
-
-- **AZR-91** Tenant gap grid: one tab stop with arrow-key navigation between cells
-  `AZR-F10` `story` `settled`
-  AZR-63 review follow-up. Every indicator carries an (i), so a keyboard user
-  passes about 28 stops per tenant row to reach the next row's Read button.
-  AZR-63 named every tip (tenant, source, side) so a screen reader can tell
-  them apart; the remaining fix is a roving tabindex over the grid (arrow keys
-  between cells, Enter opens the reason) so the Read buttons are a few
-  keystrokes away. Reasoning in backlog.md section 6i.
 
 - **DBT-305** feature-catalog.md: rows after the Setup-path gating paragraph render outside their table, and the paragraph still says byo is RG-scoped Contributor only
   `DBT-F1` `bug` `settled`

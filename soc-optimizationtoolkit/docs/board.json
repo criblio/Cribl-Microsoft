@@ -264,7 +264,7 @@
       "feature": "AZR-F6",
       "title": "Blob-only sources as visible unavailable rows",
       "type": "story",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "later",
       "settled": "settled",
       "dependsOn": [],
@@ -2597,7 +2597,7 @@
       "feature": "AZR-F9",
       "title": "Persist when each onboarding source was last seen flowing, beyond the metrics lookback",
       "type": "story",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "later",
       "settled": "settled",
       "dependsOn": [
@@ -4686,7 +4686,7 @@
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [
         "AZR-63"
@@ -4701,7 +4701,7 @@
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [
         "AZR-63"
