@@ -205,6 +205,35 @@ describe("planReceiverGrant - the principal is resolved, never guessed", () => {
     expect(result.kind === "ready" && result.ready.principal.source).toBe("typed-not-cross-checked");
   });
 
+  it("refuses a typed object id the listing holds under ANOTHER client id, though the Cribl client id is not listed", async () => {
+    // Review round 1: the directory disproves the pair here; it is not merely unconfirmed.
+    const azure = new FakeAzureManagement();
+    const other: ServicePrincipalRef = { id: PRINCIPAL, appId: "b0b0b0b0-1111-4222-8333-444444444444", displayName: "Some Other App" };
+    const result = await planReceiverGrant({ azure, graph: graphOf([other, APP_SP_REF]) }, input());
+    expect(result).toEqual({
+      kind: "refused",
+      reason: "principal-mismatch",
+      detail:
+        `Object ID ${PRINCIPAL} is the service principal of client ID b0b0b0b0-1111-4222-8333-444444444444 (Some Other App), ` +
+        `not of client ID ${CRIBL_CLIENT}. The role would go to that application while the source signs in as another. ` +
+        "Set the Cribl principal object ID in the plan values to the one that matches the client ID.",
+    });
+    expect(azure.calls).toHaveLength(0);
+  });
+
+  it("keeps typed-not-cross-checked when the listing holds neither the client id nor the object id", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(list());
+    const result = await planReceiverGrant({ azure, graph: graphOf([APP_SP_REF]) }, input());
+    expect(result.kind).toBe("ready");
+    expect(result.kind === "ready" && result.ready.principal).toEqual({
+      objectId: PRINCIPAL,
+      source: "typed-not-cross-checked",
+      displayName: "",
+      clientId: CRIBL_CLIENT,
+    });
+  });
+
   it("refuses a typed object id that is not a GUID", async () => {
     const result = await planReceiverGrant(
       { azure: new FakeAzureManagement() },

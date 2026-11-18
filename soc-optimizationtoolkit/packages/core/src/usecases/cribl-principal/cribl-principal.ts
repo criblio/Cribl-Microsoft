@@ -95,7 +95,12 @@ function crossCheckAgainst(
 export type PrincipalSource =
   /** Typed in the plan values, and the directory confirmed it belongs to the client id. */
   | "typed-matched"
-  /** Typed in the plan values; the directory could not confirm it (said in the confirm). */
+  /**
+   * Typed in the plan values; the directory could not confirm it (said in the
+   * confirm): no directory, a refused read, or a listing that holds neither
+   * the client id nor the object id. A listing that holds the object id under
+   * another client id refuses instead.
+   */
   | "typed-not-cross-checked"
   /** Not typed: the directory listed exactly one service principal for the client id. */
   | "directory";
@@ -124,7 +129,10 @@ const WHERE_OBJECT_ID =
  *
  *   - A typed object id must be a GUID; it is then cross-checked against the
  *     client id exactly as the Cribl source plan does
- *     ({@link crossCheckPrincipal}), with the same refusals.
+ *     ({@link crossCheckPrincipal}), with the same refusals. Because this
+ *     gates a WRITE, it also refuses `principal-mismatch` when the listing
+ *     lacks the client id but lists the object id under ANOTHER client id:
+ *     the directory has disproved the pair, not merely failed to confirm it.
  *   - A blank object id is looked up by client id in the directory. Exactly
  *     one listed service principal resolves it; anything else - no
  *     directory, a refused read, no match, more than one - is
@@ -194,6 +202,21 @@ export async function resolveCriblPrincipal(
       };
     }
     const listed = sps.find((sp) => lc(sp.id) === lc(objectId));
+    // The listing may not hold the client id, but it can still DISPROVE the
+    // pair: the typed object id listed under another application is not the
+    // Cribl client's principal, and the grant would go to that application.
+    // "Not cross-checked" is only honest when the listing holds neither id.
+    if (clientId !== "" && tie?.kind === "ok" && tie.check === "not-cross-checked" && listed !== undefined && lc(listed.appId) !== lc(clientId)) {
+      return {
+        kind: "refused",
+        reason: "principal-mismatch",
+        detail:
+          `Object ID ${objectId} is the service principal of client ID ${listed.appId}` +
+          (listed.displayName === "" ? "" : ` (${listed.displayName})`) +
+          `, not of client ID ${clientId}. The role would go to that application while the source signs in as another. ` +
+          "Set the Cribl principal object ID in the plan values to the one that matches the client ID.",
+      };
+    }
     return {
       kind: "resolved",
       objectId,
