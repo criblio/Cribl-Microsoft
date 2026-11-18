@@ -203,11 +203,12 @@
       "feature": "AZR-F5",
       "title": "Verify whether XDR streaming and the Sentinel incidents API are complementary or alternatives",
       "type": "spike",
-      "status": "backlog",
+      "status": "done",
       "priority": "later",
-      "settled": "undecided",
+      "settled": "settled",
       "dependsOn": [],
-      "detail": "Streaming carries alert-grain tables; path B returns the incident object with triage state. Settle before building either AZR-6 or AZR-7 - presenting A as a replacement loses triage state silently, presenting them as unrelated builds two overlapping feeds without telling anyone. `backlog.md#6d`. NOT SEEDABLE AS A CLICK (2026-08-28): the cited section instructs \"verify against the APIs rather than reasoning it out\", and the outcome handling is already pre-committed - if only alerts, the honest presentation is alerts via A, incidents via B. A click would record an opinion where the card demands a fact. Worth carrying into the spike: the repo's own catalog lists the XDR streaming tables as alert-grain only (AlertInfo, AlertEvidence, UrlClickEvents), so complementary is the likely answer - still unverified, which is the point."
+      "detail": "Streaming carries alert-grain tables; path B returns the incident object with triage state. Settle before building either AZR-6 or AZR-7 - presenting A as a replacement loses triage state silently, presenting them as unrelated builds two overlapping feeds without telling anyone. `backlog.md#6d`. NOT SEEDABLE AS A CLICK (2026-08-28): the cited section instructs \"verify against the APIs rather than reasoning it out\", and the outcome handling is already pre-committed - if only alerts, the honest presentation is alerts via A, incidents via B. A click would record an opinion where the card demands a fact. Worth carrying into the spike: the repo's own catalog lists the XDR streaming tables as alert-grain only (AlertInfo, AlertEvidence, UrlClickEvents), so complementary is the likely answer - still unverified, which is the point.\n\nDONE 2026-11-17 (docs/azr-s1-spike): COMPLEMENTARY. Answered from Microsoft Learn schemas and API references, not from a live API - no tenant was queried, hence verified none. (1) The Streaming API lists 23 GA tables (AlertInfo, AlertEvidence, CloudAppEvents, ten Device*, four Email*, three Identity*, UrlClickEvents); none is at incident grain, and BehaviorInfo/BehaviorEntities are not available. (2) AlertInfo has eight columns - Timestamp, AlertId, Title, Category, Severity, ServiceSource, DetectionSource, AttackTechniques - so a streamed alert carries no status, classification, determination, owner, comments, last-modified time, or even an incident id. Path A is detection telemetry with no triage state at any grain; path B is the only source of triage state. (3) In a tenant whose Sentinel workspace is onboarded to the Defender portal, Microsoft recommends Graph `security/incidents` for incidents and alerts; the Sentinel SecurityInsights incident there is a synced copy (up to 5 min lag, changes within 5-10 min batched to the latest). Without onboarding, Graph does not return Sentinel incidents and the Sentinel API is the only source. AZR-7 updated accordingly; AZR-110 filed for detecting the onboarding state. Graph `alerts_v2` is alert grain WITH triage state but is redundant with `security/incidents?$expand=alerts`. Also found: the 6c/LOG-09 Graph permission list names SecurityEvents.Read.All, but listing security/incidents documents SecurityIncident.Read.All - noted on AZR-6. Not verified live: Graph $filter on lastUpdateDateTime with $expand=alerts, its $top ceiling and throttling, the absent $orderby, and whether alert-level triage bumps the incident lastUpdateDateTime. `backlog.md#6d`.",
+      "verified": "none"
     },
     {
       "id": "AZR-13",
@@ -321,13 +322,13 @@
         "AZR-S1",
         "CAP-5"
       ],
-      "detail": "Licence check then usage probe - a licence held is not a product in use. The checkboxes here are a worklist, not a deployment: Microsoft exposes no configuration API for XDR streaming, so the last step is a portal visit, forever. Tables absent from the Streaming API show greyed with the reason. `backlog.md#6c`."
+      "detail": "Licence check then usage probe - a licence held is not a product in use. The checkboxes here are a worklist, not a deployment: Microsoft exposes no configuration API for XDR streaming, so the last step is a portal visit, forever. Tables absent from the Streaming API show greyed with the reason. `backlog.md#6c`.\n\nAZR-S1 (2026-11-17): no streamed table is at incident grain and AlertInfo carries no status, classification, owner or incident id - the worklist must say streaming is detection telemetry and that triage state comes from AZR-7, so nobody enables AlertInfo expecting case state. The usage probe calls Graph `security/incidents`, whose documented least-privileged application permission is SecurityIncident.Read.All, not the SecurityEvents.Read.All that LOG-09 lists - request and measure that one. `backlog.md#6c`."
     },
     {
       "id": "AZR-7",
       "epic": "AZR",
       "feature": "AZR-F5",
-      "title": "Sentinel incidents via a Cribl REST collector",
+      "title": "Incidents with triage state via a Cribl REST collector (Graph or Sentinel by tenant)",
       "type": "story",
       "status": "backlog",
       "priority": "later",
@@ -335,9 +336,22 @@
       "dependsOn": [
         "AZR-S1",
         "CAP-4",
-        "DBT-1"
+        "DBT-1",
+        "AZR-110"
       ],
-      "detail": "Filter on `lastModifiedTimeUtc`, not `createdTimeUtc` - filtering on creation misses every update to an open incident. Repeat deliveries are correct; dedupe downstream on incident GUID plus `lastModifiedTimeUtc`. Build on `lab-cribl.ts:149`. `backlog.md#6d`."
+      "detail": "Filter on `lastModifiedTimeUtc`, not `createdTimeUtc` - filtering on creation misses every update to an open incident. Repeat deliveries are correct; dedupe downstream on incident GUID plus `lastModifiedTimeUtc`. Build on `lab-cribl.ts:149`. `backlog.md#6d`.\n\nAZR-S1 (2026-11-17) changes what this builds. Path B is not secondary to XDR streaming but beside it: it is the only source of incident triage state. The SOURCE depends on the tenant: (a) Sentinel onboarded to the Defender portal - poll Graph `GET /security/incidents?$filter=lastUpdateDateTime ge {earliest}&$expand=alerts`, paging on @odata.nextLink, app permission SecurityIncident.Read.All; it embeds alerts with their evidence, which answers the entities question, and avoids the Sentinel copy's sync lag and 5-10 minute batching. Graph documents no $orderby, so the watermark must not assume ordered pages. (b) Not onboarded - the existing Sentinel SecurityInsights request is right and the only option; alerts and entities are separate sub-resources there. Same rule in both: filter on last-modified, expect repeats, dedupe downstream on id + last-modified. Choosing (a) or (b) needs AZR-110. `backlog.md#6d`."
+    },
+    {
+      "id": "AZR-110",
+      "epic": "AZR",
+      "feature": "AZR-F5",
+      "title": "Detect whether a Sentinel workspace is onboarded to the Defender portal",
+      "type": "spike",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "undecided",
+      "dependsOn": [],
+      "detail": "Filed by AZR-S1. AZR-7 must poll Graph `security/incidents` when the workspace is onboarded to the Defender portal and the Sentinel SecurityInsights incidents API when it is not, and Graph does not return Sentinel incidents at all without onboarding. Find a readable signal for the onboarding state with least privilege - candidates to test, none confirmed: `providerName` of recent Sentinel incidents reading Microsoft XDR, or `additionalData.providerIncidentUrl` being present; a Graph incident whose alerts carry a Sentinel serviceSource. Until measured, the honest UI is to ask the operator and say why. Needs a live tenant. `backlog.md#6d`."
     },
     {
       "id": "AZR-10",
