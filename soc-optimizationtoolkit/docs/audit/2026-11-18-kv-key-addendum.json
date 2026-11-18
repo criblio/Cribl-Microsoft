@@ -1,0 +1,46 @@
+{
+  "record": "Status: Record - dated ADDENDUM to docs/audit/2026-11-03-least-privilege-audit.json, written 2026-11-18 for AZR-125. That audit is a dated record and is not edited; this file adds rows in the same shape. Its GET and PUT rows name the app KV document keys the 2026-11-03 rows omit: azure-onboarding-flow-last-seen (AZR-37, written by the background flow poll), azure-credential-lease and azure-credential-owner (the tenant session's, run-tenant-session.ts), and tenant-cribl-mapping (the Setup tenant to Cribl mapping, found while pinning the others). No permission changes: every key is in the app's own KV namespace, which the platform grants every App user and which cannot be narrowed per key, exactly as the 2026-11-03 rows say. packages/core/src/domain/least-privilege/operations.ts cites both the dated row and the addendum row for cribl.kv.read and cribl.kv.write; operations.test.ts reads both files.",
+  "amends": "2026-11-03-least-privilege-audit.json",
+  "families": [
+    {
+      "family": "Cribl API",
+      "matrix": {
+        "rows": [
+          {
+            "method": "GET",
+            "path": "/kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping",
+            "operation": "Cribl App Platform: App user access level on the installed app (platform grants /a/{appId}/kvstore/* through the AppUser role automatically; not declarable in policies.yml)",
+            "leastBuiltInRole": "App user (Apps > Installed > Share), the same grant as the 2026-11-03 GET /kvstore/{key} row",
+            "narrowestScope": "Cribl app (/a/{appId}/kvstore/*) within the one workspace; already the narrowest possible, cannot be narrowed per key",
+            "citation": "https://docs.cribl.io/apps/admin-guide/ (Sharing installed Apps; Who can run installed Apps)",
+            "confidence": "high",
+            "functions": [
+              "Azure onboarding flow poll - last-seen read (onboarding-flow/last-seen.ts)",
+              "Tenant session - credential lease and owner reads (usecases/tenant-session/run-tenant-session.ts)",
+              "Setup - tenant to Cribl mapping (tenant-cribl-mapping-section.tsx); Tenant gap scan"
+            ],
+            "api": "Cribl App KV store",
+            "notes": "Read through the KvDocumentStore port (apps/cribl-app/src/platform/kv-document-store.ts), never encrypted. The guard that keeps the lists whole is packages/core/src/domain/least-privilege/kv-keys.test.ts, which derives the document keys from the @soc/core barrel's *_KEY constants. azure-coverage-selection and azure-onboarding-progress, named by the 2026-11-03 rows, are now also stored per tenant as {key}.{tenantId} (ADR 0009); the same grant covers them."
+          },
+          {
+            "method": "PUT",
+            "path": "/kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping",
+            "operation": "Cribl App Platform: App user access (AppUser role covers /a/{appId}/kvstore/* for all verbs)",
+            "leastBuiltInRole": "App user, the same grant as the 2026-11-03 PUT /kvstore/{key} row",
+            "narrowestScope": "Cribl app KV namespace (/a/{appId}/kvstore/*), one workspace",
+            "citation": "https://docs.cribl.io/apps/admin-guide/ (App Settings / KV store; Sharing installed Apps)",
+            "confidence": "high",
+            "functions": [
+              "Azure onboarding flow poll - last-seen write",
+              "Tenant session - credential lease take, renew and release; credential owner switching and cleared marks",
+              "Setup - tenant to Cribl mapping save"
+            ],
+            "api": "Cribl App KV store",
+            "notes": "Written through KvDocumentStore.save, unencrypted."
+          }
+        ]
+      },
+      "verdicts": []
+    }
+  ]
+}

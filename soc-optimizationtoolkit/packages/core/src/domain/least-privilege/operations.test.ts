@@ -79,9 +79,25 @@ function correctedRows(): AuditRow[] {
 }
 
 const CORRECTED = correctedRows();
+
+/**
+ * DATED ADDENDA to the 2026-11-03 audit (AZR-125). That record is not edited;
+ * an addendum adds rows in the same shape, and its rows are held to every pin
+ * below exactly as the corrected rows are. They are kept out of CORRECTED so
+ * the count pin still notices a re-run of the dated audit itself.
+ */
+const ADDENDA = ["2026-11-18-kv-key-addendum.json"].flatMap((file) =>
+  (
+    JSON.parse(
+      readFileSync(new URL(`../../../../../docs/audit/${file}`, import.meta.url), "utf8"),
+    ) as Audit
+  ).families.flatMap((family) => family.matrix.rows),
+);
+const ROWS = [...CORRECTED, ...ADDENDA];
+
 const keyOf = (r: AuditRow): string => `${r.method} ${r.path}`;
 const BY_KEY = new Map<string, AuditRow[]>();
-for (const row of CORRECTED) {
+for (const row of ROWS) {
   BY_KEY.set(keyOf(row), [...(BY_KEY.get(keyOf(row)) ?? []), row]);
 }
 
@@ -218,9 +234,18 @@ describe("least-privilege operations against the audit", () => {
     expect(CORRECTED).toHaveLength(173);
   });
 
-  it("references every corrected audit row, or says why a row needs no permission", () => {
+  it("reads the addenda's rows, and every one is new", () => {
+    expect(ADDENDA.map(keyOf)).toEqual([
+      "GET /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping",
+      "PUT /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping",
+    ]);
+    const dated = new Set(CORRECTED.map(keyOf));
+    expect(ADDENDA.map(keyOf).filter((key) => dated.has(key))).toEqual([]);
+  });
+
+  it("references every corrected and addendum audit row, or says why a row needs no permission", () => {
     const referenced = new Set(OPERATIONS.flatMap((op) => op.audit));
-    const missing = CORRECTED.map(keyOf).filter(
+    const missing = ROWS.map(keyOf).filter(
       (key) => !referenced.has(key) && NOT_REGISTERED[key] === undefined,
     );
     expect(missing).toEqual([]);
