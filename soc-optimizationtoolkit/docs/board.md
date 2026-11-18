@@ -2165,11 +2165,15 @@ Settled and unblocked, sequenced behind now.
 - **AZR-115** Live-verify the Entra ID credential of the Cribl Event Hub source (ADR 0008 Unverified list)
   `AZR-F9` `enabler` `settled`
   SPLIT 2026-11-17 from [[AZR-59]] (and the Entra half of [[AZR-34]]), both
-  closed on pins. Blocked in the lab until a DEDICATED Cribl service principal
-  exists (not the app's own registration) with Azure Event Hubs Data Receiver
-  granted by hand on the hub only ([[AZR-103]] automates the grant later; not
-  needed here). In Live Preview on a test worker group with the operator
-  present, measure each ADR 0008 Unverified item: (1) Cribl accepts scope
+  closed on pins. STEP 0, the operator's manual setup and the first thing done
+  on this card (added 2026-11-18 so READY is true: with dependsOn [] groom
+  calls the card READY, and the lab had no such principal): create a DEDICATED
+  Cribl service principal in the lab tenant (not the app's own registration),
+  give it a client secret, and grant it Azure Event Hubs Data Receiver by hand
+  on the hub only ([[AZR-103]] automates the grant later; not needed here).
+  Each of those is an Azure write the operator makes, outside the app. Then,
+  in Live Preview on a test worker group with the operator present, measure
+  each ADR 0008 Unverified item: (1) Cribl accepts scope
   https://<ns>.servicebus.windows.net/.default - a created input reads events;
   (2) the leader's runtime accepts sasl oauthbearer on the eventhub input, not
   only its schema; (3) a HUB-scoped Data Receiver assignment alone is enough;
@@ -2203,7 +2207,7 @@ Settled and unblocked, sequenced behind now.
   moves from Documented to measured).
 
 - **CAP-9** Measure the Event Hub namespace-side permissions: listKeys and the namespace, hub and rule creates (CAP-7b)
-  `CAP-F1` `enabler` `settled` `blocked by AZR-24`
+  `CAP-F1` `enabler` `settled` `blocked by AZR-11`
   SPLIT 2026-11-17 from [[CAP-7]] (its CAP-7b half, never built). The
   subscription-scope evaluation CAP-7a uses cannot see a grant made on the
   namespace or its resource group, so it would read these as denied. SCOPE,
@@ -2212,13 +2216,14 @@ Settled and unblocked, sequenced behind now.
   probe would return a key), a miss read as unknown unless the evaluation at
   that scope itself answered: (a)
   Microsoft.EventHub/namespaces/authorizationRules/listKeys/action AT the
-  namespace resource id of the persisted target ([[AZR-24]]) - what the
-  Defender export and Activity Log sections need; (b)
-  Microsoft.EventHub/namespaces/write AT THE RESOURCE GROUP the new namespace
-  is created in - a namespace that does not exist yet has no resource id to
-  evaluate at (least-privilege/operations.ts:54-68 already records scope
-  resourceGroup); the evaluator takes that resource group as a parameter and
-  [[AZR-22]]'s create form supplies it; (c)
+  namespace resource id the prerequisite picker holds ([[AZR-11]]; screen
+  state today, the persisted target once [[AZR-24]] lands - evaluation needs
+  the id, not its persistence) - what the Defender export and Activity Log
+  sections need; (b) Microsoft.EventHub/namespaces/write AT THE RESOURCE GROUP
+  the new namespace is created in - a namespace that does not exist yet has no
+  resource id to evaluate at (least-privilege/operations.ts:54-68 already
+  records scope resourceGroup); the evaluator takes that resource group as a
+  parameter and [[AZR-22]]'s create form supplies it; (c)
   Microsoft.EventHub/namespaces/eventhubs/write (operations.ts:102-116) and
   Microsoft.EventHub/namespaces/authorizationRules/write AT the existing
   namespace - the rule write has NO registry operation today, so add one
@@ -2226,7 +2231,9 @@ Settled and unblocked, sequenced behind now.
   capability; replace the 'needed, not yet measured' namespace lists in
   domain/onboarding-sections/automation-permissions.ts:167-169 and
   defender-export/defender-permissions.ts:80-82 with measured rows. The result
-  is a banner beside the action it covers; route-capabilities.ts:84 stays []
+  is a banner beside the action it covers;
+  ROUTE_CAPABILITIES['azure-onboarding'] in route-capabilities.ts stays [] by
+  design (its comment and route-capabilities.test.ts say so, since 2026-11-18)
   and no Create or Deploy button is disabled by it (the audit informs, never
   forbids). Pins: per action, a grant at its own scope reads granted; a
   subscription-scope miss alone never reads denied; the namespace write is
@@ -2236,7 +2243,12 @@ Settled and unblocked, sequenced behind now.
   split this card covered only listKeys and the namespace write at an existing
   namespace, so AZR-22's namespace create (no resource id yet), hub create and
   rule create would have had no measurement while the board said CAP-9
-  unblocked them. (b) and (c) are that missing half.
+  unblocked them. (b) and (c) are that missing half. RE-POINTED 2026-11-18
+  (closeout review round 2): dependsOn was [[AZR-24]] (priority later), which
+  put [[AZR-22]] and [[AZR-23]] (next) behind a later card. None of the three
+  parts needs persistence: (a) evaluates at the namespace the picker holds,
+  (b) at the resource group AZR-22's form supplies, (c) at the chosen
+  namespace. dependsOn is now [[AZR-11]], which supplies the namespace.
 
 - **CAP-10** Measure the Activity Log diagnostic-setting write so its section stops reading 'not measured'
   `CAP-F1` `enabler` `settled`
@@ -3264,16 +3276,21 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   any non-GET before sending ('Validate sends GETs only'), and
   validate-azure-onboarding.test.ts's recording fake fails on any non-GET; (2)
   per-step verdicts as-expected / present-differs (what differs) / absent /
-  unknown - domain/onboarding-validation/classify.ts:119 and :133, absent only
-  from a by-name 404 or a complete listing; (3) a refused read is never absent
-  - classify.test.ts and requests.test.ts pin a 403 as unknown denied for
-  every check kind; (4) works whether the app or the operator configured it,
-  and feeds the diagram's lane states - the same plan values drive both,
-  lanes.ts reads the results (AZR-30 closed on it). The defects the live
-  passes found (AZR-40, 41, 42, 44, 54, 55) are all done. WHAT REMAINS is live
-  observation only, the unexercised half of ADR 0007 item 3, moved to
-  [[AZR-112]]. [[AZR-39]] (in progress) depended on this card for its own live
-  check; that check is still its own and is listed on AZR-112 as well.
+  unknown - domain/onboarding-validation/classify.ts - refusalVerdict
+  (:189-205) returns absent only for a 404 on a GET_BY_NAME_KINDS read
+  (:147-158), and the listing classifiers return absent only from a complete
+  listing (measuredHubNames :219 is the completeness rule; classifyHubs :248,
+  classifyRule :283, which return unknown when rows were dropped); (3) a
+  refused read is never absent - refusalReason (classify.ts:175-187) maps
+  401/403 to unknown denied; classify.test.ts and requests.test.ts pin a 403
+  as unknown denied for every check kind; (4) works whether the app or the
+  operator configured it, and feeds the diagram's lane states - the same plan
+  values drive both, lanes.ts reads the results (AZR-30 closed on it). The
+  defects the live passes found (AZR-40, 41, 42, 44, 54, 55) are all done.
+  WHAT REMAINS is live observation only, the unexercised half of ADR 0007 item
+  3, moved to [[AZR-112]]. [[AZR-39]] (in progress) depended on this card for
+  its own live check; that check is still its own and is listed on AZR-112 as
+  well.
 
 - **AZR-33** Diagram shows a new live flow when data arrives in Cribl
   `AZR-F9` `story` `settled` `verified: both`
@@ -3489,16 +3506,19 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   pinned by create-cribl-source.test.ts and cribl-source-panel.dom.test.tsx;
   (5) commit and deploy per the kit - the adopted kit under
   packages/core/src/kit/config-writes/ (configWrites.test.ts,
-  kit-purity.test.ts); (6) the input write grants in config/policies.yml:80-83
-  (and the delete at :124 for AZR-105), held by policies-coverage.test.ts.
-  Since AZR-59 the default credential is Entra ID; the SAS fallback refuses a
-  Manage-capable rule (AZR-58). Live already recorded by the operator: the
-  Event Hub lane with the listKeys SAS credential created, committed, deployed
-  and received data (2026-11-04). WHAT REMAINS is live observation only, split
-  in three: the SAS fallback's unobserved items of ADR 0007 items 4 and 5
-  ([[AZR-113]]), the Blob lane ([[AZR-114]]) and the Entra ID credential
-  ([[AZR-115]], ADR 0008). AZR-35 and AZR-36 depend on the built source, not
-  on that verification, so they stay pointed here.
+  kit-purity.test.ts); (6) the input write grants in config/policies.yml: the
+  policy objects '/m/:gid/system/inputs' with GET and POST (:203-204) and
+  '/m/:gid/system/inputs/:id' with GET (:210-211; its PATCH and DELETE there
+  are AZR-105), documented in the comment block at :75-100, held by
+  policies-coverage.test.ts. Since AZR-59 the default credential is Entra ID;
+  the SAS fallback refuses a Manage-capable rule (AZR-58). Live already
+  recorded by the operator: the Event Hub lane with the listKeys SAS
+  credential created, committed, deployed and received data (2026-11-04). WHAT
+  REMAINS is live observation only, split in three: the SAS fallback's
+  unobserved items of ADR 0007 items 4 and 5 ([[AZR-113]]), the Blob lane
+  ([[AZR-114]]) and the Entra ID credential ([[AZR-115]], ADR 0008). AZR-35
+  and AZR-36 depend on the built source, not on that verification, so they
+  stay pointed here.
 
 - **AZR-12** Check `eventhub-discovery` for overlap before building a second Event Hub surface
   `AZR-F9` `enabler` `settled` `verified: none`
