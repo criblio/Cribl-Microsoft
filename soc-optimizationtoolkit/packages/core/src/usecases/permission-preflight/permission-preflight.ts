@@ -26,7 +26,8 @@
  *      DCR ingestion grant) cannot report "not ready" to an operator who can
  *      deploy perfectly well. See domain/azure-permissions PermissionNecessity.
  *   2. LIVE EXISTENCE PROBES - no-op reads (workspace GET, tables list, DCR
- *      list, and a one-row Resource Graph query - a POST, but query-only).
+ *      list, a one-row Resource Graph query - a POST, but query-only - and
+ *      one Sentinel incident from the configured workspace, CAP-4).
  *      PROBES ARE TRUTH about what is actually reachable/readable right
  *      now. They decorate the report but never, on their own, flip
  *      deploy-readiness: a Reader passes every probe yet must still read as NOT
@@ -79,6 +80,7 @@ import type {
 import { DIRECT_DCR_API_VERSION } from "../../domain/dcr-request";
 import { resourceGraphRequest } from "../../domain/eventhub-discovery";
 import { WORKSPACE_API_VERSION } from "../azure-discovery";
+import { SECURITY_INSIGHTS_API_VERSION } from "../content-install/content-install";
 import { httpErrorText, is2xx, prop } from "../arm-http";
 
 // ---------------------------------------------------------------------------
@@ -718,6 +720,26 @@ export async function runAzurePreflight(
     request: resourceGraphRequest(target.subscriptionId, RESOURCE_GRAPH_PROBE_QUERY),
     evidence: resourceGraphReturnedRows,
   });
+  // CAP-4. One incident from the configured workspace, after Resource Graph
+  // so the probes before it keep their order. ARM authorizes before the
+  // Sentinel provider answers, so a 2xx is a grant even with no incidents in
+  // it; a workspace without Sentinel answers 404, which stays unknown.
+  if (target.resourceGroup !== "" && target.workspaceName !== "") {
+    probeRequests.push({
+      name: "sentinel-incidents-list",
+      label: "Read Microsoft Sentinel incidents",
+      request: {
+        method: "GET",
+        path:
+          `/subscriptions/${target.subscriptionId}` +
+          `/resourceGroups/${target.resourceGroup}` +
+          `/providers/Microsoft.OperationalInsights/workspaces/${target.workspaceName}` +
+          "/providers/Microsoft.SecurityInsights/incidents",
+        apiVersion: SECURITY_INSIGHTS_API_VERSION,
+        query: { $top: "1" },
+      },
+    });
+  }
   const probes = await Promise.all(
     probeRequests.map((p) => probeAzure(azure, p.name, p.label, p.request, p.evidence)),
   );

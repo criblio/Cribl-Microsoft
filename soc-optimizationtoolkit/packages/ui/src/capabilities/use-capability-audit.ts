@@ -177,6 +177,8 @@ export function useCapabilityAudit(
           azure: ports.azure,
           cribl: ports.cribl,
           ...(ports.contentCache !== undefined ? { cache: ports.contentCache } : {}),
+          // CAP-5: the Graph permission probes, when the shell binds Graph.
+          ...(ports.graph !== undefined ? { graph: ports.graph } : {}),
           ...(ports.logger !== undefined ? { logger: ports.logger } : {}),
         },
         {

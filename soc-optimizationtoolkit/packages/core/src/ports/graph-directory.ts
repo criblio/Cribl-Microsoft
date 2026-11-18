@@ -58,4 +58,28 @@ export interface GraphDirectory {
   readSubscribedSkus(): Promise<
     { kind: "read"; body: unknown } | { kind: "denied"; status: number; detail: string }
   >;
+
+  /**
+   * OPTIONAL (CAP-5): one minimal Graph read that measures an application
+   * permission for the capability audit. `subscribed-skus` is
+   * GET /v1.0/subscribedSkus?$select=skuId (LicenseAssignment.Read.All, or
+   * Organization.Read.All); `security-incidents` is
+   * GET /v1.0/security/incidents?$top=1 (SecurityIncident.Read.All).
+   *
+   * Resolves with the raw status and body for EVERY HTTP answer - core decides
+   * what it proves (capability-mapping graphProbeVerdict) - after the same
+   * single token re-mint on 401/403 the other reads do. Rejects only on a
+   * transport or credential-slot failure. Optional because a shell or a test
+   * fake without it simply leaves both capabilities unmeasured.
+   */
+  probePermission?(probe: GraphPermissionProbe): Promise<GraphProbeResponse>;
+}
+
+/** The Graph reads the capability audit probes with (CAP-5). */
+export type GraphPermissionProbe = "subscribed-skus" | "security-incidents";
+
+/** A Graph probe's HTTP answer, uninterpreted. */
+export interface GraphProbeResponse {
+  status: number;
+  body: unknown;
 }

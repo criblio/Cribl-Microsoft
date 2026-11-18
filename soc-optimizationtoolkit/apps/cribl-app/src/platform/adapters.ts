@@ -19,6 +19,8 @@ import type {
   CriblRequest,
   GithubPatManager,
   GraphDirectory,
+  GraphPermissionProbe,
+  GraphProbeResponse,
   InstalledPack,
   JobRecord,
   JobStore,
@@ -432,6 +434,13 @@ const GRAPH_SP_URL =
 const GRAPH_SKUS_URL =
   `${GRAPH_BASE_URL}/v1.0/subscribedSkus?$select=skuId,skuPartNumber,capabilityStatus,prepaidUnits,consumedUnits,appliesTo`;
 
+// CAP-5: the capability audit's permission probes - the smallest read each
+// application permission allows. One SKU id; one incident.
+const GRAPH_PROBE_URLS: Readonly<Record<GraphPermissionProbe, string>> = {
+  'subscribed-skus': `${GRAPH_BASE_URL}/v1.0/subscribedSkus?$select=skuId`,
+  'security-incidents': `${GRAPH_BASE_URL}/v1.0/security/incidents?$top=1`,
+};
+
 /** What GraphDirectory.readSubscribedSkus resolves to. */
 type SubscribedSkusRead =
   | { kind: 'read'; body: unknown }
@@ -573,6 +582,32 @@ export class PlatformGraphDirectory implements GraphDirectory {
       status: res.status,
       detail: `Graph subscribedSkus: HTTP ${res.status}${hint}`,
     };
+  }
+
+  /**
+   * CAP-5. Through the shared slot exactly as the reads above, with the same
+   * single re-mint on 401/403 (a token minted before the consent keeps
+   * answering 403). Every HTTP answer is returned as is; core decides what it
+   * proves, and an empty 200 proves nothing (AZR-111).
+   */
+  async probePermission(probe: GraphPermissionProbe): Promise<GraphProbeResponse> {
+    return this.mode === 'session'
+      ? this.probe(probe, async () => undefined)
+      : this.slot.shared(this.identity, 'read', (recheck) => this.probe(probe, recheck));
+  }
+
+  private async probe(probe: GraphPermissionProbe, recheck: SlotRecheck): Promise<GraphProbeResponse> {
+    if (this.mode === 'shared') {
+      await this.slot.ensureGraph(this.tenantId);
+    }
+    const url = GRAPH_PROBE_URLS[probe];
+    let res = await this.page(url);
+    if (res.status === 401 || res.status === 403) {
+      await recheck();
+      await this.slot.mintGraph(this.tenantId);
+      res = await this.page(url);
+    }
+    return { status: res.status, body: res.body };
   }
 }
 

@@ -1270,6 +1270,19 @@ or REST collector, is `source.manage`.
 > with the Defender `pricings`/`automations` actions and the namespace rule
 > `listKeys/action`.
 
+> BUILT 2026-11-17 (CAP-2..CAP-5, verified pins only): `policy.assign`,
+> `policy.remediate` and `identity.create` are measured from the subscription's
+> effective actions in the background audit's existing Defender read (no probe;
+> the identity write grant-only); `sentinel-incidents.read` by a one-incident
+> preflight probe of the workspace; `graph-licences.read` and
+> `graph-incidents.read` by two one-row Graph reads in the audit, where an empty
+> 200 records nothing (AZR-111). The Graph scope is `SecurityIncident.Read.All`,
+> not `SecurityEvents.Read.All` (AZR-S1), and the licence read is measured by
+> `subscribedSkus` itself, which `LicenseAssignment.Read.All` (already asked)
+> satisfies more narrowly than `Organization.Read.All`. No change request asks
+> for any of these until AZR-4, AZR-6 or AZR-7 calls them. Every verdict awaits a
+> live audit.
+
 > AZR-12 VERDICT 2026-10-21 (decided by reading code in the AZR-18 design
 > workflow, so verified none): EXTEND the existing Event Hub surface; do not build
 > a second one. Event Hub Discovery is single-subscription and read-only -

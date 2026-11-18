@@ -20,6 +20,7 @@
  */
 
 import type { Capability } from "./capabilities";
+import { leastRoleFor } from "../least-privilege";
 
 /**
  * Which generator produces the artifact. A typed union rather than free text so
@@ -113,6 +114,28 @@ export const CAPABILITY_FALLBACKS: Readonly<
     kind: "defender-howto-steps",
     label: "How-to steps for the Defender continuous export",
     action: "Hand them to someone with Security Admin on the subscription to follow.",
+  },
+  // CAP-2 / CAP-3. Measured ahead of the Azure Policy feature (AZR-4), which
+  // will build the artifact proper (the assignment and remediation bodies);
+  // until then the honest handoff is the request for the role, named from
+  // the least-privilege registry's least role for each write.
+  "policy.assign": {
+    kind: "role-assignment-request",
+    label: "Role-assignment change request",
+    action:
+      `Send it to whoever administers Azure Policy, asking for ${leastRoleFor("policy.assignment.write")} where the initiative is assigned.`,
+  },
+  "policy.remediate": {
+    kind: "role-assignment-request",
+    label: "Role-assignment change request",
+    action:
+      `Send it to whoever administers Azure Policy, asking for ${leastRoleFor("policy.remediation.write")} where the remediation runs.`,
+  },
+  "identity.create": {
+    kind: "role-assignment-request",
+    label: "Role-assignment change request",
+    action:
+      `Send it to whoever administers RBAC, asking for ${leastRoleFor("managedIdentity.write")} on the identity's resource group.`,
   },
 });
 

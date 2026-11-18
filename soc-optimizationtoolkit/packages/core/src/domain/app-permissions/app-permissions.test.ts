@@ -610,6 +610,47 @@ describe("AZR-82 - management-group and tenant reads are asked for", () => {
   });
 });
 
+describe("CAP-2..CAP-5 - measured ahead of their features, asked for by no ticket", () => {
+  // Least privilege: the capability model measures these before any shipped
+  // feature calls them, and a change request must not ask for a role nothing
+  // uses. The feature that calls them (AZR-4, AZR-6, AZR-7) adds its ticket
+  // row from the same registry operation, and this pin then moves with it.
+  const NOT_YET_ASKED = [
+    leastRoleFor("policy.assignment.write"),
+    leastRoleFor("managedIdentity.write"),
+    leastRoleFor("sentinel.incidents.read"),
+    leastRoleFor("graph.securityIncidents.read"),
+  ];
+
+  it("reads Resource Policy Contributor, Managed Identity Contributor, Microsoft Sentinel Reader and SecurityIncident.Read.All from the registry", () => {
+    expect(NOT_YET_ASKED).toEqual([
+      "Resource Policy Contributor",
+      "Managed Identity Contributor",
+      "Microsoft Sentinel Reader",
+      "SecurityIncident.Read.All",
+    ]);
+    expect(leastRoleFor("policy.remediation.write")).toBe("Resource Policy Contributor");
+  });
+
+  it("asks for none of them on any setup path", () => {
+    for (const path of PATHS) {
+      for (const role of NOT_YET_ASKED) {
+        expect(names(path), `${path}: ${role}`).not.toContain(role);
+      }
+    }
+  });
+
+  it("never asks for SecurityEvents.Read.All or Organization.Read.All (AZR-S1; licences need LicenseAssignment.Read.All)", () => {
+    for (const path of PATHS) {
+      expect(names(path)).not.toContain("SecurityEvents.Read.All");
+      expect(names(path)).not.toContain("Organization.Read.All");
+    }
+    expect(graphPermissions(appPermissionPlan("existing")).map((p) => p.name)).toContain(
+      "LicenseAssignment.Read.All",
+    );
+  });
+});
+
 describe("AZR-81 - the byo lab's steps outside its group", () => {
   it("asks for Network Contributor on NetworkWatcherRG as a feature, and the preflight leaves it to the Labs check", () => {
     const row = appPermissionPlan("lab-byo-rg").find((p) => p.resourceGroup === "NetworkWatcherRG");

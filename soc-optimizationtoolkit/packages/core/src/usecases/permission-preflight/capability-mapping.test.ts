@@ -20,10 +20,17 @@ import {
   AZURE_PROBE_CAPABILITIES,
   CRIBL_PROBE_CAPABILITIES,
   GRANT_ONLY_AZURE_ACTIONS,
+  GRAPH_PROBE_CAPABILITIES,
+  azureCheckVerdicts,
   capabilitiesCheckedForSetupPath,
   capabilitiesFromReport,
   capabilitiesFromSides,
+  graphProbeVerdict,
 } from "./capability-mapping";
+import {
+  ENABLER_SUBSCRIPTION_ACTIONS,
+  ENABLER_SUBSCRIPTION_OPERATIONS,
+} from "../../domain/capability-enablers";
 import {
   runAzurePreflight,
   runCriblPreflight,
@@ -42,7 +49,11 @@ import {
   verdictFor,
   type CapabilityContext,
 } from "../../domain/capabilities";
-import { checkResult, REQUIRED_ACTIONS } from "../../domain/azure-permissions";
+import {
+  checkResult,
+  evaluatePermissions,
+  REQUIRED_ACTIONS,
+} from "../../domain/azure-permissions";
 import {
   DEFENDER_NAMESPACE_ACTIONS,
   DEFENDER_SUBSCRIPTION_ACTIONS,
@@ -695,7 +706,12 @@ describe("over a real preflight report", () => {
     expect(set.verdicts["defender-plans.read"]).toBe("denied");
     expect(set.verdicts["defender-automation.read"]).toBe("denied");
     expect(set.verdicts["defender-automation.write"]).toBeUndefined();
-    expect([...GRANT_ONLY_AZURE_ACTIONS]).toEqual([DEFENDER_SUBSCRIPTION_ACTIONS[2].action]);
+    // RE-PINNED 2026-11-17 (CAP-3): the managed-identity write joined it, for
+    // the same reason - it lands in a resource group the operator picks.
+    expect([...GRANT_ONLY_AZURE_ACTIONS]).toEqual([
+      DEFENDER_SUBSCRIPTION_ACTIONS[2].action,
+      "Microsoft.ManagedIdentity/userAssignedIdentities/write",
+    ]);
   });
 
   it("Owner on existing-subscription is granted all three Defender capabilities", async () => {
@@ -789,9 +805,155 @@ describe("the onboarding automation declarations agree with this mapping (AZR-60
       expect(AZURE_ACTION_CAPABILITIES[n.action], n.action).toBe(n.capability);
       expect(GRANT_ONLY_AZURE_ACTIONS.has(n.action), n.action).toBe(n.grantOnly);
     }
-    // Both directions: every grant-only action is declared somewhere.
-    for (const action of GRANT_ONLY_AZURE_ACTIONS) {
+    // Both directions: every grant-only action is declared somewhere - except
+    // the capability enablers (CAP-3), which no onboarding automation runs
+    // yet; the Azure Policy section declares them when it ships (AZR-4).
+    const enablers = new Set(ENABLER_SUBSCRIPTION_ACTIONS.map((a) => a.action));
+    const declarable = [...GRANT_ONLY_AZURE_ACTIONS].filter((a) => !enablers.has(a));
+    expect(declarable).toHaveLength(1);
+    for (const action of declarable) {
       expect(needs.some((n) => n.action === action && n.grantOnly), action).toBe(true);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Capability enablers (CAP-2..CAP-5)
+// ---------------------------------------------------------------------------
+
+describe("the capability enablers (CAP-2, CAP-3) map from effective actions only", () => {
+  const verdictsFor = (sets: PermissionSet[]) =>
+    azureCheckVerdicts(true, evaluatePermissions({ value: sets }, [...ENABLER_SUBSCRIPTION_ACTIONS]));
+
+  it("maps each enabler action to its own capability, read from the registry", () => {
+    expect(ENABLER_SUBSCRIPTION_OPERATIONS.map((o) => o.operationId)).toEqual([
+      "policy.assignment.write",
+      "policy.remediation.write",
+      "managedIdentity.write",
+    ]);
+    expect(ENABLER_SUBSCRIPTION_ACTIONS.map((a) => AZURE_ACTION_CAPABILITIES[a.action])).toEqual([
+      "policy.assign",
+      "policy.remediate",
+      "identity.create",
+    ]);
+    for (const op of ENABLER_SUBSCRIPTION_OPERATIONS) {
+      expect(op.action).toBe(LEAST_PRIVILEGE_OPERATIONS[op.operationId].operation);
+      expect(op.label).toContain(`(${LEAST_PRIVILEGE_OPERATIONS[op.operationId].leastRole})`);
+      expect(op.necessity).toBe("feature");
+    }
+  });
+
+  it("Owner is granted all three", () => {
+    expect(verdictsFor([permSet({ actions: ["*"] })])).toEqual({
+      "policy.assign": "granted",
+      "policy.remediate": "granted",
+      "identity.create": "granted",
+    });
+  });
+
+  it("Contributor cannot assign policy (Microsoft.Authorization writes are its notActions)", () => {
+    const contributor = permSet({
+      actions: ["*"],
+      notActions: ["Microsoft.Authorization/*/Write", "Microsoft.Authorization/*/Delete"],
+    });
+    expect(verdictsFor([contributor])).toEqual({
+      "policy.assign": "denied",
+      "policy.remediate": "granted",
+      "identity.create": "granted",
+    });
+  });
+
+  it("a subscription miss denies the policy writes but leaves the identity write unmeasured", () => {
+    // The identity lands in a resource group the operator picks, where a
+    // role is invisible from the subscription: grant-only, like the
+    // Defender export write.
+    expect(verdictsFor([permSet({ actions: ["*/read"] })])).toEqual({
+      "policy.assign": "denied",
+      "policy.remediate": "denied",
+    });
+  });
+
+  it("records nothing when the subscription's permissions were not read", () => {
+    expect(
+      azureCheckVerdicts(
+        false,
+        ENABLER_SUBSCRIPTION_ACTIONS.map((a) => checkResult(a, false)),
+      ),
+    ).toEqual({});
+  });
+
+  it("never comes from a probe, and is checked by no setup path's preflight", () => {
+    const enablerCapabilities = ["policy.assign", "policy.remediate", "identity.create"];
+    for (const capability of Object.values(AZURE_PROBE_CAPABILITIES)) {
+      expect(enablerCapabilities).not.toContain(capability);
+    }
+    for (const path of Object.keys(REQUIRED_ACTIONS) as SetupPath[]) {
+      for (const capability of enablerCapabilities) {
+        expect(capabilitiesCheckedForSetupPath(path), path).not.toContain(capability);
+      }
+    }
+  });
+});
+
+describe("the Sentinel incidents probe (CAP-4)", () => {
+  it("establishes sentinel-incidents.read, and only from its own probe", () => {
+    expect(AZURE_PROBE_CAPABILITIES["sentinel-incidents-list"]).toBe("sentinel-incidents.read");
+    expect(
+      Object.values(AZURE_ACTION_CAPABILITIES).filter((c) => c === "sentinel-incidents.read"),
+    ).toEqual([]);
+  });
+
+  it("records granted on ok, denied on denied, and nothing on unknown", () => {
+    const withProbe = (status: "ok" | "denied" | "unknown"): AzurePreflight => ({
+      configured: true,
+      setupPath: "existing-rg",
+      scopeKind: "resource-group",
+      scope: "/subscriptions/s/resourceGroups/rg",
+      permissionsFetched: false,
+      workspaceScope: "",
+      checks: [],
+      probes: [
+        { name: "sentinel-incidents-list", label: "Read Microsoft Sentinel incidents", status, detail: "" },
+      ],
+      hasRequiredAccess: false,
+      error: "",
+    });
+    const cribl: CriblPreflight = {
+      mode: "cloud",
+      workerGroup: "",
+      probes: [],
+      hasRequiredAccess: true,
+      error: "",
+    };
+    const verdict = (status: "ok" | "denied" | "unknown") =>
+      capabilitiesFromSides(withProbe(status), cribl, { auditedAt: null, connectionId: null })
+        .verdicts["sentinel-incidents.read"];
+    expect(verdict("ok")).toBe("granted");
+    expect(verdict("denied")).toBe("denied");
+    expect(verdict("unknown")).toBeUndefined();
+  });
+});
+
+describe("the Graph permission probes (CAP-5)", () => {
+  it("map the licence read and the incidents list, and nothing else", () => {
+    expect(GRAPH_PROBE_CAPABILITIES).toEqual({
+      "subscribed-skus": "graph-licences.read",
+      "security-incidents": "graph-incidents.read",
+    });
+  });
+
+  it("grant only on a row, deny only on a 403, and read an empty 200 as nothing (AZR-111)", () => {
+    expect(graphProbeVerdict({ status: 200, body: { value: [{ id: "x" }] } })).toBe("granted");
+    expect(graphProbeVerdict({ status: 200, body: { value: [] } })).toBeUndefined();
+    expect(graphProbeVerdict({ status: 200, body: {} })).toBeUndefined();
+    expect(graphProbeVerdict({ status: 200, body: { value: "x" } })).toBeUndefined();
+    expect(graphProbeVerdict({ status: 200, body: null })).toBeUndefined();
+    expect(graphProbeVerdict({ status: 403, body: {} })).toBe("denied");
+    for (const status of [400, 401, 404, 429, 500, 503]) {
+      expect(
+        graphProbeVerdict({ status, body: { value: [{ id: "x" }] } }),
+        String(status),
+      ).toBeUndefined();
     }
   });
 });

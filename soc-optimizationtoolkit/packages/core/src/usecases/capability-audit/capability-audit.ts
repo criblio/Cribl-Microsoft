@@ -41,18 +41,25 @@ import {
 import type {
   AuditDecision,
   AuditTrigger,
+  Capability,
   CapabilitySet,
+  CapabilityVerdict,
 } from "../../domain/capabilities";
 import { evaluateActionsAtScope, runPermissionPreflight } from "../permission-preflight";
 import { DEFENDER_SUBSCRIPTION_ACTIONS } from "../../domain/defender-export/defender-permissions";
+import { ENABLER_SUBSCRIPTION_ACTIONS } from "../../domain/capability-enablers";
+import type { RequiredAction } from "../../domain/azure-permissions";
+import type { GraphDirectory, GraphPermissionProbe } from "../../ports/graph-directory";
 import type {
   AzurePreflightTarget,
   CriblShellMode,
   PermissionReport,
 } from "../permission-preflight";
 import {
+  GRAPH_PROBE_CAPABILITIES,
   azureCheckVerdicts,
   capabilitiesFromReport,
+  graphProbeVerdict,
 } from "../permission-preflight/capability-mapping";
 
 /** The ports the audit orchestrates. */
@@ -65,6 +72,11 @@ export interface CapabilityAuditPorts {
    * that has not bound one should still be able to audit.
    */
   cache?: ContentCache;
+  /**
+   * OPTIONAL Microsoft Graph reader for the CAP-5 permission probes. Absent,
+   * or without `probePermission`, the Graph capabilities stay unmeasured.
+   */
+  graph?: GraphDirectory;
   /** OPTIONAL diagnostics sink. */
   logger?: Logger;
 }
@@ -107,21 +119,36 @@ export interface CapabilityAuditResult {
 }
 
 /**
- * The Defender verdicts a resource-group audit adds from the subscription
- * (AZR-86, audit discrepancy 21).
- *
- * The existing path audits `existing-rg`, whose scope is the workspace's
- * resource group, while the Defender export's pricings and automations are
- * read at the subscription. So the default audit never measured them, and the
- * Defender capabilities stayed unknown for every existing-path tenant. This
- * reads the subscription's effective permissions once and evaluates only the
- * Defender actions - the same list `existing-subscription` checks, with the
- * same grant-only rule for the export write.
- *
- * One more GET per audit, and only on `existing-rg` with a subscription set.
- * Unread, it records nothing (rule 3), so a refusal costs an annotation.
+ * The actions a resource-group audit evaluates at the SUBSCRIPTION, in one
+ * read: the Defender export's (AZR-86) and the capability enablers' (CAP-2,
+ * CAP-3). Exported so the pin can name exactly what is measured there.
  */
-export async function defenderSubscriptionVerdicts(
+export const SUBSCRIPTION_AUDIT_ACTIONS: readonly RequiredAction[] = Object.freeze([
+  ...DEFENDER_SUBSCRIPTION_ACTIONS,
+  ...ENABLER_SUBSCRIPTION_ACTIONS,
+]);
+
+/**
+ * The verdicts a resource-group audit adds from the subscription.
+ *
+ * DEFENDER (AZR-86, audit discrepancy 21). The existing path audits
+ * `existing-rg`, whose scope is the workspace's resource group, while the
+ * Defender export's pricings and automations are read at the subscription. So
+ * the default audit never measured them, and the Defender capabilities stayed
+ * unknown for every existing-path tenant.
+ *
+ * ENABLERS (CAP-2, CAP-3). The Azure Policy assignment, remediation and
+ * managed-identity writes are measured here too, ahead of the feature that
+ * will call them (domain/capability-enablers says what the subscription read
+ * can and cannot prove for each). They ride in the SAME read, so measuring
+ * them costs no request.
+ *
+ * One GET per audit, and only on `existing-rg` with a subscription set. The
+ * grant-only rule applies to the Defender export write and the managed
+ * identity write. Unread, it records nothing (rule 3), so a refusal costs an
+ * annotation.
+ */
+export async function subscriptionScopeVerdicts(
   azure: AzureManagement,
   setupPath: SetupPath,
   subscriptionId: string,
@@ -132,9 +159,40 @@ export async function defenderSubscriptionVerdicts(
   const evaluated = await evaluateActionsAtScope(
     azure,
     `/subscriptions/${subscriptionId}`,
-    DEFENDER_SUBSCRIPTION_ACTIONS,
+    SUBSCRIPTION_AUDIT_ACTIONS,
   );
   return azureCheckVerdicts(evaluated.fetched, evaluated.checks);
+}
+
+/**
+ * The Microsoft Graph application-permission verdicts (CAP-5): one minimal
+ * read per probe in {@link GRAPH_PROBE_CAPABILITIES}, run in sequence.
+ *
+ * Records only what graphProbeVerdict says a response proves - a row is a
+ * grant, a 403 a denial, and an empty 200 nothing (AZR-111). A shell whose
+ * GraphDirectory has no probe, or no GraphDirectory at all, records nothing;
+ * so does a probe that rejects. Two Graph GETs per audit that runs.
+ */
+export async function graphPermissionVerdicts(
+  graph: GraphDirectory | undefined,
+  logger?: Logger,
+): Promise<CapabilitySet["verdicts"]> {
+  const into: Partial<Record<Capability, CapabilityVerdict>> = {};
+  if (graph?.probePermission === undefined) {
+    return into;
+  }
+  const probes = Object.keys(GRAPH_PROBE_CAPABILITIES) as GraphPermissionProbe[];
+  for (const probe of probes) {
+    try {
+      const verdict = graphProbeVerdict(await graph.probePermission(probe));
+      if (verdict !== undefined) {
+        into[GRAPH_PROBE_CAPABILITIES[probe]] = verdict;
+      }
+    } catch (err) {
+      logger?.info("capability-audit: graph probe failed", { probe, error: errText(err) });
+    }
+  }
+  return into;
 }
 
 /** Render a thrown value as text. */
@@ -270,17 +328,20 @@ export async function runCapabilityAudit(
     auditedAt: input.nowIso,
     connectionId: key,
   });
-  // AZR-86: the subscription-scope Defender evaluation, per tenant (this
-  // audit, its key and its cache entry are one tenant's). Fills only what
-  // the preflight left unmeasured.
-  const defender = await defenderSubscriptionVerdicts(
+  // AZR-86 and CAP-2/CAP-3: the subscription-scope evaluation, per tenant
+  // (this audit, its key and its cache entry are one tenant's). Fills only
+  // what the preflight left unmeasured.
+  const subscription = await subscriptionScopeVerdicts(
     ports.azure,
     input.setupPath,
     input.azure.subscriptionId,
   );
+  // CAP-5: the Graph application permissions, measured on this tenant's
+  // Graph token. The preflight never records these, so nothing collides.
+  const graph = await graphPermissionVerdicts(ports.graph, logger);
   const set: CapabilitySet = {
     ...measured,
-    verdicts: { ...defender, ...measured.verdicts },
+    verdicts: { ...subscription, ...graph, ...measured.verdicts },
   };
   await saveCapabilityAudit(ports.cache, set, input.identity.tenantId, logger);
 

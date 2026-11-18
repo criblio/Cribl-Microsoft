@@ -66,6 +66,10 @@ management.azure.com:
 # 403 and the picker falls back to manual object-id entry. The data-allowances
 # licence read (GET /v1.0/subscribedSkus: SKUs and seat counts only) needs
 # LicenseAssignment.Read.All; without it the E5 granted figure shows as a floor.
+# The background capability audit also sends two one-row probes here (GET
+# /v1.0/subscribedSkus?$select=skuId and GET /v1.0/security/incidents?$top=1) to
+# measure LicenseAssignment.Read.All and SecurityIncident.Read.All; a refusal
+# only leaves that capability marked as not granted or unknown.
 graph.microsoft.com:
   timeout: 30000
   headers:

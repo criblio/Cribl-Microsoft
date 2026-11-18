@@ -38,7 +38,19 @@ const FUNCTIONS = [
     id: "permission-check",
     label: "Check the app's effective permissions",
     necessity: "core",
-    operations: ["rbac.permissions.read", "dcr.list", "workspace.read", "tables.list", "resourceGraph.query"],
+    operations: [
+      "rbac.permissions.read",
+      "dcr.list",
+      "workspace.read",
+      "tables.list",
+      "resourceGraph.query",
+      // CAP-4: the Sentinel incidents probe ($top=1) on the configured workspace.
+      "sentinel.incidents.read",
+      // CAP-5: the capability audit's two Graph probes, on the Graph token.
+      "entra.token",
+      "graph.subscribedSkus.read",
+      "graph.securityIncidents.read",
+    ],
   },
   {
     id: "dcr-deploy",
@@ -237,6 +249,15 @@ const FUNCTIONS = [
       "tables.list",
       "workspace.query",
     ],
+  },
+  // PLANNED (AZR-4): nothing performs this yet. Listed so the CAP-2 / CAP-3
+  // writes the capability model measures ahead of the feature are not orphan
+  // facts; no change request asks for them until the feature ships.
+  {
+    id: "policy-logging",
+    label: "Assign the Azure Policy logging initiatives and remediate existing resources",
+    necessity: "feature",
+    operations: ["policy.assignment.write", "policy.remediation.write", "managedIdentity.write"],
   },
   {
     id: "labs",

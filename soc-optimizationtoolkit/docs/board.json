@@ -114,11 +114,12 @@
       "feature": "CAP-F1",
       "title": "Add policy assignment and remediation capabilities plus probes (`Microsoft.Authorization`, `Mic",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "rosoft.PolicyInsights`). Gates AZR-4."
+      "detail": "rosoft.PolicyInsights`). Gates AZR-4.\n\nDONE 2026-11-17 (pins): capabilities policy.assign (Microsoft.Authorization/policyAssignments/write) and policy.remediate (Microsoft.PolicyInsights/remediations/write), least role Resource Policy Contributor from the new registry operations policy.assignment.write and policy.remediation.write (domain/capability-enablers). Writes are never probed: the background capability audit evaluates them at the SUBSCRIPTION in the same single permissions read that already measures the Defender actions on existing-rg (capability-audit subscriptionScopeVerdicts), so they cost no request. Two-sided there: a management group's grants are inherited and visible at the subscription, so a miss is a denial at the subscription and above it; a grant at the subscription proves nothing about a management group, which AZR-4 must evaluate itself when it assigns there. Not in REQUIRED_ACTIONS (nothing calls them) and asked for by no change request until AZR-4 ships (pinned). Fallback: a role-assignment request naming Resource Policy Contributor. NOT VERIFIED LIVE: one audit against an identity holding Resource Policy Contributor at the subscription (granted) and one with plain Contributor (policy.assign denied, policy.remediate granted).",
+      "verified": "pins"
     },
     {
       "id": "CAP-3",
@@ -126,11 +127,12 @@
       "feature": "CAP-F1",
       "title": "Add managed-identity creation plus probe",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "Gates AZR-4."
+      "detail": "Gates AZR-4.\n\nDONE 2026-11-17 (pins): capability identity.create (Microsoft.ManagedIdentity/userAssignedIdentities/write), least role Managed Identity Contributor (registry operation managedIdentity.write), measured in the same subscription read as CAP-2. GRANT-ONLY (added to GRANT_ONLY_AZURE_ACTIONS): the identity lands in a resource group the operator picks, where a role is invisible from the subscription, so a miss there records nothing. No probe. Asked for by no ticket until AZR-4 ships (pinned). NOT VERIFIED LIVE: an audit against an identity with Managed Identity Contributor at the subscription reading granted.",
+      "verified": "pins"
     },
     {
       "id": "CAP-4",
@@ -138,11 +140,12 @@
       "feature": "CAP-F1",
       "title": "Add Sentinel incident read (Microsoft Sentinel Reader)",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "Modelled nowhere - `azure-permissions.ts:239,244` knows only the Contributor actions. Gates AZR-7."
+      "detail": "Modelled nowhere - `azure-permissions.ts:239,244` knows only the Contributor actions. Gates AZR-7.\n\nDONE 2026-11-17 (pins): capability sentinel-incidents.read, measured by a new preflight probe sentinel-incidents-list - GET {workspace}/providers/Microsoft.SecurityInsights/incidents?$top=1 (api 2025-09-01), issued after the Resource Graph query and only when a workspace is configured. ARM authorizes before the provider answers, so 2xx (even an empty list) is granted, 401/403 denied, 404 (Sentinel not enabled) and anything else unknown; it never gates readiness. Registry operation sentinel.incidents.read (Microsoft Sentinel Reader on the workspace; Reader also grants it). One more GET per preflight and per audit. Asked for by no ticket until AZR-7 ships (pinned). NOT VERIFIED LIVE: the probe's 200 on a Sentinel workspace, its 403 for an identity without */read there, and its 404 on a workspace without Sentinel.",
+      "verified": "pins"
     },
     {
       "id": "CAP-5",
@@ -150,11 +153,12 @@
       "feature": "CAP-F1",
       "title": "Add the Graph licence and incident scopes plus probes",
       "type": "enabler",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "Gates AZR-6.\n\nCORRECTED 2026-11-17 (AZR-S1, backlog.md 6d point 7): LOG-09 listed Organization.Read.All and SecurityEvents.Read.All. The usage probe lists Graph security/incidents, whose least-privileged application permission is SecurityIncident.Read.All; SecurityEvents.Read.All belongs to the legacy Graph security alerts and is not asked for. The licence check reads GET /v1.0/subscribedSkus, which Organization.Read.All satisfies but LicenseAssignment.Read.All (already asked for the data allowances) satisfies more narrowly - so the capability is measured by the subscribedSkus read itself, and either grant reads as granted. Per AZR-111 an empty 200 from Graph is not a measured refusal: it records unknown."
+      "detail": "Gates AZR-6.\n\nCORRECTED 2026-11-17 (AZR-S1, backlog.md 6d point 7): LOG-09 listed Organization.Read.All and SecurityEvents.Read.All. The usage probe lists Graph security/incidents, whose least-privileged application permission is SecurityIncident.Read.All; SecurityEvents.Read.All belongs to the legacy Graph security alerts and is not asked for. The licence check reads GET /v1.0/subscribedSkus, which Organization.Read.All satisfies but LicenseAssignment.Read.All (already asked for the data allowances) satisfies more narrowly - so the capability is measured by the subscribedSkus read itself, and either grant reads as granted. Per AZR-111 an empty 200 from Graph is not a measured refusal: it records unknown.\n\nDONE 2026-11-17 (pins): capabilities graph-licences.read and graph-incidents.read, measured by the background capability audit through a new OPTIONAL GraphDirectory.probePermission (cloud adapter: GET /v1.0/subscribedSkus?$select=skuId and GET /v1.0/security/incidents?$top=1, same shared slot and single re-mint on 401/403 as the other Graph reads). Core decides (graphProbeVerdict): a 2xx with a row in value is granted, a 403 denied, and an empty 200 records NOTHING, per AZR-111 - the refusal shape is unsettled and a tenant can have no incidents. 401/404/429/5xx and a rejected probe record nothing. Organization.Read.All is kept in the sense that it also satisfies the subscribedSkus probe, but no ticket asks for it: LicenseAssignment.Read.All, already asked for the data allowances, is the least privilege for the same read. New registry operation graph.securityIncidents.read (SecurityIncident.Read.All). SecurityEvents.Read.All is asked for nowhere (pinned). Two Graph GETs per audit that runs; none when the cached audit is reused. graph.microsoft.com was already in proxies.yml (no path allowlist); its comment now names the probes. NOT VERIFIED LIVE: the probes' answers in a tenant with and without each consent - which also measures part of AZR-111's open refusal shape for these two endpoints.",
+      "verified": "pins"
     },
     {
       "id": "CAP-6",
@@ -181,6 +185,19 @@
       "settled": "settled",
       "dependsOn": [],
       "detail": "The azure-logging-map route ships with requires [] (route-capabilities.ts, following the eventhub-discovery precedent) because the capability taxonomy (capabilities.ts:22-29) has no capability for Management Group Reader, policy read (policyAssignments/read, policyExemptions/read) or role-assignment read. The screen reports its own refusals as unknown, so nothing is hidden, but the nav cannot annotate the route before the operator opens it. DONE WHEN: a capability exists with a real probe (the step-2 mapping rule records only measurements), and the [[AZR-19]] route requires it."
+    },
+    {
+      "id": "CAP-11",
+      "epic": "CAP",
+      "feature": "CAP-F1",
+      "title": "The RBAC preflight panel's cache write drops the audit's subscription and Graph verdicts",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "FOUND 2026-11-17 while building CAP-2..CAP-5. The RBAC preflight panel saves capabilitiesFromSides(azure, cribl) under the same per-tenant cache key the background audit uses (rbac-preflight-panel.tsx, saveCapabilityAudit). That projection holds only what runAzurePreflight measures, so it carries none of the verdicts runCapabilityAudit adds afterwards: the defender-* capabilities on existing-rg (AZR-86), policy.assign, policy.remediate and identity.create (CAP-2, CAP-3), and graph-licences.read / graph-incidents.read (CAP-5). After a panel run the next launch finds a matching key, skips the audit, and those capabilities read unknown until a manual refresh or a scope change. FIX: have the panel merge its set over the cached one (or re-run the audit's extra measurements) rather than replace it; pin that a panel save keeps a cached defender-plans.read verdict.",
+      "priorityWhy": "The loss only ever turns a measured verdict into unknown - it never invents a grant or a denial - so its cost is an annotation, and one manual refresh restores it. No shipped route requires the enabler or Graph capabilities yet; the Defender section's banner is the one surface that shows a dropped verdict, as not measured. The defects where a granted ticket still fails outrank it."
     },
     {
       "id": "HON-6",
