@@ -203,7 +203,7 @@
       "feature": "AZR-F5",
       "title": "Verify whether XDR streaming and the Sentinel incidents API are complementary or alternatives",
       "type": "spike",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "later",
       "settled": "undecided",
       "dependsOn": [],
