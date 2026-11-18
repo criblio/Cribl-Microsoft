@@ -192,12 +192,25 @@
       "feature": "CAP-F1",
       "title": "The RBAC preflight panel's cache write drops the audit's subscription and Graph verdicts",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [],
-      "detail": "FOUND 2026-11-17 while building CAP-2..CAP-5. The RBAC preflight panel saves capabilitiesFromSides(azure, cribl) under the same per-tenant cache key the background audit uses (rbac-preflight-panel.tsx, saveCapabilityAudit). That projection holds only what runAzurePreflight measures, so it carries none of the verdicts runCapabilityAudit adds afterwards: the defender-* capabilities on existing-rg (AZR-86), policy.assign, policy.remediate and identity.create (CAP-2, CAP-3), and graph-licences.read / graph-incidents.read (CAP-5). After a panel run the next launch finds a matching key, skips the audit, and those capabilities read unknown until a manual refresh or a scope change. FIX: have the panel merge its set over the cached one (or re-run the audit's extra measurements) rather than replace it; pin that a panel save keeps a cached defender-plans.read verdict.",
-      "priorityWhy": "The loss only ever turns a measured verdict into unknown - it never invents a grant or a denial - so its cost is an annotation, and one manual refresh restores it. No shipped route requires the enabler or Graph capabilities yet; the Defender section's banner is the one surface that shows a dropped verdict, as not measured. The defects where a granted ticket still fails outrank it."
+      "detail": "FOUND 2026-11-17 while building CAP-2..CAP-5. The RBAC preflight panel saves capabilitiesFromSides(azure, cribl) under the same per-tenant cache key the background audit uses (rbac-preflight-panel.tsx, saveCapabilityAudit). That projection holds only what runAzurePreflight measures, so it carries none of the verdicts runCapabilityAudit adds afterwards: the defender-* capabilities on existing-rg (AZR-86), policy.assign, policy.remediate and identity.create (CAP-2, CAP-3), and graph-licences.read / graph-incidents.read (CAP-5). After a panel run the next launch finds a matching key, skips the audit, and those capabilities read unknown until a manual refresh or a scope change. FIX: have the panel merge its set over the cached one (or re-run the audit's extra measurements) rather than replace it; pin that a panel save keeps a cached defender-plans.read verdict. DONE 2026-11-18 (pins): saveCapabilityAudit now MERGES instead of replacing, for both writers (the panel and runCapabilityAudit), through the new pure domain/capabilities/capability-merge.ts mergeCapabilitySets. A writer merges only what it measured; a verdict is replaced only by a newer measurement of the same capability, judged per capability from a new optional CapabilitySet.measuredAt (cached as measuredAt, written only when a verdict is older than the set auditedAt, so single-writer entries keep their old shape); unknown/unreachable never displace granted/denied; a set for another connection key replaces outright and carries nothing; a failed read before the write skips the write rather than erase. The audit returns the merged set, so what renders is what the next launch reads. Pinned by capability-audit-writers.test.ts: audit (mixed granted/denied on all eight audit-only capabilities: defender-plans.read, defender-automation.read/.write, policy.assign, policy.remediate, identity.create, graph-licences.read, graph-incidents.read) then a panel set built as rbac-preflight-panel.tsx builds it; each keeps its exact prior value, and the relaunch reuses them with zero requests. Mutation-checked: with the merge replaced by a plain replace, 3 of the 6 pins fail. NOT VERIFIED LIVE: no Live Preview run; the panel save is unchanged fire-and-forget, and two writers interleaving their read-merge-write inside the same instant can still lose one write (costs an annotation until the next audit).",
+      "priorityWhy": "The loss only ever turns a measured verdict into unknown - it never invents a grant or a denial - so its cost is an annotation, and one manual refresh restores it. No shipped route requires the enabler or Graph capabilities yet; the Defender section's banner is the one surface that shows a dropped verdict, as not measured. The defects where a granted ticket still fails outrank it.",
+      "verified": "pins"
+    },
+    {
+      "id": "CAP-15",
+      "epic": "CAP",
+      "feature": "CAP-F1",
+      "title": "Show a carried verdict's own audit age where it is older than the set's",
+      "type": "story",
+      "status": "backlog",
+      "priority": "later",
+      "settled": "settled",
+      "dependsOn": [],
+      "detail": "Filed 2026-11-18 from CAP-11. Since the two writers merge into one cached set, a set can hold verdicts of different ages: auditedAt (what the audit-age chip renders) is the NEWEST measurement, and a verdict carried from an older run keeps its own time in CapabilitySet.measuredAt. Nothing renders measuredAt yet, so an operator reading the chip after an RBAC panel run sees the panel's age for the Defender, enabler and Graph verdicts that were measured by the earlier audit. DONE WHEN: a surface that shows a carried verdict (the Defender section banner first) says when that verdict was measured, read through verdict age rather than the set age."
     },
     {
       "id": "CAP-12",
@@ -4781,7 +4794,7 @@
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [
         "AZR-61"
@@ -4791,8 +4804,9 @@
       "id": "AZR-125",
       "menu": "none",
       "title": "The least-privilege KV audit lists omit azure-onboarding-flow-last-seen, azure-credential-lease and azure-credential-owner",
-      "detail": "Found in the AZR-37/AZR-90 review round 3 (2026-11-18). The cribl.kv.read and cribl.kv.write operations in packages/core/src/domain/least-privilege/operations.ts name the app KV keys read and written, but not azure-onboarding-flow-last-seen (AZR-37 loads it and PUTs it from the background flow poll) nor azure-credential-lease and azure-credential-owner (the tenant session's; that gap predates AZR-37). Those audit strings are not free text: operations.test.ts matches each against a 'method path' row of docs/audit/2026-11-03-least-privilege-audit.json, so adding a key means amending that dated audit record or adding a later audit row, a decision about how the audit is kept rather than a one-line edit. FIX: add the three keys through whichever route is chosen (a dated addendum row is the honest one) and pin the KV key constants (FLOW_LAST_SEEN_KEY, CREDENTIAL_LEASE_KEY, CREDENTIAL_OWNER_KEY) against both lists so a new key cannot be missed again.",
-      "priorityWhy": "No permission is wrong or missing: the grant is the app's own KV namespace, which the platform gives every App user and which cannot be narrowed per key, so the omission misleads a reader of the inventory but asks for nothing extra and refuses nothing. The fix also needs a decision on amending a dated audit, which should not be made inside a review round."
+      "detail": "Found in the AZR-37/AZR-90 review round 3 (2026-11-18). The cribl.kv.read and cribl.kv.write operations in packages/core/src/domain/least-privilege/operations.ts name the app KV keys read and written, but not azure-onboarding-flow-last-seen (AZR-37 loads it and PUTs it from the background flow poll) nor azure-credential-lease and azure-credential-owner (the tenant session's; that gap predates AZR-37). Those audit strings are not free text: operations.test.ts matches each against a 'method path' row of docs/audit/2026-11-03-least-privilege-audit.json, so adding a key means amending that dated audit record or adding a later audit row, a decision about how the audit is kept rather than a one-line edit. FIX: add the three keys through whichever route is chosen (a dated addendum row is the honest one) and pin the KV key constants (FLOW_LAST_SEEN_KEY, CREDENTIAL_LEASE_KEY, CREDENTIAL_OWNER_KEY) against both lists so a new key cannot be missed again. DONE 2026-11-18 (pins): route chosen is a DATED ADDENDUM, docs/audit/2026-11-18-kv-key-addendum.json (the 2026-11-03 record is not edited). Its GET and PUT rows name azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner and, found while pinning, tenant-cribl-mapping (the Setup mapping document, also missing). cribl.kv.read and cribl.kv.write cite the dated row AND the addendum row; operations.test.ts reads the addendum and holds its rows to every pin (reads exactly two new rows, each referenced). Guard: least-privilege/kv-keys.test.ts derives the document keys from the @soc/core barrel itself (every exported string constant named *_KEY, less three exclusions with reasons) and fails when one is missing from either list; it was red on the four keys before the fix. It cannot see a key spelled inline rather than as an exported *_KEY constant, nor @soc/ui or shell-owned keys. No permission changed; verified none live because nothing live changed.",
+      "priorityWhy": "No permission is wrong or missing: the grant is the app's own KV namespace, which the platform gives every App user and which cannot be narrowed per key, so the omission misleads a reader of the inventory but asks for nothing extra and refuses nothing. The fix also needs a decision on amending a dated audit, which should not be made inside a review round.",
+      "verified": "pins"
     },
     {
       "epic": "AZR",
