@@ -21,9 +21,15 @@ describe("renderStep", () => {
       "ns1.servicebus.windows.net:9093",
     );
     expect(r.values.find((v) => v.label === "Namespace resource ID")?.value).toBe(
-      "/subscriptions/<subscriptionId>/resourceGroups/<resourceGroup>/providers/Microsoft.EventHub/namespaces/ns1",
+      "/subscriptions/<eventHubSubscriptionId>/resourceGroups/<eventHubResourceGroup>/providers/Microsoft.EventHub/namespaces/ns1",
     );
-    expect(r.missing).toEqual(["subscriptionId", "resourceGroup", "region"]);
+    expect(r.missing).toEqual(["eventHubSubscriptionId", "eventHubResourceGroup", "region"]);
+    // AZR-102: a blank namespace location renders the shared subscription and resource group.
+    const shared = renderStep(howToStep("eh-namespace")!, { ...BLANK, namespace: "ns1", subscriptionId: "s1", resourceGroup: "r1" });
+    expect(shared.values.find((v) => v.label === "Namespace resource ID")?.value).toBe(
+      "/subscriptions/s1/resourceGroups/r1/providers/Microsoft.EventHub/namespaces/ns1",
+    );
+    expect(shared.missing).toEqual(["region"]);
     expect(r.title).toBe("Create or pick the Event Hub namespace ns1");
   });
 

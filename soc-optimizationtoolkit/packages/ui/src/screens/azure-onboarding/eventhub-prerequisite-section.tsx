@@ -26,7 +26,9 @@
  *
  * NO KEY HERE. Listing the rules never returns a key; the connection string is
  * fetched only inside the Defender deploy, after the confirm. The choice lives
- * in the screen's React state and is not persisted.
+ * in the screen's React state and is not itself persisted (AZR-24); a complete
+ * pick is written into the How-to plan values by the screen while those follow
+ * section 1 (AZR-102), so the steps name the hub a deploy writes to.
  *
  * Controlled: the screen owns {@link EventHubTarget} because the Defender
  * section's deploy gate reads it. Every list and empty state is worded by

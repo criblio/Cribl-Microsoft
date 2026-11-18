@@ -50,7 +50,7 @@ import type {
   CheckKind,
   StepVerdict,
 } from "../../domain/onboarding-howto/check-kinds";
-import type { PlanValueKey, PlanValues } from "../../domain/onboarding-howto/plan-values";
+import { eventHubLocation, type PlanValueKey, type PlanValues } from "../../domain/onboarding-howto/plan-values";
 import {
   onboardingSource,
   type OnboardingSourceId,
@@ -557,8 +557,8 @@ export function applyDefenderDeploy(
   const ran = expectedExportFor({
     subscriptionId: values.subscriptionId.trim(),
     namespace: {
-      subscriptionId: values.subscriptionId.trim(),
-      resourceGroup: values.resourceGroup.trim(),
+      subscriptionId: eventHubLocation(values).subscriptionId.trim(),
+      resourceGroup: eventHubLocation(values).resourceGroup.trim(),
       name: values.namespace.trim(),
     },
     hubName: values.hubName.trim(),
@@ -621,8 +621,8 @@ export function applyActivityLogDeploy(
 ): ValidationResult | null {
   const same = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase();
   const planNamespace = {
-    subscriptionId: values.subscriptionId.trim(),
-    resourceGroup: values.resourceGroup.trim(),
+    subscriptionId: eventHubLocation(values).subscriptionId.trim(),
+    resourceGroup: eventHubLocation(values).resourceGroup.trim(),
     name: values.namespace.trim(),
   };
   if (!same(values.subscriptionId, deploy.input.subscriptionId)) return null;

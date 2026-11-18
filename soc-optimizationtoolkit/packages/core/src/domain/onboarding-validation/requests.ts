@@ -61,7 +61,13 @@ import {
 import { metricsRequest } from "../eventhub-discovery/eventhub-discovery";
 import { buildSubscriptionDiagnosticSettingsListRequest } from "../activity-log-export/activity-log-setting";
 import type { CheckKind } from "../onboarding-howto/check-kinds";
-import { missingValues, type PlanValueKey, type PlanValues } from "../onboarding-howto/plan-values";
+import {
+  eventHubLocation,
+  missingValues,
+  withEventHubLocation,
+  type PlanValueKey,
+  type PlanValues,
+} from "../onboarding-howto/plan-values";
 import { onboardingSource, type OnboardingSourceId } from "../onboarding-howto/sources";
 import {
   LEGACY_POLICY_NAMES,
@@ -154,7 +160,9 @@ export type CheckRequests =
   | { readonly kind: "requests"; readonly requests: readonly CheckRequest[] }
   | { readonly kind: "missing"; readonly missing: readonly PlanValueKey[] };
 
-const SUB_RG_NS: readonly PlanValueKey[] = ["subscriptionId", "resourceGroup", "namespace"];
+// AZR-102: the namespace where it lives. Read through withEventHubLocation
+// (requiredMissing), so a blank Event Hub key is satisfied by its shared key.
+const SUB_RG_NS: readonly PlanValueKey[] = ["eventHubSubscriptionId", "eventHubResourceGroup", "namespace"];
 const STORAGE: readonly PlanValueKey[] = ["subscriptionId", "resourceGroup", "storageAccount"];
 
 /** The plan values each check kind needs before it may send anything. */
@@ -170,9 +178,11 @@ export const CHECK_REQUIRED_VALUES: Readonly<Record<CheckKind, readonly PlanValu
   "eh-role-receiver": [...SUB_RG_NS, "criblPrincipalObjectId"],
   "defender-plans": ["subscriptionId"],
   "defender-provider": ["subscriptionId"],
-  "defender-export": [...SUB_RG_NS, "hubName"],
+  // The export is listed on the shared subscription; its target is the namespace.
+  "defender-export": ["subscriptionId", ...SUB_RG_NS, "hubName"],
   "entra-setting": SUB_RG_NS,
-  "activity-log-setting": SUB_RG_NS,
+  // The setting is listed on the shared subscription; its target is the namespace.
+  "activity-log-setting": ["subscriptionId", ...SUB_RG_NS],
   "policy-assignment": ["managementGroupId"],
   "policy-set-definition": ["managementGroupId"],
   "policy-definition": ["managementGroupId"],
@@ -192,15 +202,28 @@ export const CHECK_REQUIRED_VALUES: Readonly<Record<CheckKind, readonly PlanValu
   "storage-rbac": [...STORAGE, "criblPrincipalObjectId"],
 };
 
+/**
+ * The keys a check needs that are unset, with the Event Hub location keys
+ * resolved first (AZR-102): blank means the shared subscription or resource group.
+ */
+export function requiredMissing(values: PlanValues, keys: readonly PlanValueKey[]): readonly PlanValueKey[] {
+  return missingValues(withEventHubLocation(values), keys);
+}
+
 function v(values: PlanValues, key: PlanValueKey): string {
   return (values[key] ?? "").trim();
 }
 
-/** The namespace the plan names. Only meaningful once SUB_RG_NS are set. */
+/**
+ * The namespace the plan names, in its own subscription and resource group
+ * when the plan sets them (AZR-102, eventHubLocation). Only meaningful once
+ * SUB_RG_NS are set.
+ */
 export function planNamespace(values: PlanValues): NamespaceRef {
+  const loc = eventHubLocation(values);
   return {
-    subscriptionId: v(values, "subscriptionId"),
-    resourceGroup: v(values, "resourceGroup"),
+    subscriptionId: loc.subscriptionId.trim(),
+    resourceGroup: loc.resourceGroup.trim(),
     name: v(values, "namespace"),
   };
 }
@@ -500,7 +523,7 @@ export function requestsFor(
   values: PlanValues,
   expectations: CheckExpectations = {},
 ): CheckRequests {
-  const missing = missingValues(values, CHECK_REQUIRED_VALUES[kind]);
+  const missing = requiredMissing(values, CHECK_REQUIRED_VALUES[kind]);
   if (missing.length > 0) return { kind: "missing", missing };
   return { kind: "requests", requests: requestList(kind, values, expectations) };
 }
@@ -521,7 +544,7 @@ export function arrivalRequestFor(
   hub: string,
   timespan?: string,
 ): ArrivalRequest {
-  const missing = missingValues(values, SUB_RG_NS);
+  const missing = requiredMissing(values, SUB_RG_NS);
   if (missing.length > 0) return { kind: "missing", missing };
   const base = metricsRequest(eventHubResourceId(planNamespace(values), hub), timespan ?? "");
   const query = { ...(base.query ?? {}) };
