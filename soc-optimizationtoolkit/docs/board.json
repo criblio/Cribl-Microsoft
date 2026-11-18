@@ -4591,7 +4591,7 @@
     {
       "id": "AZR-102",
       "type": "story",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "next",
       "dependsOn": [],
       "title": "One Event Hub choice: the section 1 picker and the How-to 'Your names and ids' values hold separate copies of namespace, hub and rule",
@@ -5165,7 +5165,7 @@
       "epic": "AZR",
       "feature": "AZR-F9",
       "type": "bug",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
