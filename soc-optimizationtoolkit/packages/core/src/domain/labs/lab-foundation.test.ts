@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-  CONTRIBUTOR_ROLE_DEFINITION_ID,
+  TTL_ROLE_DEFINITION_ID,
+  TTL_ROLE_NAME,
   LAB_LOGIC_APP_API_VERSION,
   LAB_RESOURCE_GROUPS_API_VERSION,
   buildResourceGroupGetRequest,
   buildResourceGroupPatchTagsRequest,
   buildResourceGroupPutRequest,
-  buildRgContributorRoleAssignmentRequest,
+  buildRgTtlRoleAssignmentRequest,
   buildTtlLogicAppPutRequest,
   buildTtlWorkflowDefinition,
   labFoundationTags,
@@ -119,9 +120,9 @@ describe("buildTtlLogicAppPutRequest", () => {
   });
 });
 
-describe("buildRgContributorRoleAssignmentRequest", () => {
-  it("PUTs Contributor for the identity at resource-group scope", () => {
-    const request = buildRgContributorRoleAssignmentRequest({
+describe("buildRgTtlRoleAssignmentRequest", () => {
+  it("PUTs the TTL role for the identity at resource-group scope (AZR-89)", () => {
+    const request = buildRgTtlRoleAssignmentRequest({
       subscriptionId: SUB,
       resourceGroup: RG,
       assignmentName: "aaaa-bbbb",
@@ -133,8 +134,18 @@ describe("buildRgContributorRoleAssignmentRequest", () => {
         "/providers/Microsoft.Authorization/roleAssignments/aaaa-bbbb",
     );
     const body = request.body as Record<string, any>;
-    expect(body.properties.roleDefinitionId).toContain(CONTRIBUTOR_ROLE_DEFINITION_ID);
+    expect(body.properties.roleDefinitionId).toBe(
+      `/subscriptions/${SUB}/providers/Microsoft.Authorization/roleDefinitions/641177b8-a67a-45b9-a033-47bc880bb21e`,
+    );
     expect(body.properties.principalId).toBe("pppp-qqqq");
     expect(body.properties.principalType).toBe("ServicePrincipal");
+  });
+
+  it("names Managed Application Contributor Role by its built-in GUID, never Contributor (AZR-89)", () => {
+    // Learn built-in-roles/management-and-governance: the GUID and name of
+    // the least built-in role that can read and delete a resource group.
+    expect(TTL_ROLE_DEFINITION_ID).toBe("641177b8-a67a-45b9-a033-47bc880bb21e");
+    expect(TTL_ROLE_NAME).toBe("Managed Application Contributor Role");
+    expect(TTL_ROLE_DEFINITION_ID).not.toBe("b24988ac-6180-42a0-ab88-20f7382dd24c");
   });
 });

@@ -11,8 +11,9 @@
  * - Deploy-TTL.ps1: the Logic App workflow definition VERBATIM (hourly
  *   recurrence; managed-identity HTTP GET of its own resource group; TTL tag
  *   parse; expiration comparison against utcNow(); managed-identity HTTP
- *   DELETE of the resource group) and the Contributor grant to the Logic
- *   App's identity.
+ *   DELETE of the resource group) and the role grant to the Logic App's
+ *   identity - Managed Application Contributor Role since AZR-89, where the
+ *   legacy granted Contributor.
  *
  * Recorded deviations from the legacy scripts:
  * - Timestamps are UTC. The legacy wrote LOCAL time with a literal "Z"
@@ -46,15 +47,34 @@ export const LAB_LOGIC_APP_API_VERSION = "2019-05-01";
 export const LAB_ROLE_ASSIGNMENTS_API_VERSION = "2022-04-01";
 
 /**
- * Built-in "Contributor" role definition GUID - the role the legacy script
- * granted the Logic App's managed identity so it can delete its own resource
- * group. Fixed Azure identifier; do not change. VERIFIED LIVE 2026-07-17
- * against az role definition list (an earlier revision shipped a wrong GUID
- * here, which failed constrained-RBAC ABAC conditions with
- * AuthorizationFailed - the condition checks the requested role id).
+ * The built-in role the TTL Logic App's identity is granted on its own
+ * resource group (AZR-89): the least built-in role that can GET and DELETE
+ * the group. It grants read on every resource, every action on
+ * Microsoft.Resources/subscriptions/resourceGroups and on
+ * Microsoft.Resources/deployments, every action on Microsoft.Solutions
+ * applications and the Microsoft.Solutions register action, and no data
+ * actions (Learn: built-in-roles/management-and-governance).
+ *
+ * Why a resource-group delete right is enough: Learn
+ * (azure-resource-manager/management/delete-resource-group, "Required access
+ * and deletion failures") says the only permission required to delete a
+ * resource group is the resource group delete action, and that no permission
+ * to delete the individual resources inside it is needed.
+ *
+ * Why not a custom role with only resourceGroups/read and delete: the app
+ * cannot create one. Creating a role definition needs
+ * Microsoft.Authorization/roleDefinitions/write, which neither RBAC
+ * Administrator nor Contributor holds, and asking for it would let the app
+ * widen the very role its constrained grant is allowed to assign.
+ *
+ * The legacy script granted Contributor (b24988ac-6180-42a0-ab88-20f7382dd24c);
+ * an RBAC Administrator condition written for that role must now name this
+ * one instead (LAB_RBAC_CONDITION, lab-permissions).
  */
-export const CONTRIBUTOR_ROLE_DEFINITION_ID =
-  "b24988ac-6180-42a0-ab88-20f7382dd24c";
+export const TTL_ROLE_DEFINITION_ID = "641177b8-a67a-45b9-a033-47bc880bb21e";
+
+/** The display name of {@link TTL_ROLE_DEFINITION_ID}, for messages and the az command. */
+export const TTL_ROLE_NAME = "Managed Application Contributor Role";
 
 /** TTL settings for one lab (legacy timeToLive block; enabled is implicit). */
 export interface LabTtlSettings {
@@ -311,7 +331,7 @@ export function buildTtlLogicAppPutRequest(
   };
 }
 
-/** Inputs for {@link buildRgContributorRoleAssignmentRequest}. */
+/** Inputs for {@link buildRgTtlRoleAssignmentRequest}. */
 export interface RgRoleAssignmentInput {
   subscriptionId: string;
   resourceGroup: string;
@@ -322,13 +342,14 @@ export interface RgRoleAssignmentInput {
 }
 
 /**
- * PUT the Contributor role assignment for the Logic App's managed identity at
- * resource-group scope (legacy New-AzRoleAssignment, as ARM REST). Same body
+ * PUT the {@link TTL_ROLE_NAME} assignment for the Logic App's managed
+ * identity at resource-group scope (legacy New-AzRoleAssignment, as ARM REST;
+ * the legacy role was Contributor, AZR-89). Same body
  * conventions as the assign-dcr-role usecase: principalType ServicePrincipal
  * (a managed identity IS a service principal) suppresses the Graph-replication
  * pre-flight on the service side.
  */
-export function buildRgContributorRoleAssignmentRequest(
+export function buildRgTtlRoleAssignmentRequest(
   input: RgRoleAssignmentInput,
 ): AzureManagementRequest {
   const scope = `/subscriptions/${input.subscriptionId}/resourceGroups/${input.resourceGroup}`;
@@ -340,7 +361,7 @@ export function buildRgContributorRoleAssignmentRequest(
       properties: {
         roleDefinitionId:
           `/subscriptions/${input.subscriptionId}/providers/Microsoft.Authorization` +
-          `/roleDefinitions/${CONTRIBUTOR_ROLE_DEFINITION_ID}`,
+          `/roleDefinitions/${TTL_ROLE_DEFINITION_ID}`,
         principalId: input.principalId,
         principalType: "ServicePrincipal",
       },

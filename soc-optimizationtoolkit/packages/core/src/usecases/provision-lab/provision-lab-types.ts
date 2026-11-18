@@ -11,6 +11,7 @@ import type { AzureManagement } from "../../ports/azure-management";
 import type { JobStore } from "../../ports/job-store";
 import type { Logger } from "../../ports/logger";
 import type { LabTtlSettings } from "../../domain/labs/lab-foundation";
+import { TTL_ROLE_NAME } from "../../domain/labs/lab-foundation";
 import {
   isLabPhaseRequired,
   type LabComponentFlags,
@@ -321,7 +322,7 @@ export interface ProvisionLabResult {
   logicAppCreated: boolean;
   /** The watchdog identity's principal (object) id; "" when unavailable. */
   principalId: string;
-  /** True when the identity now holds Contributor on the group. */
+  /** True when the identity now holds the TTL role (TTL_ROLE_NAME) on the group. */
   roleAssigned: boolean;
   /** True when the grant already existed (409 RoleAssignmentExists). */
   roleAlreadyAssigned: boolean;
@@ -362,7 +363,7 @@ export function manualLabRoleCommand(
 ): string {
   return (
     `az role assignment create --assignee-object-id ${principalId} ` +
-    `--assignee-principal-type ServicePrincipal --role Contributor ` +
+    `--assignee-principal-type ServicePrincipal --role "${TTL_ROLE_NAME}" ` +
     `--scope /subscriptions/${subscriptionId}/resourceGroups/${resourceGroup}`
   );
 }

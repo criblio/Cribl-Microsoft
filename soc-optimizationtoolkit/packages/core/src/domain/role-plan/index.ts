@@ -1,5 +1,6 @@
 export {
   LAB_RBAC_CONDITION,
+  LAB_TTL_ROLE,
   NETWORK_WATCHER_RESOURCE_GROUP,
   adminStepsForSetupPath,
   rolePlanForSetupPath,

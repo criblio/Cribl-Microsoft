@@ -264,6 +264,13 @@ describe("provisionLab - foundation", () => {
     );
   });
 
+  it("the manual command assigns the TTL role, never Contributor (AZR-89)", () => {
+    expect(manualLabRoleCommand("S", "R", "P")).toBe(
+      "az role assignment create --assignee-object-id P --assignee-principal-type ServicePrincipal " +
+        '--role "Managed Application Contributor Role" --scope /subscriptions/S/resourceGroups/R',
+    );
+  });
+
   it("treats 409 RoleAssignmentExists as success and retries PrincipalNotFound", async () => {
     const azure = new FakeAzureManagement();
     azure.respondWith(

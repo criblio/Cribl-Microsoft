@@ -849,7 +849,7 @@ const OPERATIONS = {
     leastRole: "RBAC Administrator",
     alsoGrantedBy: ["User Access Administrator", "Owner"],
     scope: "resourceGroup",
-    scopeNote: "the lab resource group, with a condition limiting it to Contributor for service principals",
+    scopeNote: "the lab resource group, with a condition limiting it to Managed Application Contributor Role (the TTL identity, AZR-89) and Monitoring Metrics Publisher for service principals",
     citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/privileged",
     confidence: "high",
     audit: [
