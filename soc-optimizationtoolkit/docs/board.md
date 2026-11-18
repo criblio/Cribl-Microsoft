@@ -5877,7 +5877,18 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   back verbatim on the 2021-11-01 api-version), the DELETE answers, and the
   race window between the re-read and the PUT (ARM PUT is create-or-update;
   the re-read narrows it, it cannot close it). A hub-scoped Listen rule,
-  narrower than the namespace one, is [[AZR-138]].
+  narrower than the namespace one, is [[AZR-138]]. REVIEW ROUND 1: the Listen
+  rule's removal proof gained an instance signal - name plus Listen-only
+  rights is also exactly what the How-to eh-listen-rule step builds by hand,
+  so a stale record could have proven a rule someone re-created. Each record
+  now saves the creation time the read-back after the PUT reported
+  (systemData.createdAt, else properties.createdAt), and Remove refuses a rule
+  (not-proven, no DELETE) when the saved time is missing or differs from the
+  current one; a consumer group is checked against it when one was saved. A
+  consumer group's Remove row now names its hub. UNVERIFIED LIVE: that Azure
+  returns systemData.createdAt on an Event Hubs authorization rule GET at
+  2021-11-01 - if it does not, every app-created rule is not-proven and has to
+  be removed in the portal (safe direction).
 
 - **AZR-37** Persist when each onboarding source was last seen flowing, beyond the metrics lookback
   `AZR-F9` `story` `settled` `verified: pins`

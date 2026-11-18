@@ -19,8 +19,13 @@ const API = "2021-11-01";
 const notFound = { status: 404, body: { error: { code: "NotFound" } } };
 const forbidden = { status: 403, body: { error: { code: "AuthorizationFailed", message: "no" } } };
 const ok = { status: 200, body: {} };
-const listenRule = { status: 200, body: { name: "cribl-listen", properties: { rights: ["Listen"] } } };
-const stampedGroup = { status: 200, body: { name: "cribl", properties: { userMetadata: CONSUMER_GROUP_STAMP } } };
+const RULE_AT = "2026-11-18T10:00:00.123Z";
+const GROUP_AT = "2026-11-18T10:00:01Z";
+const listenRule = {
+  status: 200,
+  body: { name: "cribl-listen", properties: { rights: ["Listen"] }, systemData: { createdAt: RULE_AT } },
+};
+const stampedGroup = { status: 200, body: { name: "cribl", properties: { userMetadata: CONSUMER_GROUP_STAMP, createdAt: GROUP_AT } } };
 
 const TARGET: ListenAccessTarget = {
   namespace: NS,
@@ -86,7 +91,10 @@ describe("applyListenAccess (create-only)", () => {
     ]);
     expect(azure.calls[1]?.body).toEqual({ properties: { rights: ["Listen"] } });
     expect(result.outcomes.map((o) => o.kind)).toEqual(["created", "created"]);
-    expect(result.records).toEqual([listenRuleRecord(NS, "cribl-listen"), consumerGroupRecord(NS, "hub-a", "cribl")]);
+    expect(result.records).toEqual([
+      { kind: "listen-rule", resourceId: RULE_PATH, createdAt: RULE_AT },
+      { kind: "consumer-group", resourceId: CG_A, createdAt: GROUP_AT },
+    ]);
   });
 
   it("a name that appeared since the check is never written over, and not recorded", async () => {
@@ -118,7 +126,17 @@ describe("applyListenAccess (create-only)", () => {
     azure.respondWith(notFound, ok, { status: 200, body: { properties: {} } });
     const result = await applyListenAccess(azure, plan);
     expect(result.outcomes[0]).toMatchObject({ kind: "created-not-verified" });
-    expect(result.records).toHaveLength(1);
+    expect(result.records).toEqual([{ kind: "consumer-group", resourceId: CG_A }]);
+  });
+
+  it("a rule whose read-back failed is recorded without a creation time", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(notFound);
+    const plan = await planListenAccess(azure, { ...TARGET, createGroups: false });
+    azure.respondWith(notFound, ok, forbidden);
+    const result = await applyListenAccess(azure, plan);
+    expect(result.outcomes[0]).toMatchObject({ kind: "created-not-verified" });
+    expect(result.records).toEqual([{ kind: "listen-rule", resourceId: RULE_PATH }]);
   });
 
   it("sends nothing for a refused plan", async () => {
@@ -154,6 +172,27 @@ describe("removeListenAccessObject", () => {
     const outcome = await removeListenAccessObject(azure, { record: rec, recorded: [rec], inUseBy: ["eventhub_x"] });
     expect(outcome.kind).toBe("in-use");
     expect(azure.calls.map((c) => c.method)).toEqual(["GET"]);
+  });
+
+  it("a stale rule record against a rule re-created by hand sends no DELETE", async () => {
+    const ruleRec = listenRuleRecord(NS, "cribl-listen", RULE_AT);
+    const azure = new FakeAzureManagement();
+    azure.respondWith({
+      status: 200,
+      body: { name: "cribl-listen", properties: { rights: ["Listen"] }, systemData: { createdAt: "2026-11-19T08:00:00Z" } },
+    });
+    const outcome = await removeListenAccessObject(azure, { record: ruleRec, recorded: [ruleRec], inUseBy: [] });
+    expect(outcome.kind).toBe("not-proven");
+    expect(azure.calls.map((c) => `${c.method} ${c.path}`)).toEqual([`GET ${RULE_PATH}`]);
+  });
+
+  it("the rule the app recorded (same creation time) is deleted", async () => {
+    const ruleRec = listenRuleRecord(NS, "cribl-listen", RULE_AT);
+    const azure = new FakeAzureManagement();
+    azure.respondWith(listenRule, ok, notFound);
+    const outcome = await removeListenAccessObject(azure, { record: ruleRec, recorded: [ruleRec], inUseBy: [] });
+    expect(outcome).toEqual({ kind: "removed", resourceId: RULE_PATH });
+    expect(azure.calls.map((c) => c.method)).toEqual(["GET", "DELETE", "GET"]);
   });
 
   it("a 403 on the DELETE is denied at the delete step", async () => {

@@ -17,6 +17,7 @@ import {
   LISTEN_ACCESS_ACTIONS,
   LISTEN_ACCESS_LEAST_ROLE,
   LISTEN_ACCESS_NOT_MEASURED,
+  accessObjectHub,
   accessObjectName,
   plannedWrites,
   quoteArmRequest,
@@ -127,10 +128,12 @@ export function eventHubSourcesInUse(progress: OnboardingProgress): string[] {
     .filter((id) => id !== "");
 }
 
-/** The Remove row's title. */
+/** The Remove row's title. A consumer group names its hub: the same group may sit on several. */
 export function accessRecordTitle(record: EventHubAccessRecord): string {
   const name = accessObjectName(record.resourceId);
-  return record.kind === "listen-rule" ? `Listen rule ${name} (Azure)` : `Consumer group ${name} (Azure)`;
+  if (record.kind === "listen-rule") return `Listen rule ${name} (Azure)`;
+  const hub = accessObjectHub(record);
+  return hub === "" ? `Consumer group ${name} (Azure)` : `Consumer group ${name} on ${hub} (Azure)`;
 }
 
 /** The Remove confirm: the exact DELETE, and what is checked first. */
@@ -138,7 +141,7 @@ export function accessRemoveConfirmText(record: EventHubAccessRecord): string {
   const requests = requestsForAccessRecord(record);
   const proof =
     record.kind === "listen-rule"
-      ? "it is read first and removed only if this app's record names it and its rights are still Listen alone"
+      ? "it is read first and removed only if this app's record names it, its rights are still Listen alone and Azure reports the creation time this app saved"
       : "it is read first and removed only if this app's record names it and it still carries this app's description";
   if (requests === null) return "This record does not name an object this app creates; nothing will be sent.";
   return `Remove sends ${quoteArmRequest(requests.del)} - ${proof}. A Cribl source that read with it stops reading.`;

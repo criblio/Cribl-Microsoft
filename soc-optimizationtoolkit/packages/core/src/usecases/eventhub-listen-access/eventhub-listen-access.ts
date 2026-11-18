@@ -18,7 +18,8 @@
  *                    it, so nothing is written and the object is reported),
  *                    PUT exactly the planned request, GET it back. The
  *                    result names the records to keep: one per object whose
- *                    PUT was accepted after a 404 - never an object reused.
+ *                    PUT was accepted after a 404 - never an object reused -
+ *                    each carrying the creation time the read-back reported.
  *
  * removeListenAccessObject
  *                    for one recorded object: GET it now (404 is already
@@ -48,6 +49,7 @@ import {
   consumerGroupResourceId,
   listenRuleRecord,
   readConsumerGroupMetadata,
+  readCreatedAt,
   readRuleRights,
   requestsForAccessRecord,
   rightsAreListenOnly,
@@ -207,9 +209,19 @@ function readBackProblem(item: ListenAccessItem, body: unknown): string | null {
     : "The consumer group read back without this app's description stamp.";
 }
 
-function recordFor(plan: Extract<ListenAccessPlan, { kind: "planned" }>, item: ListenAccessItem): EventHubAccessRecord {
+/**
+ * The ownership record, with the creation time the read-back reported ("" when
+ * it failed or carried none: then a rule is never proven the app's later).
+ */
+function recordFor(
+  plan: Extract<ListenAccessPlan, { kind: "planned" }>,
+  item: ListenAccessItem,
+  createdAt: string,
+): EventHubAccessRecord {
   const ns = plan.target.namespace;
-  return item.kind === "listen-rule" ? listenRuleRecord(ns, item.name) : consumerGroupRecord(ns, item.hub ?? "", item.name);
+  return item.kind === "listen-rule"
+    ? listenRuleRecord(ns, item.name, createdAt)
+    : consumerGroupRecord(ns, item.hub ?? "", item.name, createdAt);
 }
 
 /**
@@ -252,9 +264,10 @@ export async function applyListenAccess(
       outcomes.push({ kind: "failed", item, failure: classifyArmFailure(put, `Create ${label}`) });
       continue;
     }
-    // Accepted after a 404: the app made it, whatever the read-back says.
-    records.push(recordFor(plan, item));
+    // Accepted after a 404: the app made it, whatever the read-back says. The
+    // record carries the read-back's creation time, the rule's instance proof.
     const back = await lookup(azure, get, `Read ${label} back`);
+    records.push(recordFor(plan, item, back.kind === "found" ? readCreatedAt(back.body) : ""));
     if (back.kind !== "found") {
       outcomes.push({
         kind: "created-not-verified",

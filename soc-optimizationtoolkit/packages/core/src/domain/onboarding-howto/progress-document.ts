@@ -295,7 +295,7 @@ export function encodeProgress(progress: OnboardingProgress): string {
     .map((r) => ({ tenantId: r.tenantId, settingName: r.settingName, ruleId: r.ruleId }))
     .sort((a, b) => (a.tenantId < b.tenantId ? -1 : a.tenantId > b.tenantId ? 1 : 0));
   const eventHubAccess = [...(progress.eventHubAccess ?? [])]
-    .map((r) => ({ kind: r.kind, resourceId: r.resourceId }))
+    .map((r) => ({ kind: r.kind, resourceId: r.resourceId, ...(r.createdAt === undefined || r.createdAt === "" ? {} : { createdAt: r.createdAt }) }))
     .sort((a, b) => (a.resourceId < b.resourceId ? -1 : a.resourceId > b.resourceId ? 1 : 0));
   return JSON.stringify({
     kind: ONBOARDING_PROGRESS_KIND,
@@ -503,7 +503,12 @@ export function decodeProgress(raw: unknown): DecodedProgress {
         dropped.push(`eventHubAccess[${i}]`);
         return;
       }
-      eventHubAccess.push({ kind, resourceId });
+      // createdAt is optional: a non-string or blank one is left out (the
+      // record then cannot prove a rule, which is the safe direction).
+      const createdAt = isRecord(v) ? str(v["createdAt"]) : null;
+      eventHubAccess.push(
+        createdAt !== null && createdAt.trim() !== "" ? { kind, resourceId, createdAt: createdAt.trim() } : { kind, resourceId },
+      );
     });
   } else if (raw["eventHubAccess"] !== undefined) {
     dropped.push("eventHubAccess");

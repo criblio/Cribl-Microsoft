@@ -505,4 +505,19 @@ describe("Event Hub access records (AZR-36)", () => {
     expect(progress.eventHubAccess).toEqual([RULE, CG]);
     expect(dropped).toEqual(["eventHubAccess[1]", "eventHubAccess[2]", "eventHubAccess[3]"]);
   });
+
+  it("round-trips a record's creation time exactly, and leaves out a blank or non-string one", () => {
+    const AT = "2026-11-18T10:00:00.123Z";
+    const p = withEventHubAccess(emptyProgress(), [{ ...RULE, createdAt: AT }, CG]);
+    expect(JSON.parse(encodeProgress(p)).eventHubAccess).toEqual([
+      { kind: "listen-rule", resourceId: RULE.resourceId, createdAt: AT },
+      { kind: "consumer-group", resourceId: CG.resourceId },
+    ]);
+    expect(decodeProgress(JSON.parse(encodeProgress(p))).progress.eventHubAccess).toEqual([{ ...RULE, createdAt: AT }, CG]);
+    const raw = JSON.parse(encodeProgress(emptyProgress()));
+    raw.eventHubAccess = [{ ...RULE, createdAt: 5 }, { ...CG, createdAt: "  " }];
+    const { progress, dropped } = decodeProgress(raw);
+    expect(progress.eventHubAccess).toEqual([RULE, CG]);
+    expect(dropped).toEqual([]);
+  });
 });

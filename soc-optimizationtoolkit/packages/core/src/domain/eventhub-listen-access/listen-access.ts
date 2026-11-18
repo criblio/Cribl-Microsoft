@@ -30,9 +30,15 @@
  *
  *   consumer group  the KV record, the name, and the description stamp the
  *                   PUT wrote into userMetadata
- *   Listen rule     the KV record, the name, and - in place of a stamp, which
- *                   a rule cannot carry - rights still exactly ["Listen"], as
- *                   the app wrote them
+ *   Listen rule     the KV record, the name, rights still exactly
+ *                   ["Listen"] as the app wrote them, and - in place of a
+ *                   stamp, which a rule cannot carry - the creation time Azure
+ *                   reported on the read-back after the app's PUT. Name and
+ *                   Listen-only rights alone are exactly what the How-to step
+ *                   eh-listen-rule tells the operator to build by hand, so a
+ *                   stale record would otherwise prove a rule someone
+ *                   re-created under the same name. A record without a
+ *                   creation time (the read-back failed) never proves a rule.
  *
  * and nothing the app created that reads with it may remain: a recorded Cribl
  * Event Hubs source may be using the rule's key or the group, so it is removed
@@ -166,6 +172,21 @@ export function readConsumerGroupMetadata(body: unknown): string {
   return typeof raw === "string" ? raw : "";
 }
 
+/**
+ * When Azure says the object was created: systemData.createdAt, else
+ * properties.createdAt (consumer groups carry both); "" when neither is a
+ * non-empty string. Compared verbatim, never parsed (no clock here).
+ */
+export function readCreatedAt(body: unknown): string {
+  const pick = (holder: unknown): string => {
+    const raw = isRecord(holder) ? holder["createdAt"] : undefined;
+    return typeof raw === "string" ? raw.trim() : "";
+  };
+  if (!isRecord(body)) return "";
+  const fromSystem = pick(body["systemData"]);
+  return fromSystem !== "" ? fromSystem : pick(body["properties"]);
+}
+
 /** True when the rights are exactly Listen, as the app writes them. */
 export function rightsAreListenOnly(rights: readonly string[]): boolean {
   return rights.length === 1 && (rights[0] ?? "").toLowerCase() === "listen";
@@ -255,16 +276,24 @@ export interface EventHubAccessRecord {
   readonly kind: "listen-rule" | "consumer-group";
   /** The full ARM resource id the PUT addressed. */
   readonly resourceId: string;
+  /**
+   * When Azure says it was created, from the read-back GET after the PUT
+   * ({@link readCreatedAt}). It tells THIS instance apart from one re-created
+   * later under the same name. Absent when the read-back failed or carried none.
+   */
+  readonly createdAt?: string;
 }
 
 /** The record for a rule the app created. */
-export function listenRuleRecord(ns: NamespaceRef, ruleName: string): EventHubAccessRecord {
-  return { kind: "listen-rule", resourceId: namespaceRuleResourceId(ns, ruleName) };
+export function listenRuleRecord(ns: NamespaceRef, ruleName: string, createdAt = ""): EventHubAccessRecord {
+  const at = createdAt.trim();
+  return { kind: "listen-rule", resourceId: namespaceRuleResourceId(ns, ruleName), ...(at === "" ? {} : { createdAt: at }) };
 }
 
 /** The record for a consumer group the app created. */
-export function consumerGroupRecord(ns: NamespaceRef, hubName: string, group: string): EventHubAccessRecord {
-  return { kind: "consumer-group", resourceId: consumerGroupResourceId(ns, hubName, group) };
+export function consumerGroupRecord(ns: NamespaceRef, hubName: string, group: string, createdAt = ""): EventHubAccessRecord {
+  const at = createdAt.trim();
+  return { kind: "consumer-group", resourceId: consumerGroupResourceId(ns, hubName, group), ...(at === "" ? {} : { createdAt: at }) };
 }
 
 /** Same ARM id, compared as ARM does (case-insensitive, no trailing slash). */
@@ -277,6 +306,13 @@ export function sameAccessResourceId(a: string, b: string): boolean {
 export function accessObjectName(resourceId: string): string {
   const parts = resourceId.split("/").filter((s) => s !== "");
   return parts[parts.length - 1] ?? "";
+}
+
+/** The hub of a consumer-group record's resource id (segment 9); "" for anything else. */
+export function accessObjectHub(record: EventHubAccessRecord): string {
+  if (record.kind !== "consumer-group") return "";
+  const segments = record.resourceId.split("/").filter((s) => s !== "");
+  return segments.length === 12 && (segments[8] ?? "").toLowerCase() === "eventhubs" ? (segments[9] ?? "") : "";
 }
 
 /** The GET and DELETE for a recorded object, or null when its id is not one this module writes. */
@@ -339,7 +375,8 @@ export function classifyListenAccessRemoval(
     };
   }
   const missing: string[] = [];
-  if (!recorded.some((r) => r.kind === record.kind && sameAccessResourceId(r.resourceId, record.resourceId))) {
+  const saved = recorded.find((r) => r.kind === record.kind && sameAccessResourceId(r.resourceId, record.resourceId));
+  if (saved === undefined) {
     missing.push("this app has no record of creating it");
   }
   const body = lookup.body;
@@ -352,6 +389,19 @@ export function classifyListenAccessRemoval(
     }
   } else if (readConsumerGroupMetadata(body) !== CONSUMER_GROUP_STAMP) {
     missing.push("its description does not carry this app's stamp");
+  }
+  // The instance signal. Required for a rule (nothing else on it is the
+  // app's alone); checked for a group whenever the record saved one.
+  const savedAt = (saved ?? record).createdAt?.trim() ?? "";
+  const nowAt = readCreatedAt(body);
+  if (savedAt === "") {
+    if (record.kind === "listen-rule") {
+      missing.push("this app saved no creation time for it, so a rule re-created under the same name cannot be told apart from the one it made");
+    }
+  } else if (nowAt === "") {
+    missing.push("Azure did not return its creation time to compare with the one this app saved");
+  } else if (nowAt !== savedAt) {
+    missing.push(`it was created at ${nowAt}, not at ${savedAt} when this app created it`);
   }
   if (missing.length > 0) {
     return {

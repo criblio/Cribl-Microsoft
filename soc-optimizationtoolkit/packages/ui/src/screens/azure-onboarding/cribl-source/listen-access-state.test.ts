@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { consumerGroupRecord, emptyProgress, listenRuleRecord, withCriblSource } from "@soc/core";
 import type { ListenAccessPlan, ListenAccessTarget } from "@soc/core";
 import {
+  accessRecordTitle,
   accessRemoveConfirmText,
   accessRemoveMessage,
   applyOutcomeMessage,
@@ -110,7 +111,15 @@ describe("listen access panel state", () => {
     expect(accessRemoveConfirmText(consumerGroupRecord(NS, "hub-a", "cribl"))).toBe(
       `Remove sends DELETE ${NS_PATH}/eventhubs/hub-a/consumergroups/cribl?api-version=2021-11-01 - it is read first and removed only if this app's record names it and it still carries this app's description. A Cribl source that read with it stops reading.`,
     );
-    expect(accessRemoveConfirmText(listenRuleRecord(NS, "cribl-listen"))).toContain("its rights are still Listen alone");
+    expect(accessRemoveConfirmText(listenRuleRecord(NS, "cribl-listen"))).toBe(
+      `Remove sends DELETE ${NS_PATH}/authorizationRules/cribl-listen?api-version=2021-11-01 - it is read first and removed only if this app's record names it, its rights are still Listen alone and Azure reports the creation time this app saved. A Cribl source that read with it stops reading.`,
+    );
+  });
+
+  it("a consumer group's Remove row names its hub, so the same group on two hubs reads as two rows", () => {
+    expect(accessRecordTitle(consumerGroupRecord(NS, "hub-a", "cribl"))).toBe("Consumer group cribl on hub-a (Azure)");
+    expect(accessRecordTitle(consumerGroupRecord(NS, "hub-b", "cribl"))).toBe("Consumer group cribl on hub-b (Azure)");
+    expect(accessRecordTitle(listenRuleRecord(NS, "cribl-listen"))).toBe("Listen rule cribl-listen (Azure)");
   });
 
   it("the remove outcomes", () => {
