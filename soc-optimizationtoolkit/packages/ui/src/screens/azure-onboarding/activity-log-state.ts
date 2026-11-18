@@ -27,6 +27,9 @@ import {
   subscriptionSettingsFull,
 } from "@soc/core";
 import type {
+  ActivityLogRemoveOutcome,
+  ActivityLogRemoveStep,
+  ActivityLogSettingRecord,
   ActivityLogDeployOutcome,
   ActivityLogDeployStep,
   ActivityLogState,
@@ -204,5 +207,64 @@ export function activityLogOutcomeMessage(outcome: ActivityLogDeployOutcome): Pi
     case "unregistered":
     case "failed":
       return { tone: "error", text: `Deploy stopped at ${STEP_LABELS[outcome.step]}. ${outcome.message}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Remove (AZR-105)
+// ---------------------------------------------------------------------------
+
+/**
+ * Why Remove is disabled, or null. The removal proves ownership itself after
+ * the confirm (it re-reads the setting by name); this only keeps the button
+ * honest: without the app's own record of writing the setting here, the app
+ * never removes it.
+ */
+export function activityLogRemoveDisabledReason(gate: {
+  readonly running: boolean;
+  readonly subscriptionId: string;
+  readonly record: ActivityLogSettingRecord | null;
+}): string | null {
+  if (gate.running) return "A change is already running.";
+  if (gate.subscriptionId === "") return "No Azure subscription is configured for this connection.";
+  if (gate.record === null) {
+    return (
+      `This app has no record of creating ${ACTIVITY_LOG_SETTING_NAME} on this subscription, so it does not remove it from here. ` +
+      "Remove it in the Azure portal if it should go. Unchoosing the Activity Log does not remove it."
+    );
+  }
+  return null;
+}
+
+/** The removal confirm, quoting exactly what goes and what it is checked against. */
+export function activityLogRemoveConfirmText(subscriptionId: string, record: ActivityLogSettingRecord): string {
+  return (
+    `Remove the diagnostic setting ${ACTIVITY_LOG_SETTING_NAME} from subscription ${subscriptionId}? ` +
+    `It is removed only if it still sends with the rule this app recorded writing (${record.ruleId}); otherwise nothing is removed. ` +
+    "Azure then stops sending this subscription's Activity Log to the Event Hub. The hub, its events and the Cribl source are not touched. " +
+    "This deletes one setting in Azure."
+  );
+}
+
+const REMOVE_STEP_LABELS: Readonly<Record<ActivityLogRemoveStep, string>> = {
+  "setting-read": "reading the setting",
+  "setting-delete": "removing the setting",
+};
+
+/** The removal outcome as the screen says it. */
+export function activityLogRemoveMessage(outcome: ActivityLogRemoveOutcome): PickerMessage {
+  switch (outcome.kind) {
+    case "removed":
+      return { tone: "info", text: `${ACTIVITY_LOG_SETTING_NAME} was removed, and no longer reads back from Azure.` };
+    case "removed-not-confirmed":
+      return { tone: "warning", text: `Azure accepted removing ${ACTIVITY_LOG_SETTING_NAME}, but it is not confirmed gone: ${outcome.reason}` };
+    case "already-gone":
+      return { tone: "info", text: `Nothing was removed: ${ACTIVITY_LOG_SETTING_NAME} is not on this subscription.` };
+    case "not-proven":
+      return { tone: "warning", text: `Nothing was removed. ${outcome.detail}` };
+    case "denied":
+    case "unregistered":
+    case "failed":
+      return { tone: "error", text: `Remove stopped at ${REMOVE_STEP_LABELS[outcome.step]}. ${outcome.message}` };
   }
 }

@@ -297,6 +297,8 @@ describe("the Activity Log declaration (AZR-98): nothing is measured, and the vi
     expect(p.notMeasured.flatMap((g) => g.actions.map((a) => a.action))).toEqual([
       LEAST_PRIVILEGE_OPERATIONS["activityLog.diagnosticSettings.read"].operation,
       LEAST_PRIVILEGE_OPERATIONS["activityLog.diagnosticSetting.write"].operation,
+      // AZR-105: Remove deletes the setting the app created.
+      LEAST_PRIVILEGE_OPERATIONS["activityLog.diagnosticSetting.delete"].operation,
       LEAST_PRIVILEGE_OPERATIONS["eventhub.rule.listKeys"].operation,
     ]);
   });

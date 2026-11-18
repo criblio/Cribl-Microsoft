@@ -20,6 +20,7 @@ export {
   SUBSCRIPTION_DIAGNOSTIC_SETTINGS_API_VERSION,
   activityLogSettingDiffs,
   activityLogSettingPath,
+  buildActivityLogSettingDeleteRequest,
   buildActivityLogSettingGetRequest,
   buildActivityLogSettingPutRequest,
   buildSubscriptionDiagnosticSettingsListRequest,

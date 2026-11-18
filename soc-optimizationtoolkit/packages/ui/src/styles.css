@@ -7198,6 +7198,40 @@ details[open] > summary::before {
   font-size: 13px;
 }
 
+/* AZR-105: "Remove or pause what this app created", one row per recorded source. */
+.azo-teardown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.azo-teardown h4 {
+  margin: 0;
+}
+
+.azo-teardown-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.azo-teardown-row [data-tone='ok'] {
+  color: var(--ok-strong);
+}
+
+.azo-teardown-row [data-tone='warning'] {
+  color: var(--warn);
+}
+
+.azo-teardown-row [data-tone='error'] {
+  color: var(--error-strong);
+}
+
 /* Dataflow diagram (hand SVG on the components/diagram shell). */
 .azo-flow {
   display: flex;

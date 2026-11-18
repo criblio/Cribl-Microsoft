@@ -71,7 +71,7 @@ const LAKE_TIP =
   "Cribl Lake is Cribl.Cloud's own storage for keeping data to search later. The app creates one Lake dataset " +
   "for this source (or uses the one already there), a pipeline that splits Azure's records array into one event " +
   "per record, and a route from this source's Cribl input to the dataset. It only creates: it never changes or " +
-  "removes a route, pipeline or dataset that is already there.";
+  "removes a route, pipeline or dataset that is already there. Remove, further down, takes out only what it can prove it created.";
 
 const POSITION_TIP =
   "Cribl checks routes from the top down, and a final route stops the events it matches. Pick where this route " +

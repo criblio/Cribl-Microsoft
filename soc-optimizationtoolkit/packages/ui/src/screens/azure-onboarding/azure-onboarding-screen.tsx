@@ -80,6 +80,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import {
   COVERAGE_SELECTION_KEY,
   ACTIVITY_LOG_ITEM_ID,
+  ACTIVITY_LOG_SETTING_NAME,
   DEFENDER_EXPORT_ITEM_ID,
   ONBOARDING_PROGRESS_KEY,
   applyCriblSource,
@@ -112,9 +113,26 @@ import {
   withCriblSource,
   withLakeRoute,
   withWorkerGroup,
+  activityLogSettingRecord,
+  applyInputPause,
+  applySourceTeardown,
+  expectedActivityLogSetting,
+  planInputPause,
+  planSourceTeardown,
+  withActivityLogSetting,
+  withLakeRouteAfterTeardown,
+  withoutActivityLogSetting,
+  withoutCriblSource,
 } from "@soc/core";
 import type {
   TenantInventory,
+  ActivityLogRemoveOutcome,
+  ApplyPauseOutcome,
+  ApplyTeardownOutcome,
+  PlanPauseResult,
+  PlanTeardownResult,
+  ReadyPause,
+  ReadyTeardown,
   ApplyCredential,
   ApplyCriblSourceOutcome,
   ApplyLakeRouteOutcome,
@@ -209,12 +227,16 @@ import {
   validateRunReducer,
 } from "./validate/validate-state";
 import { CriblSourcePanel } from "./cribl-source/cribl-source-panel";
+import { TeardownPanel } from "./cribl-source/teardown-panel";
 import { sourceRows } from "./cribl-source/cribl-source-state";
 import { onboardingGroupChoice, onboardingGroupResolution } from "./cribl-source/group-choice";
 import { StrandedSourcesNotice } from "./cribl-source/stranded-sources-notice";
 import { strandedNoticeOf } from "./cribl-source/stranded-sources-state";
 import { OnboardingDataflow } from "./dataflow/onboarding-dataflow";
 import { liveFlowLanes, useLiveFlow } from "./dataflow/use-live-flow";
+
+/** What a teardown leaves recorded for one source (AZR-105). */
+type TeardownRecords = ApplyTeardownOutcome["records"];
 
 /** Shown when the shell wires no document store: a wiring gap, not a first run. */
 export const SHELL_GAP_MESSAGE =
@@ -256,7 +278,7 @@ const HOWTO_TIP =
 const VALIDATE_TIP =
   "Reads the Azure side of every chosen source and compares it with your plan. It only reads: nothing in Azure is changed, and no key is read.";
 const CRIBL_TIP =
-  "The Cribl Stream source that receives each chosen source is always created by the app, after you confirm. It never changes or deletes a source that is already there.";
+  "The Cribl Stream source that receives each chosen source is always created by the app, after you confirm. It never changes or deletes a source it did not create; Remove takes out only what it can prove it created.";
 
 /** Shown instead of the diagram until both documents have loaded. */
 export const DATAFLOW_WAITING_TEXT =
@@ -843,6 +865,31 @@ export function AzureOnboardingScreen({
   function onActivityLogDeployed(deploy: ActivityLogDeployForValidation): void {
     amendLastRun(deploy, activityLogAmendNote(deploy.outcome, new Date().toLocaleTimeString()));
     logger?.info(`${LOG} Activity Log deploy applied to the last Validate result`, { outcome: deploy.outcome });
+    // AZR-105: the app's record of writing the setting, so a Remove can prove it.
+    const p = loadedProgress(latestProgressLoad.current);
+    const recorded =
+      p !== null &&
+      commitProgress(
+        withActivityLogSetting(p, {
+          subscriptionId: deploy.input.subscriptionId,
+          settingName: ACTIVITY_LOG_SETTING_NAME,
+          ruleId: expectedActivityLogSetting(deploy.input).ruleId,
+        }),
+        "activity log setting",
+      );
+    if (!recorded) {
+      showMessage("howto", {
+        tone: "warning",
+        text: `The Activity Log setting ${ACTIVITY_LOG_SETTING_NAME} was created, but your saved progress could not be updated, so this page cannot prove it created it and will not offer to remove it.`,
+      });
+    }
+  }
+
+  /** AZR-105: after a removal that left nothing behind, forget the record. */
+  function onActivityLogRemoved(outcome: ActivityLogRemoveOutcome): void {
+    if (outcome.kind !== "removed" && outcome.kind !== "already-gone") return;
+    const p = loadedProgress(latestProgressLoad.current);
+    if (p !== null) commitProgress(withoutActivityLogSetting(p, config.subscriptionId), "activity log setting removed");
   }
 
   function amendLastRun(deploy: OnboardingDeployForValidation, note: string): void {
@@ -1005,7 +1052,7 @@ export function AzureOnboardingScreen({
     const outcome = await applyLakeRoute(criblPorts, ready);
     if (outcome.record !== null) {
       const p = loadedProgress(latestProgressLoad.current);
-      const recorded = p !== null && commitProgress(withLakeRoute(p, ready.sourceId, outcome.record), "lake route");
+      const recorded = p !== null && commitProgress(withLakeRoute(p, ready.sourceId, outcome.record, { datasetSeenAbsent: outcome.datasetSeenAbsent }), "lake route");
       if (!recorded) {
         showMessage("howto", {
           tone: "warning",
@@ -1014,6 +1061,63 @@ export function AzureOnboardingScreen({
       }
     }
     return outcome;
+  }
+
+  // AZR-105: Remove and Pause what the app created in Cribl for one source.
+  // Read-only plans; each apply re-reads, and the records are updated to what
+  // is still there (core recordsAfterTeardown).
+  function saveTeardownRecords(sourceId: OnboardingSourceId, records: TeardownRecords): void {
+    const p = loadedProgress(latestProgressLoad.current);
+    const next =
+      p === null
+        ? null
+        : withLakeRouteAfterTeardown(
+            records.criblSource === null ? withoutCriblSource(p, sourceId) : withCriblSource(p, sourceId, records.criblSource),
+            sourceId,
+            records.lakeRoute,
+          );
+    const saved = next !== null && commitProgress(next, "teardown");
+    if (!saved) {
+      showMessage("howto", {
+        tone: "warning",
+        text: "Objects were removed in Cribl, but your saved progress could not be updated, so this page still lists them after a reload.",
+      });
+    }
+  }
+
+  async function onPlanRemove(sourceId: OnboardingSourceId, removeDataset: boolean): Promise<PlanTeardownResult> {
+    const p = loadedProgress(latestProgressLoad.current);
+    if (p === null) throw new Error("the saved progress is not available");
+    const lakeRoutes = p.criblLakeRoutes ?? {};
+    const result = await planSourceTeardown(criblPorts, {
+      sourceId,
+      criblSource: p.criblSources[sourceId] ?? null,
+      lakeRoute: lakeRoutes[sourceId] ?? null,
+      otherLakeRoutes: Object.entries(lakeRoutes)
+        .filter(([id, r]) => id !== sourceId && r !== undefined)
+        .map(([id, r]) => ({ sourceId: id as OnboardingSourceId, record: r! })),
+      removeDataset,
+    });
+    // Everything already gone: nothing to confirm, and the records go now.
+    if (result.kind === "nothing-to-remove") saveTeardownRecords(sourceId, result.records);
+    return result;
+  }
+
+  async function onApplyRemove(ready: ReadyTeardown): Promise<ApplyTeardownOutcome> {
+    const outcome = await applySourceTeardown(criblPorts, ready);
+    if (outcome.kind !== "void") saveTeardownRecords(ready.input.sourceId, outcome.records);
+    return outcome;
+  }
+
+  async function onPlanPause(sourceId: OnboardingSourceId, pause: boolean): Promise<PlanPauseResult> {
+    const p = loadedProgress(latestProgressLoad.current);
+    const record = p?.criblSources[sourceId];
+    if (record === undefined) throw new Error("this app has no record of a Cribl source for it");
+    return planInputPause(criblPorts, { record, pause });
+  }
+
+  async function onApplyPause(ready: ReadyPause): Promise<ApplyPauseOutcome> {
+    return applyInputPause(criblPorts, ready);
   }
 
   async function onReadCriblSide(): Promise<void> {
@@ -1155,6 +1259,8 @@ export function AzureOnboardingScreen({
                   state={activityLogState}
                   onState={setActivityLogState}
                   onDeployed={onActivityLogDeployed}
+                  record={progress === null ? null : activityLogSettingRecord(progress, config.subscriptionId)}
+                  onRemoved={onActivityLogRemoved}
                   howtoSection={CHOOSER_SECTION_NUMBER}
                   onShowHowto={() => showHowto(ACTIVITY_LOG_ITEM_ID)}
                 />
@@ -1252,6 +1358,19 @@ export function AzureOnboardingScreen({
               records: progress.criblLakeRoutes ?? {},
               onPlan: onPlanLakeRoute,
               onApply: onApplyLakeRoute,
+            }}
+          />
+        )}
+        {progress !== null && (
+          <TeardownPanel
+            hooks={{
+              criblSources: progress.criblSources,
+              lakeRoutes: progress.criblLakeRoutes ?? {},
+              readSeq,
+              onPlanRemove,
+              onApplyRemove,
+              onPlanPause,
+              onApplyPause,
             }}
           />
         )}

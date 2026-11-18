@@ -23,6 +23,11 @@ import {
   withTick,
   withWorkerGroup,
   withoutTick,
+  activityLogSettingRecord,
+  withActivityLogSetting,
+  withLakeRouteAfterTeardown,
+  withoutActivityLogSetting,
+  withoutCriblSource,
 } from "./index";
 import type { OnboardingProgress } from "./index";
 
@@ -234,6 +239,66 @@ describe("Lake route records (AZR-35)", () => {
     const { progress, dropped } = decodeProgress(raw);
     expect([...dropped].sort()).toEqual(["criblLakeRoutes.activityLog", "criblLakeRoutes.notASource"]);
     expect(progress.criblLakeRoutes).toBeUndefined();
+  });
+});
+
+describe("teardown records (AZR-105)", () => {
+  const RECORD = { groupId: "default", datasetId: "azure_activity_log", pipelineId: "azure_onb_unroll_records", routeId: "azure_onb_activity_log_lake" };
+  const RULE = "/subscriptions/s1/resourceGroups/rg/providers/Microsoft.EventHub/namespaces/ns/authorizationRules/m";
+
+  it("round-trips datasetCreated only as a literal true", () => {
+    const p = withLakeRoute(sample(), "activityLog", { ...RECORD, datasetCreated: true });
+    expect(progressFrom(readProgressDocument(value(encodeProgress(p))))?.criblLakeRoutes?.activityLog).toEqual({ ...RECORD, datasetCreated: true });
+    const raw = JSON.parse(encodeProgress(withLakeRoute(sample(), "activityLog", RECORD)));
+    expect(raw.criblLakeRoutes.activityLog).not.toHaveProperty("datasetCreated");
+    raw.criblLakeRoutes.activityLog.datasetCreated = "yes";
+    expect(decodeProgress(raw).progress.criblLakeRoutes?.activityLog).toEqual(RECORD);
+  });
+
+  it("a later apply that found the dataset present keeps the proof the app created it", () => {
+    let p = withLakeRoute(sample(), "activityLog", { ...RECORD, pipelineId: null, routeId: null, datasetCreated: true });
+    p = withLakeRoute(p, "activityLog", RECORD);
+    expect(p.criblLakeRoutes?.activityLog).toEqual({ ...RECORD, datasetCreated: true });
+    // ...but not when that apply saw the dataset absent and did not create it.
+    expect(withLakeRoute(p, "activityLog", RECORD, { datasetSeenAbsent: true }).criblLakeRoutes?.activityLog).toEqual(RECORD);
+    // ...and not across a different group or dataset.
+    p = withLakeRoute(p, "activityLog", { ...RECORD, groupId: "other" });
+    expect(p.criblLakeRoutes?.activityLog).toEqual({ ...RECORD, groupId: "other" });
+  });
+
+  it("forgets a Cribl source and a Lake route record", () => {
+    let p = withLakeRoute(sample(), "activityLog", RECORD);
+    p = withoutCriblSource(p, "defenderExport");
+    expect(p.criblSources).toEqual({});
+    p = withLakeRouteAfterTeardown(p, "activityLog", { ...RECORD, routeId: null });
+    expect(p.criblLakeRoutes?.activityLog).toEqual({ ...RECORD, routeId: null });
+    p = withLakeRouteAfterTeardown(p, "activityLog", null);
+    expect(p).not.toHaveProperty("criblLakeRoutes");
+  });
+
+  it("records one Activity Log setting per subscription, round-trips it, and forgets it", () => {
+    let p = withActivityLogSetting(sample(), { subscriptionId: "S1", settingName: "cribl-activity-log", ruleId: RULE });
+    p = withActivityLogSetting(p, { subscriptionId: "s1", settingName: "cribl-activity-log", ruleId: `${RULE}2` });
+    p = withActivityLogSetting(p, { subscriptionId: "s2", settingName: "cribl-activity-log", ruleId: RULE });
+    expect(p.activityLogSettings).toHaveLength(2);
+    expect(activityLogSettingRecord(p, "S1")?.ruleId).toBe(`${RULE}2`);
+    const back = progressFrom(readProgressDocument(value(encodeProgress(p))));
+    expect(back?.activityLogSettings?.map((r) => r.subscriptionId)).toEqual(["s1", "s2"]);
+    const gone = withoutActivityLogSetting(withoutActivityLogSetting(p, "s1"), "S2");
+    expect(gone).not.toHaveProperty("activityLogSettings");
+    expect(JSON.parse(encodeProgress(gone))).not.toHaveProperty("activityLogSettings");
+  });
+
+  it("drops and reports a malformed or duplicate Activity Log record", () => {
+    const raw = JSON.parse(encodeProgress(sample()));
+    raw.activityLogSettings = [
+      { subscriptionId: "s1", settingName: "cribl-activity-log", ruleId: RULE },
+      { subscriptionId: "S1", settingName: "cribl-activity-log", ruleId: RULE },
+      { subscriptionId: 7 },
+    ];
+    const { progress, dropped } = decodeProgress(raw);
+    expect(dropped).toEqual(["activityLogSettings[1]", "activityLogSettings[2]"]);
+    expect(progress.activityLogSettings).toEqual([{ subscriptionId: "s1", settingName: "cribl-activity-log", ruleId: RULE }]);
   });
 });
 

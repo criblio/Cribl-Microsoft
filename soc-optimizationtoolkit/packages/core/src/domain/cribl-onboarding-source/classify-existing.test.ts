@@ -60,16 +60,24 @@ describe("classifyExistingInput", () => {
   it("a hand edit to run state, routing, SASL or TLS posture is differs, not already applied", () => {
     const cases: [Record<string, unknown>, string][] = [
       [{ ...stored, tls: { disabled: false, rejectUnauthorized: false } }, "tls.rejectUnauthorized"],
-      [{ ...stored, disabled: true }, "disabled"],
+      // disabled alone is the app's Pause (below); with another change it is a difference.
+      [{ ...stored, disabled: true, sendToRoutes: false }, "disabled,sendToRoutes"],
       [{ ...stored, sendToRoutes: false }, "sendToRoutes"],
       [{ ...stored, sasl: { ...(expected["sasl"] as Record<string, unknown>), disabled: true } }, "sasl.disabled"],
     ];
     for (const [edited, field] of cases) {
       expect(classifyExistingInput({ read: { state: "read", items: [edited] }, expected, recorded: record })).toEqual({
         kind: "differs",
-        fields: [field],
+        fields: field.split(","),
       });
     }
+  });
+
+  it("AZR-105: ours and identical except disabled:true is ours-matching and paused, never differs", () => {
+    const paused = { ...stored, disabled: true };
+    expect(classifyExistingInput({ read: { state: "read", items: [paused] }, expected, recorded: record })).toEqual({ kind: "ours-matching", paused: true });
+    // Without the stamp it is still foreign: paused never stands in for proof.
+    expect(classifyExistingInput({ read: { state: "read", items: [{ ...paused, description: "x" }] }, expected, recorded: record }).kind).toBe("foreign");
   });
 
   // AZR-59: a hand-edited OAuth input refuses by name, exactly as the SAS body does.
@@ -134,7 +142,9 @@ describe("classifyExistingInput", () => {
       connectionTenantId: "t",
     });
     const blobRecord: CriblSourceRecord = { groupId: "g1", inputId: "azure_onb_blob_acct_q1", inputType: "azure_blob", secretId: "azure_onb_blob_acct_q1_secret" };
-    for (const [edit, field] of [[{ disabled: true }, "disabled"], [{ sendToRoutes: false }, "sendToRoutes"]] as const) {
+    // disabled:true alone is the app's Pause (AZR-105): paused, not differs.
+    expect(classifyExistingInput({ read: { state: "read", items: [{ ...blob, disabled: true }] }, expected: blob, recorded: blobRecord })).toEqual({ kind: "ours-matching", paused: true });
+    for (const [edit, field] of [[{ sendToRoutes: false }, "sendToRoutes"]] as const) {
       expect(classifyExistingInput({ read: { state: "read", items: [{ ...blob, ...edit }] }, expected: blob, recorded: blobRecord })).toEqual({
         kind: "differs",
         fields: [field],

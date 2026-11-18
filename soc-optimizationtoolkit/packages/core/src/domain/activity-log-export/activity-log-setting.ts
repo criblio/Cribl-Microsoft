@@ -150,6 +150,19 @@ export function buildActivityLogSettingGetRequest(subscriptionId: string): Azure
   };
 }
 
+/**
+ * The DELETE of our setting (AZR-105). The caller must have read it by name
+ * and proved it is the app's (domain/onboarding-teardown
+ * classifyActivityLogRemoval) - this builder cannot know.
+ */
+export function buildActivityLogSettingDeleteRequest(subscriptionId: string): AzureManagementRequest {
+  return {
+    method: "DELETE",
+    path: activityLogSettingPath(subscriptionId),
+    apiVersion: SUBSCRIPTION_DIAGNOSTIC_SETTINGS_API_VERSION,
+  };
+}
+
 /** The shape the PUT below writes, for comparing a read-back. */
 export function expectedActivityLogSetting(input: ActivityLogSettingInput): ExpectedActivityLogSetting {
   return { ruleId: namespaceRuleResourceId(input.namespace, input.ruleName) };

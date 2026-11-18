@@ -97,6 +97,11 @@ class RoutingAzure implements AzureManagement {
       this.settings.push(written);
       return ok(written);
     }
+    if (r.method === "DELETE" && r.path === OURS) {
+      const at = this.settings.findIndex((s) => (s as { id: string }).id === OURS);
+      if (at >= 0) this.settings.splice(at, 1);
+      return ok(null);
+    }
     if (r.method === "GET" && r.path === OURS) {
       const found = this.settings.find((s) => (s as { id: string }).id === OURS);
       return found === undefined ? ({ status: 404, body: {} } as unknown as PortHttpResponse) : ok(found);
@@ -176,6 +181,44 @@ describe("Activity Log section - before anything is read", () => {
     expect(within(block()).getByTestId("azo-permission-banner").textContent).toContain("does not measure");
     // Every dropdown on the screen is a SearchableSelect.
     expect(document.querySelectorAll("select")).toHaveLength(0);
+  });
+});
+
+describe("Activity Log section - remove (AZR-105)", () => {
+  function removeButton(): HTMLButtonElement {
+    return within(block()).getByRole("button", { name: "Remove setting" }) as HTMLButtonElement;
+  }
+
+  it("offers no removal of a setting the app has no record of writing, even one under its name", async () => {
+    const azure = mount(new RoutingAzure([setting("cribl-activity-log", RULE_ID)]));
+    await loaded();
+    await readSettings();
+    expect(removeButton().disabled).toBe(true);
+    expect(within(block()).getByText(/This app has no record of creating cribl-activity-log on this subscription/)).toBeTruthy();
+    expect(azure.calls.some((c) => c.method === "DELETE")).toBe(false);
+  });
+
+  it("after the app's own deploy: two clicks, the confirm quotes setting, subscription and rule, then one DELETE", async () => {
+    const azure = mount();
+    await loaded();
+    await chooseTarget("DiagManage");
+    await readSettings();
+    fireEvent.click(deployButton());
+    fireEvent.click(within(screen.getByRole("group", { name: "Confirm Activity Log deploy" })).getByRole("button", { name: "Confirm deploy" }));
+    await waitFor(() => expect(within(block()).getByText(/was created and read back from Azure/)).toBeTruthy());
+    await waitFor(() => expect(removeButton().disabled).toBe(false));
+
+    fireEvent.click(removeButton());
+    expect(azure.calls.some((c) => c.method === "DELETE")).toBe(false);
+    const confirm = screen.getByRole("group", { name: "Confirm Activity Log removal" });
+    const text = confirm.textContent ?? "";
+    expect(text).toContain(`Remove the diagnostic setting cribl-activity-log from subscription ${SUB}?`);
+    expect(text).toContain(`still sends with the rule this app recorded writing (${RULE_ID})`);
+    fireEvent.click(within(confirm).getByRole("button", { name: "Confirm remove" }));
+    await waitFor(() => expect(within(block()).getByText("cribl-activity-log was removed, and no longer reads back from Azure.")).toBeTruthy());
+    expect(azure.calls.filter((c) => c.method === "DELETE")).toEqual([{ method: "DELETE", path: OURS, apiVersion: "2021-05-01-preview" }]);
+    // The record is gone with it: Remove is off again, with its reason.
+    await waitFor(() => expect(removeButton().disabled).toBe(true));
   });
 });
 

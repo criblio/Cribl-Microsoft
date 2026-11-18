@@ -651,7 +651,10 @@ function leftBehind(detail: string, left: { readonly secretId: string } | undefi
 /** A plan that did not reach the confirm: already applied, or refused. */
 export function planResultView(result: Exclude<PlanCriblSourceResult, { kind: "ready" }>): OutcomeView {
   if (result.kind === "already-applied") {
-    const headline = `Already created: input ${result.record.inputId} in worker group ${result.record.groupId} matches the plan.`;
+    const headline =
+      result.paused === true
+        ? `Already created, and paused: input ${result.record.inputId} in worker group ${result.record.groupId} matches the plan and is paused. Resume it under Remove or pause what this app created.`
+        : `Already created: input ${result.record.inputId} in worker group ${result.record.groupId} matches the plan.`;
     // AZR-97: adopted with a Manage-capable credential choice - warning, never ok.
     if (result.credentialWarning !== undefined) {
       return { tone: "warning", headline, detail: result.credentialWarning, inCribl: null };

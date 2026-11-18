@@ -76,6 +76,8 @@ export * from "./domain/eventhub-arm";
 export * from "./domain/defender-export";
 // AZR-98: the subscription Activity Log diagnostic setting (create-only).
 export * from "./domain/activity-log-export";
+// AZR-105: Remove and Pause for what the onboarding screen created (pure plan).
+export * from "./domain/onboarding-teardown";
 // AZR-18: the Azure onboarding screen's section layout and item availability.
 export * from "./domain/onboarding-sections";
 export * from "./domain/siem-migration";

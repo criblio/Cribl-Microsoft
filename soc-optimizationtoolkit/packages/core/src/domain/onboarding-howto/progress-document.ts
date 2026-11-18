@@ -95,6 +95,29 @@ export interface LakeRouteRecord {
   readonly pipelineId: string | null;
   /** The route the app wrote into the group's routing table; null when it was not written. */
   readonly routeId: string | null;
+  /**
+   * AZR-105: true only when THIS APP created the dataset (POST answered 2xx
+   * and the read-back listed it). `datasetId` alone does not say so: it is
+   * also recorded when the dataset already existed and was used as it is.
+   * Without it a teardown can never prove the dataset is the app's, so it is
+   * kept. Absent (every record written before AZR-105) reads as not created.
+   */
+  readonly datasetCreated?: true;
+}
+
+/**
+ * The subscription diagnostic setting the app created for the Activity Log
+ * (AZR-98), recorded so a removal can prove it (AZR-105). A diagnostic
+ * setting carries no description or tags, so the KV record also holds the
+ * rule id the app wrote: a setting under the app's name that now sends with
+ * another rule is not provably the one the app wrote.
+ */
+export interface ActivityLogSettingRecord {
+  readonly subscriptionId: string;
+  /** The setting's name as written (ACTIVITY_LOG_SETTING_NAME). */
+  readonly settingName: string;
+  /** The eventHubAuthorizationRuleId the PUT wrote. */
+  readonly ruleId: string;
 }
 
 export interface OnboardingProgress {
@@ -110,6 +133,13 @@ export interface OnboardingProgress {
    * An older release decodes this key as dropped, and its next save omits it.
    */
   readonly criblLakeRoutes?: Readonly<Partial<Record<OnboardingSourceId, LakeRouteRecord>>>;
+  /**
+   * AZR-105: the Activity Log diagnostic settings the app created, one per
+   * subscription. Optional for the same reason as criblLakeRoutes; absent
+   * reads as none, so a setting deployed before AZR-105 cannot be proven
+   * and is never removed by the app.
+   */
+  readonly activityLogSettings?: readonly ActivityLogSettingRecord[];
   /**
    * AZR-102: where the Event Hub plan values (EVENT_HUB_PLAN_KEYS) come from.
    * `section1` - they follow the screen's Event Hub picker, which writes them;
@@ -204,9 +234,19 @@ export function encodeProgress(progress: OnboardingProgress): string {
   for (const s of ONBOARDING_SOURCES) {
     const r = progress.criblLakeRoutes?.[s.id];
     if (r !== undefined) {
-      criblLakeRoutes[s.id] = { groupId: r.groupId, datasetId: r.datasetId, pipelineId: r.pipelineId, routeId: r.routeId };
+      criblLakeRoutes[s.id] = {
+        groupId: r.groupId,
+        datasetId: r.datasetId,
+        pipelineId: r.pipelineId,
+        routeId: r.routeId,
+        // Written only when true, so a record without it encodes as before.
+        ...(r.datasetCreated === true ? { datasetCreated: true as const } : {}),
+      };
     }
   }
+  const activityLogSettings = [...(progress.activityLogSettings ?? [])]
+    .map((r) => ({ subscriptionId: r.subscriptionId, settingName: r.settingName, ruleId: r.ruleId }))
+    .sort((a, b) => (a.subscriptionId < b.subscriptionId ? -1 : a.subscriptionId > b.subscriptionId ? 1 : 0));
   return JSON.stringify({
     kind: ONBOARDING_PROGRESS_KIND,
     version: ONBOARDING_PROGRESS_VERSION,
@@ -218,6 +258,7 @@ export function encodeProgress(progress: OnboardingProgress): string {
     // Written only when there is one, so a document without Lake routes
     // encodes exactly as it did before AZR-35.
     ...(Object.keys(criblLakeRoutes).length > 0 ? { criblLakeRoutes } : {}),
+    ...(activityLogSettings.length > 0 ? { activityLogSettings } : {}),
     // AZR-102: written only once set, so an older document encodes as before.
     ...(progress.eventHubSource === undefined ? {} : { eventHubSource: progress.eventHubSource }),
   });
@@ -345,10 +386,34 @@ export function decodeProgress(raw: unknown): DecodedProgress {
         datasetId: v["datasetId"] as string,
         pipelineId: v["pipelineId"] as string | null,
         routeId: v["routeId"] as string | null,
+        // Only a literal true counts: anything else is "not created by the app".
+        ...(v["datasetCreated"] === true ? { datasetCreated: true as const } : {}),
       };
     }
   }
 
+  const activityLogSettings: ActivityLogSettingRecord[] = [];
+  if (Array.isArray(raw["activityLogSettings"])) {
+    raw["activityLogSettings"].forEach((v, i) => {
+      const ok =
+        isRecord(v) &&
+        str(v["subscriptionId"]) !== null &&
+        str(v["settingName"]) !== null &&
+        str(v["ruleId"]) !== null &&
+        !activityLogSettings.some((r) => r.subscriptionId.toLowerCase() === String(v["subscriptionId"]).toLowerCase());
+      if (!ok) {
+        dropped.push(`activityLogSettings[${i}]`);
+        return;
+      }
+      activityLogSettings.push({
+        subscriptionId: v["subscriptionId"] as string,
+        settingName: v["settingName"] as string,
+        ruleId: v["ruleId"] as string,
+      });
+    });
+  } else if (raw["activityLogSettings"] !== undefined) {
+    dropped.push("activityLogSettings");
+  }
   // AZR-102: anything but the two known values is dropped (and reported), so
   // the document then resolves by the pre-AZR-102 rule.
   const rawSource = raw["eventHubSource"];
@@ -367,6 +432,7 @@ export function decodeProgress(raw: unknown): DecodedProgress {
         "criblSources",
         "workerGroup",
         "criblLakeRoutes",
+        "activityLogSettings",
         "eventHubSource",
       ].includes(k)
     ) {
@@ -382,6 +448,7 @@ export function decodeProgress(raw: unknown): DecodedProgress {
       criblSources,
       workerGroup,
       ...(Object.keys(criblLakeRoutes).length > 0 ? { criblLakeRoutes } : {}),
+      ...(activityLogSettings.length > 0 ? { activityLogSettings } : {}),
       ...(eventHubSource === undefined ? {} : { eventHubSource }),
     },
     dropped,
@@ -541,13 +608,84 @@ export function strandedCriblSources(current: OnboardingProgress, legacyRaw: unk
   return out;
 }
 
-/** Record what the app created to route a source to Cribl Lake (AZR-35). */
+/**
+ * Record what the app created to route a source to Cribl Lake (AZR-35).
+ *
+ * KEEPS THE PROOF OF A DATASET THE APP CREATED (AZR-105). A second apply
+ * after one that created the dataset finds it present and reports it as
+ * "existed"; replacing the record whole would then forget that the app made
+ * it, and a later Remove could never delete it. So `datasetCreated` carries
+ * over from the earlier record when the group and the dataset are the same -
+ * unless this apply SAW THE DATASET ABSENT (`datasetSeenAbsent`) and still did
+ * not create it: the dataset the app made is gone and another took its id.
+ * LIMIT: a dataset deleted and recreated between two applies, never seen
+ * absent by the app, keeps the carried proof; the teardown's description-stamp
+ * check is then what stops a hand-made one being deleted.
+ */
 export function withLakeRoute(
   p: OnboardingProgress,
   id: OnboardingSourceId,
   record: LakeRouteRecord,
+  opts: { readonly datasetSeenAbsent?: boolean } = {},
 ): OnboardingProgress {
-  return { ...p, criblLakeRoutes: { ...(p.criblLakeRoutes ?? {}), [id]: record } };
+  const prev = p.criblLakeRoutes?.[id];
+  const keepCreated =
+    record.datasetCreated !== true &&
+    opts.datasetSeenAbsent !== true &&
+    prev?.datasetCreated === true &&
+    prev.groupId === record.groupId &&
+    prev.datasetId === record.datasetId;
+  const next: LakeRouteRecord = keepCreated ? { ...record, datasetCreated: true } : record;
+  return { ...p, criblLakeRoutes: { ...(p.criblLakeRoutes ?? {}), [id]: next } };
+}
+
+/**
+ * Forget a source's Cribl source record (AZR-105), after a teardown removed
+ * the input and its secret (or found them already gone).
+ */
+export function withoutCriblSource(p: OnboardingProgress, id: OnboardingSourceId): OnboardingProgress {
+  const criblSources = { ...p.criblSources };
+  delete criblSources[id];
+  return { ...p, criblSources };
+}
+
+/**
+ * Replace (or, with null, forget) a source's Lake route record after a
+ * teardown (AZR-105). Unlike {@link withLakeRoute} nothing carries over: the
+ * teardown computed exactly what is still there.
+ */
+export function withLakeRouteAfterTeardown(
+  p: OnboardingProgress,
+  id: OnboardingSourceId,
+  record: LakeRouteRecord | null,
+): OnboardingProgress {
+  const criblLakeRoutes = { ...(p.criblLakeRoutes ?? {}) };
+  if (record === null) delete criblLakeRoutes[id];
+  else criblLakeRoutes[id] = record;
+  const { criblLakeRoutes: _drop, ...rest } = p;
+  return Object.keys(criblLakeRoutes).length > 0 ? { ...rest, criblLakeRoutes } : rest;
+}
+
+function sameSubscription(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/** The Activity Log setting record for a subscription, or null (AZR-105). */
+export function activityLogSettingRecord(p: OnboardingProgress, subscriptionId: string): ActivityLogSettingRecord | null {
+  return (p.activityLogSettings ?? []).find((r) => sameSubscription(r.subscriptionId, subscriptionId)) ?? null;
+}
+
+/** Record the Activity Log setting the app wrote on a subscription, replacing an earlier record for it (AZR-105). */
+export function withActivityLogSetting(p: OnboardingProgress, record: ActivityLogSettingRecord): OnboardingProgress {
+  const others = (p.activityLogSettings ?? []).filter((r) => !sameSubscription(r.subscriptionId, record.subscriptionId));
+  return { ...p, activityLogSettings: [...others, record] };
+}
+
+/** Forget the Activity Log setting record of a subscription (AZR-105), after it was removed or found gone. */
+export function withoutActivityLogSetting(p: OnboardingProgress, subscriptionId: string): OnboardingProgress {
+  const left = (p.activityLogSettings ?? []).filter((r) => !sameSubscription(r.subscriptionId, subscriptionId));
+  const { activityLogSettings: _drop, ...rest } = p;
+  return left.length > 0 ? { ...rest, activityLogSettings: left } : rest;
 }
 
 /** Remember the worker group the operator picked. */

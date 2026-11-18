@@ -32,38 +32,44 @@ const CREATE_SOURCE = 'core usecases/create-cribl-source (AZR-34)';
 const KIT_COMMIT = 'core kit/config-writes/commitDeploy.ts via create-cribl-source (AZR-34)';
 const LAKE_QUERY = 'core usecases/query-lake-samples/query-lake-samples.ts';
 const LAKE_ROUTE = 'core usecases/onboarding-lake-route/onboarding-lake-route.ts (AZR-35)';
+const TEARDOWN = 'core usecases/onboarding-teardown/onboarding-teardown.ts (AZR-105; only objects proven to be its own)';
+const PAUSE = 'core usecases/onboarding-teardown/input-pause.ts (AZR-105)';
 
 export const API_CALLS: readonly ApiCall[] = [
   // ---- Leader level ------------------------------------------------------
-  { method: 'GET', path: '/master/groups', caller: 'app platform/adapters.ts PlatformCriblClient.listGroups' },
+  { method: 'GET', path: '/master/groups', caller: `app platform/adapters.ts PlatformCriblClient.listGroups (also ${TEARDOWN}: every group, for the Lake dataset in-use check)` },
   // The kit's deployedVersion falls back here on a 404 from /products (AZR-34).
   { method: 'GET', path: '/master/groups/:id', caller: KIT_COMMIT },
   { method: 'GET', path: '/master/workers', caller: 'core usecases/live-architecture/fetch-edge-fleets.ts' },
   { method: 'PATCH', path: '/master/groups/:id/deploy', caller: `${ONBOARD}; ${FLOWLOG}; ${KIT_COMMIT} and ${KIT_COMMIT_ROUTES} (404 fallback)` },
   { method: 'PATCH', path: '/products/stream/groups/:id/deploy', caller: `${KIT_COMMIT}; ${KIT_COMMIT_ROUTES}` },
-  { method: 'GET', path: '/products/stream/groups/:id', caller: `${KIT_COMMIT} (deployedVersion)` },
+  { method: 'GET', path: '/products/stream/groups/:id', caller: `${KIT_COMMIT} (deployedVersion); ${TEARDOWN} (are earlier removals live)` },
   { method: 'POST', path: '/system/lake/datasets', caller: WIRE },
   { method: 'GET', path: '/products/lake/lakes/:lakeId/datasets', caller: `core usecases/discover-sample-sources/discover-sample-sources.ts; ${LAKE_ROUTE} (plan read and read-back)` },
   { method: 'POST', path: '/products/lake/lakes/:lakeId/datasets', caller: `${LAKE_ROUTE} (create-only, Cribl.Cloud only)` },
+  { method: 'DELETE', path: '/products/lake/lakes/:lakeId/datasets/:id', caller: `${TEARDOWN} (explicit opt-in only, after the group change is deployed)` },
 
   // ---- Worker group context ---------------------------------------------
-  { method: 'GET', path: '/m/:gid/system/outputs', caller: `${ONBOARD}; ${LIVE_ARCH}; ${PREFLIGHT}; ui screens/integrate/integrate-screen.tsx (routable check; GEN-21 existing Sentinel destination picker, parsed by core domain/sentinel-destination/existing-outputs.ts)` },
+  { method: 'GET', path: '/m/:gid/system/outputs', caller: `${ONBOARD}; ${LIVE_ARCH}; ${PREFLIGHT}; ui screens/integrate/integrate-screen.tsx (routable check; GEN-21 existing Sentinel destination picker, parsed by core domain/sentinel-destination/existing-outputs.ts); ${TEARDOWN} (in-use checks, every group)` },
   { method: 'POST', path: '/m/:gid/system/outputs', caller: ONBOARD },
   { method: 'GET', path: '/m/:gid/system/outputs/:id', caller: `${ONBOARD} (verify step)` },
   { method: 'GET', path: '/m/:gid/system/inputs', caller: `${LIVE_ARCH}; ${PREFLIGHT}; discover-sample-sources.ts; ${CREATE_SOURCE}; read-source-flow/read-onboarding-cribl-side.ts; ${WIRE} (the source's type)` },
   { method: 'POST', path: '/m/:gid/system/inputs', caller: `${CREATE_SOURCE} apply-cribl-source.ts` },
+  { method: 'DELETE', path: '/m/:gid/system/inputs/:id', caller: TEARDOWN },
+  { method: 'PATCH', path: '/m/:gid/system/inputs/:id', caller: `${PAUSE} (kit writeApproved: the whole source, disabled changed)` },
   { method: 'GET', path: '/m/:gid/system/inputs/:id', caller: `${CREATE_SOURCE} (kit verifyStored); ui screens/integrate/integrate-screen.tsx (GEN-21 QuickConnect check, parsed by existing-destination-state.ts sourceRouting)` },
   { method: 'GET', path: '/m/:gid/pipelines', caller: `${LIVE_ARCH}; ${LAKE_ROUTE} (the unroll pipeline: plan read and read-back)` },
   { method: 'POST', path: '/m/:gid/pipelines', caller: `${LAKE_ROUTE} (create-only)` },
+  { method: 'DELETE', path: '/m/:gid/pipelines/:id', caller: `${TEARDOWN} (the shared unroll pipeline, only when nothing uses it)` },
   { method: 'GET', path: '/m/:gid/lib/breakers', caller: LIVE_ARCH },
-  { method: 'GET', path: '/m/:gid/jobs', caller: LIVE_ARCH },
+  { method: 'GET', path: '/m/:gid/jobs', caller: `${LIVE_ARCH}; ${TEARDOWN} (in-use checks)` },
   { method: 'GET', path: '/m/:gid/p/:pack/system/inputs', caller: LIVE_ARCH },
   { method: 'GET', path: '/m/:gid/p/:pack/system/outputs', caller: LIVE_ARCH },
   { method: 'GET', path: '/m/:gid/p/:pack/routes', caller: LIVE_ARCH },
   { method: 'GET', path: '/m/:gid/p/:pack/pipelines', caller: LIVE_ARCH },
   { method: 'POST', path: '/m/:gid/version/commit', caller: `${ONBOARD}; ${FLOWLOG}; ${KIT_COMMIT}; ${KIT_COMMIT_ROUTES}` },
   { method: 'GET', path: '/m/:gid/version/status', caller: `${KIT_COMMIT}; ${KIT_COMMIT_ROUTES}` },
-  { method: 'GET', path: '/m/:gid/version', caller: `${KIT_COMMIT}; ${KIT_COMMIT_ROUTES} (HEAD, ?offset=0&limit=1)` },
+  { method: 'GET', path: '/m/:gid/version', caller: `${KIT_COMMIT}; ${KIT_COMMIT_ROUTES} (HEAD, ?offset=0&limit=1); ${TEARDOWN} (are earlier removals live)` },
   { method: 'GET', path: '/m/:gid/packs', caller: `${PACK_INSTALL}.listDeployed; ${LIVE_ARCH}; ${PREFLIGHT}` },
   // The binary .crbl upload: a raw fetchWithTimeout in the adapter, because the
   // JSON CriblClient cannot carry an octet-stream body.
@@ -71,13 +77,14 @@ export const API_CALLS: readonly ApiCall[] = [
   { method: 'POST', path: '/m/:gid/packs', caller: `${PACK_INSTALL}.install` },
   { method: 'PATCH', path: '/m/:gid/packs/:id', caller: `${PACK_INSTALL}.install (upgradePack)` },
   { method: 'DELETE', path: '/m/:gid/packs/:id', caller: `${PACK_INSTALL}.install (deletePack)` },
-  { method: 'GET', path: '/m/:gid/routes', caller: `${ROUTE_INSERT} (plan: which table); ${LIVE_ARCH}; ${PREFLIGHT}; read-source-flow/read-onboarding-cribl-side.ts` },
+  { method: 'GET', path: '/m/:gid/routes', caller: `${ROUTE_INSERT} (plan: which table); ${LIVE_ARCH}; ${PREFLIGHT}; read-source-flow/read-onboarding-cribl-side.ts; ${TEARDOWN} (every group, for the Lake dataset)` },
   // The kit's planChange / writeApproved re-read / verifyStored read-back, and the write itself.
   { method: 'GET', path: '/m/:gid/routes/:id', caller: `${ROUTE_INSERT} (kit read-modify-write)` },
   { method: 'PATCH', path: '/m/:gid/routes/:id', caller: `${ROUTE_INSERT} (kit writeApproved, full table)` },
   { method: 'POST', path: '/m/:gid/system/secrets', caller: `${ENSURE_SECRET} for ${WIRING_UI} and ${FLOWLOG}; ${CREATE_SOURCE} apply-cribl-source.ts; ${ONBOARD} (destination client secret, create-only, DBT-155)` },
   { method: 'PATCH', path: '/m/:gid/system/secrets/:id', caller: `${ENSURE_SECRET} (on 409, only a secret carrying our stamp) for ${WIRING_UI} and ${FLOWLOG}` },
   { method: 'GET', path: '/m/:gid/system/secrets/:id', caller: `${CREATE_SOURCE} plan-cribl-source.ts; ${ENSURE_SECRET} (who owns the secret a 409 named)` },
+  { method: 'DELETE', path: '/m/:gid/system/secrets/:id', caller: `${TEARDOWN} (the onboarding source's own secret, once no source names it)` },
   { method: 'POST', path: '/m/:gid/system/capture', caller: 'core usecases/capture-samples/capture-samples.ts' },
   { method: 'POST', path: '/system/metrics/query', caller: 'core usecases/read-source-flow/read-source-flow.ts via kit metricsQuery (AZR-33; leader route since AZR-95)' },
   // Search is group-scoped under the SEARCH group, whose id is resolved from

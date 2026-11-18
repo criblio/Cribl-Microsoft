@@ -75,7 +75,8 @@
 # Azure Native Source Onboarding (AZR-33, AZR-34; ADR 0007) ADDS exactly the
 # paths its code calls. Live input creation IS now shipped, CREATE-ONLY: the
 # app POSTs one new eventhub / azure_blob input and never PATCHes or DELETEs
-# one, so no input write beyond POST is granted.
+# one on the create path. (Pause and Remove, AZR-105 below, add the PATCH and
+# DELETE for inputs the app proves its own.)
 #   /m/{groupId}/system/inputs (post)       - create-cribl-source: create the
 #                                             onboarding input
 #   /m/{groupId}/system/inputs/{id} (get)   - the kit's verifyStored read-back
@@ -100,7 +101,7 @@
 # only on a 404, which is why both pairs are granted.
 #
 # Onboarding route to Cribl Lake (AZR-35) ADDS exactly two writes, both
-# CREATE-ONLY (no PATCH or DELETE of either object is granted):
+# CREATE-ONLY on the create path (the DELETEs are AZR-105 Remove, below):
 #   /m/{groupId}/pipelines (post)           - create the app's stamped unroll
 #                                             pipeline (azure_onb_unroll_records)
 #                                             when absent; the GET beside it
@@ -111,6 +112,40 @@
 #                                             (the spec route; the GET beside it
 #                                             is its plan read and read-back)
 # The route itself goes through the route-insert writer declared above.
+#
+# Remove and Pause (AZR-105) ADD the deletes and the one PATCH the in-app
+# teardown sends. The App Platform has no uninstall hook, so the app removes
+# what it created itself - and ONLY objects it proves its own (id in its
+# manifest, its description stamp, and its own KV record), each behind a
+# confirm that quotes what goes:
+#   /m/{groupId}/pipelines/{id} (delete)    - the shared unroll pipeline, only
+#                                             when no route, source or other
+#                                             recorded route still uses it
+#   /m/{groupId}/system/inputs/{id} (delete) - the onboarding Cribl source
+#   /m/{groupId}/system/inputs/{id} (patch) - Pause / Resume: the kit's
+#                                             read-modify-write of the whole
+#                                             source with disabled changed (the
+#                                             spec's PATCH replaces it whole)
+#   /m/{groupId}/system/secrets/{id} (delete) - that source's own secret, once
+#                                             no source names it
+#   /products/lake/lakes/{lakeId}/datasets/{id} (delete) - CLOUD-ONLY: the
+#                                             source's Lake dataset, ONLY on the
+#                                             operator's explicit opt-in (it
+#                                             holds data) and only one the app
+#                                             recorded creating
+# WHY PER-ID AND NOT NARROWER: these grants cover every id under the path,
+# not only the app's own (azure_onb_*). The policy grammar has literal and
+# `:name` segments only - no id prefix or glob - and a `*` segment is refused
+# by the coverage gate (DBT-153, Undefined in the platform's matcher). So the
+# narrowing is done in code instead: nothing is deleted or PATCHed without the
+# three ownership signals (domain/onboarding-teardown).
+# The in-use checks READ, already declared: /m/{groupId}/system/outputs and
+# /m/{groupId}/jobs (destinations and collectors), and for the Lake dataset
+# every worker group's routes and destinations (/master/groups, then
+# /m/{groupId}/routes and /system/outputs per group), plus /m/{groupId}/version
+# and /products/stream/groups/{id} to tell whether earlier removals are live.
+# The route removal goes through the routes PATCH declared above, and the
+# commit and deploy through the kit routes declared below.
 #
 # Live Architecture (2026-07-29, Architecture page's Live view) READS the
 # group's configured flow to draw it - five GET-only additions plus the
@@ -169,13 +204,18 @@ policies:
     actions: ['GET', 'POST']
   # The kit's verifyStored read-back of the created onboarding input (AZR-34),
   # and the GEN-21 existing-destination path's read of whether the source is
-  # QuickConnected (sendToRoutes) before it shows a route to add.
+  # QuickConnected (sendToRoutes) before it shows a route to add. PATCH is
+  # AZR-105 Pause / Resume (the kit's whole-source read-modify-write) and
+  # DELETE is AZR-105 Remove, both only of an input the app proves its own.
   - object: '/m/:gid/system/inputs/:id'
-    actions: ['GET']
+    actions: ['GET', 'PATCH', 'DELETE']
   # GET: Live Architecture, and AZR-35's plan read and read-back of the unroll
   # pipeline. POST: AZR-35 creates that pipeline, create-only.
   - object: '/m/:gid/pipelines'
     actions: ['GET', 'POST']
+  # AZR-105 Remove: delete the app's own unroll pipeline once nothing uses it.
+  - object: '/m/:gid/pipelines/:id'
+    actions: ['DELETE']
   - object: '/m/:gid/lib/breakers'
     actions: ['GET']
   - object: '/m/:gid/jobs'
@@ -249,8 +289,10 @@ policies:
   # create-cribl-source plan (AZR-34): read one named secret to classify it as
   # absent, ours or foreign before any write. A 409 on ITS create refuses; it
   # never PATCHes (ensure-text-secret above is the only secret PATCH).
+  # DELETE: AZR-105 Remove of the onboarding source's own secret, once no
+  # source names it.
   - object: '/m/:gid/system/secrets/:id'
-    actions: ['GET']
+    actions: ['GET', 'DELETE']
   # read-source-flow (AZR-33): the per-input intake query behind the onboarding
   # dataflow's live flow. A POST because the query travels in the body; it
   # creates nothing. A LEADER route (no /m/ prefix): the worker group is chosen
@@ -278,6 +320,10 @@ policies:
   # create-only, through the spec's route (CLOUD-ONLY).
   - object: '/products/lake/lakes/:lakeId/datasets'
     actions: ['GET', 'POST']
+  # AZR-105 Remove (CLOUD-ONLY): delete the source's Lake dataset, only on the
+  # operator's explicit opt-in and only one the app recorded creating.
+  - object: '/products/lake/lakes/:lakeId/datasets/:id'
+    actions: ['DELETE']
   # Sample capture (ADR 0003 Phase 4). THE ONLY NON-GET THIS FEATURE ADDS, and
   # worth reading carefully because the verb overstates it: POST /system/capture
   # CREATES NOTHING. It opens a short diagnostic read of events already flowing

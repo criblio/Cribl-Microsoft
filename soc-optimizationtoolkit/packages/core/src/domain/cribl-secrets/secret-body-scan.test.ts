@@ -13,7 +13,8 @@
  *      and its barrel export, the old `constant` rows, were removed by DBT-187:
  *      nothing but tests had used them since DBT-152.)
  *   3. A `writer` calls buildSecretBody and carries no `type: "text"` body; a
- *      `reader` names the path only on GET lines; a `policy` row sends no
+ *      `reader` names the path only on GET lines; a `remover` (AZR-105) only
+ *      on GET or DELETE lines and never builds a body; a `policy` row sends no
  *      request at all.
  *
  * What it cannot see: a body built by a helper in another file and passed in
@@ -43,6 +44,8 @@ type Role =
   | "writer"
   /** Reads a secret; names the path only on GET lines. */
   | "reader"
+  /** Reads and DELETEs a secret it proved its own (AZR-105); names the path only on GET or DELETE lines, sends no body. */
+  | "remover"
   /** The policy coverage table (policies.yml); a description, not a request. */
   | "policy";
 
@@ -52,6 +55,7 @@ const ROLES: Readonly<Record<string, Role>> = {
   "packages/core/src/usecases/onboard-table/onboard-table.ts": "writer",
   "packages/core/src/usecases/ensure-secret/ensure-text-secret.ts": "writer",
   "packages/core/src/usecases/create-cribl-source/plan-cribl-source.ts": "reader",
+  "packages/core/src/usecases/onboarding-teardown/onboarding-teardown.ts": "remover",
   "apps/cribl-app/src/platform/policies/paths.ts": "policy",
 };
 
@@ -123,6 +127,13 @@ describe("every Cribl secret body comes from buildSecretBody (DBT-163)", () => {
       const lines = code.split("\n").filter((l) => SECRETS_API.test(l));
       expect(lines.length).toBeGreaterThan(0);
       for (const line of lines) expect(line).toMatch(/["'`]GET["'`]/);
+      return;
+    }
+    if (role === "remover") {
+      const lines = code.split("\n").filter((l) => SECRETS_API.test(l));
+      expect(lines.length).toBeGreaterThan(0);
+      for (const line of lines) expect(line).toMatch(/["'`](GET|DELETE)["'`]/);
+      expect(code).not.toMatch(/\bbuildSecretBody\(/);
       return;
     }
     // policy: a table row naming a caller, not a request; it sends nothing.

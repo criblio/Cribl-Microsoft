@@ -34,6 +34,8 @@ function action(operationId: OperationId, label: string): RequiredAction {
 export const ACTIVITY_LOG_SUBSCRIPTION_ACTIONS: readonly RequiredAction[] = [
   action("activityLog.diagnosticSettings.read", "List the subscription's diagnostic settings"),
   action("activityLog.diagnosticSetting.write", "Create the Activity Log diagnostic setting"),
+  // AZR-105: Remove deletes the setting the app created (and proved its own).
+  action("activityLog.diagnosticSetting.delete", "Remove the Activity Log diagnostic setting this app created"),
 ];
 
 /** Actions on the Event Hub namespace RULE the setting names. */
