@@ -42,7 +42,7 @@
  * Pure orchestration over the port: no IO of its own, no clock, no randomness.
  */
 
-import type { AzureManagement } from "../../ports/azure-management";
+import type { AzureManagement, AzureManagementRequest } from "../../ports/azure-management";
 import type { Logger } from "../../ports/logger";
 import { asString, attemptArm, classifyArmFailure, is2xx, prop } from "../arm-http";
 import type { ArmReadFailure } from "../arm-http";
@@ -150,10 +150,30 @@ async function listSubscriptionSettings(
   azure: AzureManagement,
   subscriptionId: string,
 ): Promise<ActivityLogSettingsState> {
-  const what = "List the subscription's diagnostic settings";
-  const first = await attemptArm(() =>
-    azure.request(buildSubscriptionDiagnosticSettingsListRequest(subscriptionId)),
+  return listDiagnosticSettings(
+    azure,
+    buildSubscriptionDiagnosticSettingsListRequest(subscriptionId),
+    "List the subscription's diagnostic settings",
+    "a subscription's settings",
   );
+}
+
+/**
+ * List one scope's diagnostic settings in ONE page (AZR-98; shared with the
+ * Entra ID tenant list, AZR-99). A nextLink is reported unread, never `listed`
+ * with the first page, because a setting on an unread page could be ours or a
+ * duplicate; a 2xx whose body has no `value` array is unread too. Never throws.
+ *
+ * `what` names the step in every failure message; `whose` finishes the
+ * sentence about a second page ("which {whose} should not need").
+ */
+export async function listDiagnosticSettings(
+  azure: AzureManagement,
+  request: AzureManagementRequest,
+  what: string,
+  whose: string,
+): Promise<ActivityLogSettingsState> {
+  const first = await attemptArm(() => azure.request(request));
   if (!first.ok || !is2xx(first.response.status)) {
     return { kind: "unread", failure: classifyArmFailure(first, what) };
   }
@@ -172,7 +192,7 @@ async function listSubscriptionSettings(
         kind: "failed",
         status,
         code: "",
-        message: `${what}: Azure returned more than one page, which a subscription's settings should not need - stopped reading.`,
+        message: `${what}: Azure returned more than one page, which ${whose} should not need - stopped reading.`,
       },
     };
   }

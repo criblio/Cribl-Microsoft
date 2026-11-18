@@ -8,6 +8,7 @@
 export {
   IN_USE_CHECKED,
   classifyActivityLogRemoval,
+  classifyEntraSettingRemoval,
   classifyInputForPause,
   describeTeardownObject,
   isDenied,

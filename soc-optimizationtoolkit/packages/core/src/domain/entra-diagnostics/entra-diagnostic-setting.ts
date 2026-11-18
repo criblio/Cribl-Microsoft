@@ -163,21 +163,66 @@ export function listSettingsRequest(): AzureManagementRequest {
 export function buildEntraDiagnosticRequest(
   input: EntraDiagnosticInput,
 ): EntraDiagnosticRequest {
+  return {
+    method: "PUT",
+    url: settingUrl(input.settingName ?? DEFAULT_SETTING_NAME),
+    body: entraDiagnosticBody(input),
+  };
+}
+
+/**
+ * The PUT body, shared by the URL form above (the How-to step shows it) and
+ * the path form the Deploy sends (AZR-99), so the two cannot drift: what the
+ * operator is told to PUT by hand is byte-for-byte what Deploy writes.
+ */
+export function entraDiagnosticBody(input: EntraDiagnosticInput): EntraDiagnosticRequest["body"] {
   const ticked = new Set(input.categories);
   const logs: DiagnosticLogEntry[] = ENTRA_CATEGORIES.map((c) => ({
     category: c.name,
     enabled: ticked.has(c.name),
   }));
-
   return {
-    method: "PUT",
-    url: settingUrl(input.settingName ?? DEFAULT_SETTING_NAME),
-    body: {
-      properties: {
-        eventHubAuthorizationRuleId: input.eventHubAuthorizationRuleId,
-        eventHubName: input.eventHubName,
-        logs,
-      },
+    properties: {
+      eventHubAuthorizationRuleId: input.eventHubAuthorizationRuleId,
+      eventHubName: input.eventHubName,
+      logs,
     },
   };
+}
+
+/** The ARM path of one tenant setting, in the PATH form the AzureManagement port takes. */
+export function entraSettingPath(name: string = DEFAULT_SETTING_NAME): string {
+  return `${ENTRA_DIAGNOSTIC_SETTINGS_PATH}/${encodeURIComponent(name)}`;
+}
+
+/**
+ * The Deploy's PUT (AZR-99) in path form: the same body as
+ * {@link buildEntraDiagnosticRequest}, sent through the port. The caller must
+ * have listed the tenant's settings first and found nothing objecting - this
+ * PUT replaces whatever is at the path, and this builder cannot know.
+ */
+export function buildEntraSettingPutRequest(input: EntraDiagnosticInput): AzureManagementRequest & {
+  readonly method: "PUT";
+  readonly body: EntraDiagnosticRequest["body"];
+} {
+  return {
+    method: "PUT",
+    path: entraSettingPath(input.settingName ?? DEFAULT_SETTING_NAME),
+    apiVersion: AADIAM_API_VERSION,
+    body: entraDiagnosticBody(input),
+  };
+}
+
+/** The GET that reads one tenant setting back by name. A GET changes nothing. */
+export function buildEntraSettingGetRequest(name: string = DEFAULT_SETTING_NAME): AzureManagementRequest {
+  return { method: "GET", path: entraSettingPath(name), apiVersion: AADIAM_API_VERSION };
+}
+
+/**
+ * The DELETE of one tenant setting (AZR-99 Remove). The caller must have read
+ * it by name and proved it the app's (domain/onboarding-teardown
+ * classifyEntraSettingRemoval) - this builder cannot know.
+ */
+export function buildEntraSettingDeleteRequest(name: string = DEFAULT_SETTING_NAME): AzureManagementRequest {
+  return { method: "DELETE", path: entraSettingPath(name), apiVersion: AADIAM_API_VERSION };
 }

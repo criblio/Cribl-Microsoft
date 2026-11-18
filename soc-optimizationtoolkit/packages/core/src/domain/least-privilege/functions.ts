@@ -169,6 +169,20 @@ const FUNCTIONS = [
     ],
   },
   {
+    id: "entra-diagnostic-export",
+    label: "Deploy (and remove) the Entra ID tenant diagnostic setting",
+    necessity: "feature",
+    operations: [
+      "entra.diagnosticSettings.read",
+      "entra.diagnosticSetting.write",
+      // The in-app Remove of the setting this deploy created.
+      "entra.diagnosticSetting.delete",
+      // The app never calls listKeys here, but Azure checks the caller holds
+      // it on the rule a diagnostic setting names (documented, not measured).
+      "eventhub.rule.listKeys",
+    ],
+  },
+  {
     id: "validate",
     label: "Validate Azure onboarding (read only)",
     necessity: "feature",

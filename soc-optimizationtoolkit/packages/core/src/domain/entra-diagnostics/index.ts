@@ -11,6 +11,7 @@ export {
   ENTRA_PROFILE_CATEGORIES,
   categoriesForProfile,
   entraCategory,
+  licenceNotes,
   profileForSelection,
   uebaBoundTables,
   volumeWarnings,
@@ -23,6 +24,11 @@ export {
   ENTRA_DIAGNOSTIC_SETTINGS_PATH,
   ENTRA_DIRECTORY_PRECONDITION,
   buildEntraDiagnosticRequest,
+  buildEntraSettingDeleteRequest,
+  buildEntraSettingGetRequest,
+  buildEntraSettingPutRequest,
+  entraDiagnosticBody,
+  entraSettingPath,
   listSettingsRequest,
   listSettingsUrl,
 } from "./entra-diagnostic-setting";
@@ -32,3 +38,24 @@ export type {
   EntraDiagnosticRequest,
   UnmeasurablePrecondition,
 } from "./entra-diagnostic-setting";
+
+// AZR-99: the Deploy and Remove of the tenant setting from the onboarding screen.
+export {
+  ENTRA_AUTO_HUB_TEXT,
+  // ENTRA_ITEM_ID is re-exported by usecases/entra-diagnostic-export, like ACTIVITY_LOG_ITEM_ID.
+  ENTRA_SETTING_NAME,
+  classifyOursEntraSetting,
+  entraDiagnosticInputFor,
+  entraOurSettingPath,
+  entraSettingDiffs,
+  expectedEntraSetting,
+  findOverlappingEntraSettings,
+  unknownEntraCategories,
+} from "./entra-setting-deploy";
+export type { EntraSettingInput, ExpectedEntraSetting } from "./entra-setting-deploy";
+
+export {
+  ENTRA_ACTIONS_NOT_MEASURABLE,
+  ENTRA_NAMESPACE_ACTIONS,
+  ENTRA_TENANT_ACTIONS,
+} from "./entra-permissions";

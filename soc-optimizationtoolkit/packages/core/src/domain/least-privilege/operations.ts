@@ -1156,6 +1156,8 @@ const OPERATIONS = {
     id: "entra.diagnosticSettings.read",
     calls: [
       { method: "GET", path: "/providers/microsoft.aadiam/diagnosticSettings", api: "arm" },
+      // AZR-99: the Entra deploy reads its own setting back by name, and Remove reads it before and after.
+      { method: "GET", path: "/providers/microsoft.aadiam/diagnosticSettings/{name}", api: "arm" },
     ],
     operation: "microsoft.aadiam/diagnosticSettings/read",
     leastRole: "Security Administrator",
@@ -1167,6 +1169,43 @@ const OPERATIONS = {
     audit: [
       "GET /providers/microsoft.aadiam/diagnosticSettings",
     ],
+  },
+  "entra.diagnosticSetting.write": {
+    id: "entra.diagnosticSetting.write",
+    calls: [
+      { method: "PUT", path: "/providers/microsoft.aadiam/diagnosticSettings/{name}", api: "arm" },
+    ],
+    operation: "microsoft.aadiam/diagnosticSettings/write",
+    // Azure also checks the caller may use the rule the setting names, though
+    // no key is returned to the caller (as for any diagnostic setting).
+    extraActions: [
+      "Microsoft.EventHub/namespaces/authorizationRules/listKeys/action on the rule the setting names",
+    ],
+    leastRole: "Security Administrator",
+    alsoGrantedBy: ["Global Administrator"],
+    scope: "tenant",
+    scopeNote: "the tenant (an Entra directory role, not an Azure role; the app cannot measure it)",
+    citation: "https://learn.microsoft.com/en-us/entra/identity/monitoring-health/howto-stream-logs-to-event-hub",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added with AZR-99: the Entra ID deploy creates the one tenant diagnostic setting CriblEntraIDLogs. Microsoft documents Security Administrator for creating Entra diagnostic settings; whether a service principal holding it can PUT through ARM is not measured.",
+  },
+  "entra.diagnosticSetting.delete": {
+    id: "entra.diagnosticSetting.delete",
+    calls: [
+      { method: "DELETE", path: "/providers/microsoft.aadiam/diagnosticSettings/{name}", api: "arm" },
+    ],
+    operation: "microsoft.aadiam/diagnosticSettings/delete",
+    leastRole: "Security Administrator",
+    alsoGrantedBy: ["Global Administrator"],
+    scope: "tenant",
+    scopeNote: "the tenant (an Entra directory role, not an Azure role; the app cannot measure it)",
+    citation: "https://learn.microsoft.com/en-us/entra/identity/monitoring-health/howto-configure-diagnostic-settings",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added with AZR-99: Remove deletes the tenant diagnostic setting the Entra deploy created, only once the app proved it its own. Not measured - no delete has been made with a reduced identity.",
   },
   "networkWatcher.read": {
     id: "networkWatcher.read",

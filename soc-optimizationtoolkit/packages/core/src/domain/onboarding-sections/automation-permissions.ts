@@ -87,6 +87,7 @@ import {
   ACTIVITY_LOG_NAMESPACE_ACTIONS,
   ACTIVITY_LOG_SUBSCRIPTION_ACTIONS,
 } from "../activity-log-export/activity-log-permissions";
+import { ENTRA_NAMESPACE_ACTIONS, ENTRA_TENANT_ACTIONS } from "../entra-diagnostics/entra-permissions";
 import type { OnboardingItemId } from "../onboarding-selection";
 import type { ItemAvailability } from "./onboarding-sections";
 
@@ -185,11 +186,28 @@ const ACTIVITY_LOG_PERMISSIONS: AutomationPermissions = {
 };
 
 /**
+ * AZR-99. The tenant actions are granted by an Entra DIRECTORY role, which the
+ * permission check cannot see at all (entra-diagnostic-setting
+ * ENTRA_DIRECTORY_PRECONDITION), so nothing is `measured` and the banner says
+ * the check does not cover this source.
+ */
+const ENTRA_PERMISSIONS: AutomationPermissions = {
+  sourceTitle: "Entra ID diagnostic setting",
+  measuredScope: "In the Entra tenant",
+  measured: [],
+  notMeasured: [
+    { scope: "In the Entra tenant (a directory role, not an Azure role)", actions: ENTRA_TENANT_ACTIONS },
+    { scope: "On the Event Hub namespace rule", actions: ENTRA_NAMESPACE_ACTIONS },
+  ],
+};
+
+/**
  * The declaration per AUTOMATABLE item. Keyed like ITEM_AVAILABILITY and
  * covering exactly its "available" ids - the pin holds both directions.
  */
 export const AUTOMATION_PERMISSIONS: Readonly<Record<OnboardingItemId, AutomationPermissions>> = {
   activityLog: ACTIVITY_LOG_PERMISSIONS,
+  entraId: ENTRA_PERMISSIONS,
   defenderExport: DEFENDER_EXPORT_PERMISSIONS,
 };
 

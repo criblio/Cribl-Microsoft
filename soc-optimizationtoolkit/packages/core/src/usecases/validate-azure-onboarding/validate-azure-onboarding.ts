@@ -76,6 +76,7 @@ import { buildHubConsumerGroupGetRequest } from "../../domain/eventhub-arm";
 import { DEFENDER_EXPORT_ITEM_ID, expectedExportFor } from "../../domain/defender-export/defender-automation";
 import type { DefenderExportInput } from "../../domain/defender-export/defender-automation";
 import type { ActivityLogSettingInput } from "../../domain/activity-log-export/activity-log-setting";
+import type { EntraSettingInput } from "../../domain/entra-diagnostics/entra-setting-deploy";
 import { eventHubNamespacePath } from "../../domain/eventhub-arm/eventhub-arm";
 import { readAllPages, readSingle, describeRequest } from "../read-logging-map";
 import { MAX_LIST_PAGES } from "../azure-discovery";
@@ -592,8 +593,19 @@ export interface ActivityLogDeployForValidation {
   readonly input: ActivityLogSettingInput;
 }
 
-/** Either deploy that can amend a finished run. */
-export type OnboardingDeployForValidation = DefenderDeployForValidation | ActivityLogDeployForValidation;
+/** What an Entra ID deploy did (AZR-99), as {@link applyEntraDeploy} needs it. */
+export interface EntraDeployForValidation {
+  readonly source: "entraId";
+  readonly outcome: DefenderWriteOutcome;
+  /** The deploy's own target: the namespace, the rule and the categories. */
+  readonly input: EntraSettingInput;
+}
+
+/** Any deploy that can amend a finished run. */
+export type OnboardingDeployForValidation =
+  | DefenderDeployForValidation
+  | ActivityLogDeployForValidation
+  | EntraDeployForValidation;
 
 /** The detail of an activity-log-setting check retired by a write whose read-back did not confirm it. */
 export const ACTIVITY_LOG_WRITTEN_UNCONFIRMED_DETAIL =
@@ -640,12 +652,57 @@ export function applyActivityLogDeploy(
   return { ...result, checks, verdicts };
 }
 
+// ---------------------------------------------------------------------------
+// An Entra ID deploy made after the run (AZR-99)
+// ---------------------------------------------------------------------------
+
+/** The detail of an entra-setting check retired by a write whose read-back did not confirm it. */
+export const ENTRA_WRITTEN_UNCONFIRMED_DETAIL =
+  "The Entra ID setting was written after this check ran, but reading it back did not confirm it. Choose Validate to check again.";
+
+/**
+ * The run's result with its Entra setting verdicts brought up to date by a
+ * deploy made AFTER the run, or null when the deploy does not bear on it -
+ * the same contract as {@link applyActivityLogDeploy}.
+ *
+ * Sound because the entra-setting check looks for CriblEntraIDLogs (the name
+ * the deploy wrote), sending with the plan's namespace and send rule, no hub
+ * name, and the chosen profile's categories enabled - and
+ * "written-and-read-back" compared exactly that. It holds only when the
+ * deploy's namespace is the plan's and its rule is the plan's send rule;
+ * anything else returns null and the run stands.
+ */
+export function applyEntraDeploy(
+  result: ValidationResult,
+  values: PlanValues,
+  deploy: EntraDeployForValidation,
+): ValidationResult | null {
+  const same = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const planNs = {
+    subscriptionId: eventHubLocation(values).subscriptionId.trim(),
+    resourceGroup: eventHubLocation(values).resourceGroup.trim(),
+    name: values.namespace.trim(),
+  };
+  if (!same(eventHubNamespacePath(planNs), eventHubNamespacePath(deploy.input.namespace))) return null;
+  if (!same(values.sendRule ?? "", deploy.input.ruleName)) return null;
+  if (!result.checks.some((c) => c.kind === "entra-setting")) return null;
+  const verdict: StepVerdict =
+    deploy.outcome === "written-and-read-back"
+      ? { kind: "as-expected" }
+      : { kind: "unknown", reason: "failed", detail: ENTRA_WRITTEN_UNCONFIRMED_DETAIL };
+  const checks = result.checks.map((c) => (c.kind === "entra-setting" ? { ...c, verdict } : c));
+  const verdicts = { ...result.verdicts };
+  for (const c of checks) if (c.kind === "entra-setting") verdicts[c.key] = verdict;
+  return { ...result, checks, verdicts };
+}
+
 /** Apply whichever deploy this is to a finished run: the reducer's one entry point. */
 export function applyOnboardingDeploy(
   result: ValidationResult,
   values: PlanValues,
   deploy: OnboardingDeployForValidation,
 ): ValidationResult | null {
+  if (deploy.source === "entraId") return applyEntraDeploy(result, values, deploy);
   return deploy.source === "activityLog"
     ? applyActivityLogDeploy(result, values, deploy)
     : applyDefenderDeploy(result, values, deploy);

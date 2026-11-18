@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyActivityLogRemoval,
+  classifyEntraSettingRemoval,
   classifyInputForPause,
   planCriblTeardown,
   recordsAfterTeardown,
@@ -380,5 +381,31 @@ describe("classifyActivityLogRemoval", () => {
     expect(elsewhere.kind).toBe("not-proven");
     const moved = classifyActivityLogRemoval({ kind: "found", setting: setting({ ruleId: `${RULE}2` }) }, record, "s1");
     expect(moved.kind === "not-proven" && moved.detail).toContain(`it now sends with rule ${RULE}2, not the rule this app wrote`);
+  });
+});
+
+describe("classifyEntraSettingRemoval (AZR-99)", () => {
+  const RULE = "/subscriptions/s1/resourceGroups/rg/providers/Microsoft.EventHub/namespaces/ns1/authorizationRules/send";
+  const setting = (over: Partial<DiagnosticSettingRead> = {}): DiagnosticSettingRead =>
+    ({ id: "x", name: "CriblEntraIDLogs", ruleId: RULE, hub: "", enabled: [], enabledGroups: [], ...over }) as DiagnosticSettingRead;
+  const record = { tenantId: "T1", settingName: "CriblEntraIDLogs", ruleId: RULE.toLowerCase() };
+
+  it("deletes only the recorded setting, in the recorded tenant, still sending with the recorded rule", () => {
+    expect(classifyEntraSettingRemoval({ kind: "found", setting: setting() }, record, "t1")).toEqual({ kind: "delete" });
+  });
+
+  it("is already gone when there is nothing under the app's name", () => {
+    expect(classifyEntraSettingRemoval({ kind: "absent" }, record, "t1")).toEqual({ kind: "already-gone" });
+  });
+
+  it("never removes a hand-made setting of the same name: no record, another tenant, no tenant, or another rule", () => {
+    const none = classifyEntraSettingRemoval({ kind: "found", setting: setting() }, null, "t1");
+    expect(none.kind === "not-proven" && none.detail).toContain("this app has no record of creating it in this tenant");
+    expect(classifyEntraSettingRemoval({ kind: "found", setting: setting() }, record, "t2").kind).toBe("not-proven");
+    expect(classifyEntraSettingRemoval({ kind: "found", setting: setting() }, record, " ").kind).toBe("not-proven");
+    const moved = classifyEntraSettingRemoval({ kind: "found", setting: setting({ ruleId: `${RULE}2` }) }, record, "t1");
+    expect(moved.kind === "not-proven" && moved.detail).toContain(`it now sends with rule ${RULE}2, not the rule this app wrote`);
+    const renamed = classifyEntraSettingRemoval({ kind: "found", setting: setting({ name: "Other" }) }, record, "t1");
+    expect(renamed.kind === "not-proven" && renamed.detail).toContain("its name is Other, not CriblEntraIDLogs");
   });
 });

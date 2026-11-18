@@ -383,7 +383,7 @@ describe("unmeasuredGrantLines (AZR-84)", () => {
     );
     // AZR-82: the management group Reader and the Entra directory role too.
     expect(lines).toContain(
-      "  [unknown] Security Administrator on the tenant (Entra ID directory role) - Check the Entra ID diagnostic settings",
+      "  [unknown] Security Administrator on the tenant (Entra ID directory role) - Check, deploy and remove the Entra ID diagnostic setting",
     );
     expect(lines.filter((l) => l.startsWith("  [unknown] "))).toHaveLength(6);
     expect(lines.join("\n")).not.toMatch(/\[(missing|optional)\]/);
