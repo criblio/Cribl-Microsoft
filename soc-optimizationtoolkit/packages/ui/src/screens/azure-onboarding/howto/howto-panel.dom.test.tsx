@@ -231,7 +231,7 @@ describe("step dialog", () => {
 describe("chooser and mode toggle", () => {
   it("a locked toggle is disabled and its reason is visible text", () => {
     const { container } = renderChooser();
-    const entra = sourceRow(container, "entraId");
+    const entra = sourceRow(container, "xdrStreaming");
     const automate = within(entra).getByRole("radio", { name: /Automate/ }) as HTMLInputElement;
     expect(automate.disabled).toBe(true);
     expect(entra.textContent).toContain(AUTOMATE_LOCKED_REASON);

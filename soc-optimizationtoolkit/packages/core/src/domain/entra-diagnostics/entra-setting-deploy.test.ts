@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 import { parseDiagnosticSettings } from "../activity-log-export/diagnostic-setting";
-import { entraCategoriesFor, entraSettingRequest } from "../onboarding-howto-steps/entra-activity-steps";
+import { entraCategoriesFor, entraDeployTarget, entraSettingRequest } from "../onboarding-howto-steps/entra-activity-steps";
 import { defaultPlanValues } from "../onboarding-howto/plan-values";
 import { licenceNotes } from "./entra-categories";
 import {
@@ -162,5 +162,37 @@ describe("categories and licences", () => {
     ]);
     expect(licenceNotes(["ProvisioningLogs"])[0]?.licence).toContain("Microsoft Entra ID P1 or P2");
     expect(licenceNotes(["RiskyUsers"])[0]?.licence).toContain("Microsoft Entra ID P2");
+  });
+});
+
+describe("entraDeployTarget - the Deploy reads the plan the How-to renders", () => {
+  const base = {
+    ...defaultPlanValues({ subscriptionId: "shared-sub", resourceGroup: "shared-rg" }),
+    namespace: "cribl-ns",
+    sendRule: "send",
+  };
+
+  it("locates the namespace by its OWN Event Hub keys, never the shared subscription and resource group", () => {
+    const { input, missing } = entraDeployTarget(
+      { ...base, eventHubSubscriptionId: EH_SUB, eventHubResourceGroup: "eh-rg" },
+      ["Standard"],
+    );
+    expect(missing).toEqual([]);
+    expect(input).toEqual({ namespace: NS, ruleName: "send", categories: STANDARD });
+  });
+
+  it("falls back to the shared keys only when the Event Hub keys are blank (eventHubLocation)", () => {
+    expect(entraDeployTarget(base, ["HighVolume"]).input?.namespace).toEqual({
+      subscriptionId: "shared-sub",
+      resourceGroup: "shared-rg",
+      name: "cribl-ns",
+    });
+    expect(entraDeployTarget(base, ["HighVolume"]).input?.categories).toHaveLength(15);
+  });
+
+  it("names every blank value it needs and offers no input", () => {
+    const { input, missing } = entraDeployTarget(defaultPlanValues(null), []);
+    expect(input).toBeNull();
+    expect(missing).toEqual(["eventHubSubscriptionId", "eventHubResourceGroup", "namespace", "sendRule"]);
   });
 });

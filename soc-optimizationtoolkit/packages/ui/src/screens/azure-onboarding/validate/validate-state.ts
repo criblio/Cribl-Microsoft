@@ -366,6 +366,13 @@ export function activityLogAmendNote(outcome: DefenderWriteOutcome, asOf: string
     : `The Activity Log setting was written at ${asOf}, after this check, but not confirmed; check it again.`;
 }
 
+/** The status-line note for an Entra ID deploy that replaced the run's setting verdict (AZR-99). */
+export function entraAmendNote(outcome: DefenderWriteOutcome, asOf: string): string {
+  return outcome === "written-and-read-back"
+    ? `The Entra ID setting was created and read back at ${asOf}, after this check; its result is from that read.`
+    : `The Entra ID setting was written at ${asOf}, after this check, but not confirmed; check it again.`;
+}
+
 /** The line under the button while and after a run. */
 export function runStatusText(state: ValidateRunState): string {
   switch (state.kind) {

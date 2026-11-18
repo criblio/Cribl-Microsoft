@@ -235,7 +235,7 @@ describe("buildSections - an unread state is never a confident negative", () => 
   });
 
   it("a not-built row says it is not available, and its choice separately", () => {
-    const row = itemRow(buildSections(choicesOf({ entraId: "manual" }), [], new Map()), "entraId");
+    const row = itemRow(buildSections(choicesOf({ diagnosticSettingsInitiative: "manual" }), [], new Map()), "diagnosticSettingsInitiative");
     expect(row.label).toBe(NOT_AVAILABLE_LABEL);
     expect(row.choice).toEqual({ kind: "chosen", mode: "manual" });
     expect(row.choiceLabel).toBe(CHOICE_LABELS.manual);
