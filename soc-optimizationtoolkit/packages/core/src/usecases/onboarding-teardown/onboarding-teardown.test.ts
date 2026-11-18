@@ -346,6 +346,18 @@ describe("applySourceTeardown", () => {
     });
   });
 
+  it("re-review 3: an operator's pending change in a file the removal would commit refuses at plan time, writing nothing", async () => {
+    const leader = new TeardownLeader();
+    leader.pending = [INPUTS_FILE]; // a half-made source in the same inputs.yml
+    const r = await planSourceTeardown({ cribl: leader }, input());
+    expect(r).toEqual({
+      kind: "refused",
+      reason: "scope-dirty",
+      detail: `Worker group ${G} has uncommitted changes in ${INPUTS_FILE}, which this removal would have to commit with its own. The app does not commit changes it did not make. Nothing was changed; commit or discard them in Cribl, then check again.`,
+    });
+    expect(leader.writes()).toEqual([]);
+  });
+
   it("re-review 2: a run that removed something but finds nothing to commit is unsettled: records and dataset stay", async () => {
     const leader = new TeardownLeader();
     const r = ready(await planSourceTeardown({ cribl: leader }, input()));

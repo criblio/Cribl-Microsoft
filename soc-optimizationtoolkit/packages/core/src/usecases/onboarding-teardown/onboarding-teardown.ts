@@ -366,7 +366,9 @@ export type PlanTeardownRefusalReason =
   | "table-unreadable"
   | "table-moved"
   | "status-unknown"
-  | "scope-unplaced";
+  | "scope-unplaced"
+  /** A file the commit would carry already has changes the app did not make. */
+  | "scope-dirty";
 
 export type PlanTeardownResult =
   | { readonly kind: "ready"; readonly ready: ReadyTeardown }
@@ -449,6 +451,16 @@ export async function planSourceTeardown(ports: TeardownPorts, input: PlanTeardo
     const read = await scopeFor(request, groupId, markers);
     if (read.kind === "refused") return refuse(read.reason, read.detail);
     scope = read.scope;
+    // Commits are per FILE: a removal that dirties inputs.yml would carry
+    // another admin's half-made source in the same file to the workers. The
+    // app never commits changes it did not make, so it refuses before any
+    // write; the post-confirm scope re-check stays as well.
+    if (scope.alreadyDirty.length > 0) {
+      return refuse(
+        "scope-dirty",
+        `Worker group ${groupId} has uncommitted changes in ${scope.alreadyDirty.join(", ")}, which this removal would have to commit with its own. The app does not commit changes it did not make. Nothing was changed; commit or discard them in Cribl, then check again.`,
+      );
+    }
   }
 
   if (goes.length === 0) {

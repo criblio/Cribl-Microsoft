@@ -8601,7 +8601,13 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   then check again); a run that removed something but finds nothing pending
   under its markers is unsettled. ALSO UNVERIFIED LIVE: whether /m/<g>/version
   history is per group or leader-wide (if leader-wide, another group's later
-  commit makes the settled check never pass - the safe direction).
+  commit makes the settled check never pass - the safe direction). RE-REVIEW 3
+  FIX 2026-11-18, PINS ONLY: commits are per file, so the plan now REFUSES
+  (reason scope-dirty, nothing written, records and dataset untouched) when
+  any file the removal would commit already has pending changes the app did
+  not make, naming the group and the files: commit or discard them in Cribl,
+  then check again. The confirm no longer offers to carry such changes; the
+  post-confirm scope re-check stays.
 
 - **AZR-107** Tenant inventory heat map, phase 1: read-only cards for Entra ID, Activity Log and Defender for Cloud at the top of Azure Native Source Onboarding
   `AZR-F9` `story` `settled` `verified: both`

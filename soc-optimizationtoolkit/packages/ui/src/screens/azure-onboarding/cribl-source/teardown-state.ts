@@ -142,11 +142,6 @@ export function teardownConfirmText(ready: ReadyTeardown): string[] {
   }
   if (ready.commitFiles.length > 0) {
     lines.push(`The commit can include at most these files, and only those still uncommitted after the removals: ${ready.commitFiles.join(", ")}.`);
-    if (ready.scope.alreadyDirty.length > 0) {
-      lines.push(
-        `These files already have uncommitted changes this removal did not make, which the commit will carry too: ${ready.scope.alreadyDirty.join(", ")}.`,
-      );
-    }
     if (ready.scope.elsewhere.length > 0) lines.push(`Other uncommitted changes in Cribl are left alone: ${ready.scope.elsewhere.join(", ")}.`);
     lines.push(`Then deploy worker group ${groupId}, which restarts its workers.`);
   }
