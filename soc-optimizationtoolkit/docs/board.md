@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**103 in the backlog, 40 in progress, 224 done.**
+**104 in the backlog, 39 in progress, 225 done.**
 
 ## By menu item
 
@@ -36,7 +36,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 10 | 5 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 32 | 51 | 8 |
+| Azure Native Source Onboarding | 32 | 52 | 9 |
 | Azure Logging Map | 3 | 2 | 1 |
 | Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 62% (62/100)
+### `AZR` Azure native source onboarding - 62% (63/101)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 39/57 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 40/58 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 20/24 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (40)
+## In progress (39)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1314,25 +1314,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   section and its gate say Manage); no permission-audit capability covers
   diagnostic settings yet (the section shows a not-measured banner).
 
-- **AZR-99** Automate the Entra ID source: create the tenant diagnostic setting (microsoft.aadiam) that streams the chosen sign-in and audit categories to the Event Hub
-  `AZR-F9` `story` `settled` `blocked by AZR-98`
-  FILED 2026-11-11 alongside [[AZR-98]]. entraId is How-to only and had no
-  card. PUT /providers/microsoft.aadiam/diagnosticSettings/{name} with the
-  categories of the chosen Entra profile (ENTRA_PROFILE_CATEGORIES), refusing
-  on ours-exists, ours-differs, and another setting already sending a category
-  to the same hub. After AZR-98 because it reuses that refusal and read-back
-  shape, and because it needs a TENANT-level role (Security Administrator or
-  Global Administrator for the write; the read is
-  entra.diagnosticSettings.read) that the lab's single-subscription principal
-  does not hold - the permission plan and its change request must name that,
-  and AZR-82 (reads at management-group and tenant scope with no change
-  request) is related. Category availability depends on Entra licensing (P1/P2
-  for some sign-in categories); an unlicensed category must be refused by
-  name, not silently dropped. AUDIT NOTE 2026-11-11: AZR-98 added
-  domain/activity-log-export/diagnostic-setting.ts beside the existing
-  domain/entra-diagnostics/entra-diagnostic-setting.ts; build the Entra deploy
-  on ONE diagnostic-setting body/compare module rather than a third copy.
-
 - **AZR-89** The lab TTL Logic App identity is granted Contributor on the lab resource group, where it only reads and deletes the group
   `AZR-F10` `bug` `settled`
   Not now because: Over-granting to an identity that lives only as long as the
@@ -1378,7 +1359,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (12)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1602,6 +1583,22 @@ Next to pick up. Nothing blocks these.
   config-json warning when an imported connectivity value is coerced to full;
   Batch's template-only export is gated on the identity fields, so
   Disconnected cannot reach it from Batch (fallback routing).
+
+- **AZR-121** The Activity Log setting's Remove disappears once the Activity Log is switched to How-to, so a setting the app created can no longer be removed from the app
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-17 while building [[AZR-99]]. AZR-105 put the Activity Log
+  diagnostic setting's Remove inside ActivityLogSection, and the screen
+  renders that section only while deployBlockView answers `deploy`: once the
+  Activity Log is chosen in How-to mode the section is replaced by the How-to
+  note (and when unchosen in How-to mode by nothing), so the Remove of a
+  setting the app recorded writing (progress.activityLogSettings) is no longer
+  offered anywhere, although the record and the setting remain. AZR-99 avoided
+  this for Entra ID by putting its Remove in the teardown panel
+  (TeardownPanel's `azure` slot, shown from the record whatever the choice).
+  FIX DIRECTION: move the Activity Log Remove into the same slot (an
+  ActivityLogRemovePanel beside EntraRemovePanel), keyed on the record for the
+  configured subscription, and pin that it is offered with the Activity Log in
+  How-to mode.
 
 ---
 
@@ -2973,7 +2970,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (224)
+## Done (225)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -8411,6 +8408,64 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   writes. Risk medium (must not let a Manage key reach a Cribl secret). Size
   S. Full diagnosis, fix plan and pins:
   docs/audit/2026-11-11-azr-bug-triage-and-attack-mapping.json.
+
+- **AZR-99** Automate the Entra ID source: create the tenant diagnostic setting (microsoft.aadiam) that streams the chosen sign-in and audit categories to the Event Hub
+  `AZR-F9` `story` `settled` `verified: pins`
+  FILED 2026-11-11 alongside [[AZR-98]]. entraId is How-to only and had no
+  card. PUT /providers/microsoft.aadiam/diagnosticSettings/{name} with the
+  categories of the chosen Entra profile (ENTRA_PROFILE_CATEGORIES), refusing
+  on ours-exists, ours-differs, and another setting already sending a category
+  to the same hub. After AZR-98 because it reuses that refusal and read-back
+  shape, and because it needs a TENANT-level role (Security Administrator or
+  Global Administrator for the write; the read is
+  entra.diagnosticSettings.read) that the lab's single-subscription principal
+  does not hold - the permission plan and its change request must name that,
+  and AZR-82 (reads at management-group and tenant scope with no change
+  request) is related. Category availability depends on Entra licensing (P1/P2
+  for some sign-in categories); an unlicensed category must be refused by
+  name, not silently dropped. AUDIT NOTE 2026-11-11: AZR-98 added
+  domain/activity-log-export/diagnostic-setting.ts beside the existing
+  domain/entra-diagnostics/entra-diagnostic-setting.ts; build the Entra deploy
+  on ONE diagnostic-setting body/compare module rather than a third copy. DONE
+  2026-11-17 (pins only; nothing sent to Azure). Deploy of CriblEntraIDLogs
+  (PUT
+  /providers/microsoft.aadiam/diagnosticSettings/CriblEntraIDLogs?api-version=2017-04-01)
+  from the Entra ID row in Automate mode, gated like AZR-100's
+  choiceDeployBlock. The body is the How-to step's own (one builder,
+  entraDiagnosticBody; audit note honoured: reading is activity-log-export's
+  readDiagnosticSetting, no third module). The target is the PLAN's via
+  entraDeployTarget: planNamespace / eventHubLocation (never the shared
+  subscription and resource group), the Send rule, the chosen profile's
+  categories (every profile includes SignInLogs and AuditLogs).
+  Read-modify-write: re-list, refuse unknown categories by name, ours matching
+  = already applied, ours differing = refused (never overwritten, whoever made
+  it), another setting on the namespace sharing a chosen category = possible
+  duplicate; PUT; read-back names every chosen category not enabled (how an
+  unlicensed one shows). Confirm quotes setting, tenant, namespace, rule and
+  categories. progress.entraSettings records what the app wrote, keyed by
+  TENANT; Remove sits in the AZR-105 teardown panel with its own two-step
+  confirm, proven by name + this tenant's record + the recorded rule, then
+  DELETE and a 404 read. Licence notes per category from learn.microsoft.com
+  (monitoring and health licensing: provisioning and Graph activity P1/P2; ID
+  Protection P2; Workload ID; Global Secure Access), shown, never gated.
+  Permissions: Microsoft documents Security Administrator as least privilege
+  to create Entra diagnostic settings (howto-configure-diagnostic-settings,
+  howto-access-activity-logs); the app does not claim to measure it (banner
+  and lists say not measurable); the existing optional, warned Security
+  Administrator change-request row (AZR-82) now names the deploy and remove;
+  least-privilege rows entra.diagnosticSetting.write/.delete. proxies.yml
+  already passes every management.azure.com path (no path allowlist) and
+  policies.yml governs Cribl calls only, so neither needed a change.
+  Validate's Entra verdict is amended after a deploy (applyEntraDeploy). NOT
+  VERIFIED LIVE: that a service principal holding Security Administrator can
+  PUT/DELETE through ARM (vs a signed-in user); eventHubName sent as "" (the
+  legacy body) vs omitted; PUT 200 vs 201 and the read-back shape; whether
+  unticked categories sent as enabled:false are accepted in a tenant lacking
+  their licence; Manage vs Send on the rule (inferred as for the Activity
+  Log); whether the tenant list pages; whether Azure caps tenant settings (no
+  limit check built, none verified). dependsOn AZR-98 dropped at close: what
+  AZR-99 needed from it (the read/refuse/read-back shape, the shared reader)
+  is merged; AZR-98 stays in-progress only for its own live measurements.
 
 - **AZR-100** Two source-selection controls on the onboarding screen contradict each other: the Automate sections and the How-to chooser each keep their own choice
   `AZR-F9` `bug` `settled` `verified: pins`
