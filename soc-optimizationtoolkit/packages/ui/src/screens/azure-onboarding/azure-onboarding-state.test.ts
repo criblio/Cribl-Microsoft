@@ -814,3 +814,30 @@ describe("sources that cannot stream to Event Hub", () => {
     }
   });
 });
+
+// AZR-109 (found live 2026-11-17): Direct configuration showed the How-to note
+// once per deployable source without naming it, and for an unchosen source.
+describe("deployBlockView - what a deployable source's block shows", () => {
+  const TITLE = "Azure Activity Log";
+  const NOTE = `The ${TITLE} is set to How-to, so the app does not deploy it. Follow its steps under How to set it up yourself, or switch it back to Automate under Choose what to onboard.`;
+  const unknown: RowChoice = { kind: "unknown", doc: "progress", cause: "not-read" };
+
+  it("names the source in the note, and shows it only for a CHOSEN How-to source", () => {
+    expect(onboardingState.deployBlockView({ kind: "chosen", mode: "manual" }, true, TITLE)).toEqual({
+      kind: "howto-note",
+      text: NOTE,
+    });
+    expect(onboardingState.howtoDeployNote(TITLE)).toBe(NOTE);
+    expect(findHistoryInCopy([{ where: "howto-note", text: NOTE }])).toEqual([]);
+  });
+
+  it("shows nothing for a How-to source that is not chosen", () => {
+    expect(onboardingState.deployBlockView({ kind: "not-chosen" }, true, TITLE)).toEqual({ kind: "none" });
+  });
+
+  it("keeps the deploy section for Automate (chosen or not) and for an unknown choice, which gates Deploy itself", () => {
+    expect(onboardingState.deployBlockView({ kind: "chosen", mode: "automate" }, false, TITLE)).toEqual({ kind: "deploy" });
+    expect(onboardingState.deployBlockView({ kind: "not-chosen" }, false, TITLE)).toEqual({ kind: "deploy" });
+    expect(onboardingState.deployBlockView(unknown, false, TITLE)).toEqual({ kind: "deploy" });
+  });
+});

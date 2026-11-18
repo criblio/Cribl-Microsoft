@@ -2275,11 +2275,11 @@ function App() {
   // Azure Native Source Onboarding (AZR-18): a checklist of Azure native
   // sources to send through Cribl, persisted as the coverage document in KV.
   // This slice makes two sections work - the Event Hub prerequisite (AZR-11,
-  // an EXISTING namespace, hub and Send-capable rule) and the Defender for
-  // Cloud continuous export of Alerts (AZR-3, configured subscription only);
-  // every other category renders visible and disabled. The only Azure
-  // resource it creates is the Defender automation, behind a two-step
-  // confirm. The KV document store arrives through makeCloudPorts, so no port
+  // an EXISTING namespace, hub and Send-capable rule), the Defender for
+  // Cloud continuous export of Alerts (AZR-3, configured subscription only)
+  // and the subscription Activity Log diagnostic setting (AZR-98); every
+  // other category renders visible and disabled. The only Azure resources it
+  // creates are those two, each behind a two-step confirm. The KV document store arrives through makeCloudPorts, so no port
   // is wired here. requires: [] until CAP-7 measures its actions - see
   // route-capabilities.ts.
   const azureOnboardingView = (
@@ -2288,7 +2288,8 @@ function App() {
         <h1 className="harness-title">Azure Native Source Onboarding</h1>
         <p className="harness-subtitle">
           Choose which Azure native sources to send through Cribl, point them
-          at an existing Event Hub, and deploy the Defender for Cloud alert
+          at an existing Event Hub, and deploy the two the app can set up: the
+          subscription Activity Log setting and the Defender for Cloud alert
           export.
         </p>
       </header>

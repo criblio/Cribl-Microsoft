@@ -154,6 +154,7 @@ import {
   buildSections,
   canWriteSelection,
   criblSideReadingOf,
+  deployBlockView,
   deployedFrom,
   loadBanners,
   loadStateFrom,
@@ -253,10 +254,6 @@ const CRIBL_TIP =
 /** Shown instead of the diagram until both documents have loaded. */
 export const DATAFLOW_WAITING_TEXT =
   "The dataflow appears once the saved selection and your How-to progress are loaded.";
-
-/** Shown in place of a source's deploy controls while it is in How-to mode (Defender export, Activity Log). */
-export const DEFENDER_HOWTO_NOTE =
-  "This source is set to How-to, so the app does not deploy it. Follow its steps under How to set it up yourself, or switch it back to Automate under Choose what to onboard.";
 
 /** No Event Hub chosen yet. The choice is React state only; it is not persisted. */
 const EMPTY_EVENTHUB_TARGET: EventHubTarget = { namespace: null, hubName: "", rule: null };
@@ -566,6 +563,11 @@ export function AzureOnboardingScreen({
     progress !== null && effectiveMode(progress, DEFENDER_EXPORT_ITEM_ID) === "manual";
   const activityLogHowTo =
     progress !== null && effectiveMode(progress, ACTIVITY_LOG_ITEM_ID) === "manual";
+  // AZR-109: a chosen How-to source shows a note naming it; an unchosen
+  // How-to source shows neither the note nor deploy controls.
+  const titleOf = (id: OnboardingSourceId): string => onboardingSource(id)?.title ?? id;
+  const defenderBlock = deployBlockView(choiceOf(DEFENDER_EXPORT_ITEM_ID), defenderHowTo, titleOf(DEFENDER_EXPORT_ITEM_ID));
+  const activityLogBlock = deployBlockView(choiceOf(ACTIVITY_LOG_ITEM_ID), activityLogHowTo, titleOf(ACTIVITY_LOG_ITEM_ID));
   const chosen = useMemo(
     () => (progress === null ? [] : chosenSourceIds(progress, selection)),
     [progress, selection],
@@ -1112,8 +1114,10 @@ export function AzureOnboardingScreen({
           >
             {rows}
             {view.rows.some((r) => r.kind === "item" && r.id === ACTIVITY_LOG_ITEM_ID) &&
-              (activityLogHowTo ? (
-                <p className="field-hint">{DEFENDER_HOWTO_NOTE}</p>
+              (activityLogBlock.kind === "none" ? null : activityLogBlock.kind === "howto-note" ? (
+                <p className="field-hint" data-testid={`azo-howto-note-${ACTIVITY_LOG_ITEM_ID}`}>
+                  {activityLogBlock.text}
+                </p>
               ) : (
                 <ActivityLogSection
                   choice={choiceOf(ACTIVITY_LOG_ITEM_ID)}
@@ -1126,8 +1130,10 @@ export function AzureOnboardingScreen({
                 />
               ))}
             {view.rows.some((r) => r.kind === "item" && r.id === DEFENDER_EXPORT_ITEM_ID) &&
-              (defenderHowTo ? (
-                <p className="field-hint">{DEFENDER_HOWTO_NOTE}</p>
+              (defenderBlock.kind === "none" ? null : defenderBlock.kind === "howto-note" ? (
+                <p className="field-hint" data-testid={`azo-howto-note-${DEFENDER_EXPORT_ITEM_ID}`}>
+                  {defenderBlock.text}
+                </p>
               ) : (
                 <DefenderExportSection
                   choice={choiceOf(DEFENDER_EXPORT_ITEM_ID)}

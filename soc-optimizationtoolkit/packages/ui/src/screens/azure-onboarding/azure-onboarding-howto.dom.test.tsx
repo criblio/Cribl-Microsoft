@@ -48,8 +48,8 @@ import type {
 } from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
-import { AzureOnboardingScreen, DEFENDER_HOWTO_NOTE } from "./azure-onboarding-screen";
-import { CHOICE_LABELS, choiceLabel } from "./azure-onboarding-state";
+import { AzureOnboardingScreen } from "./azure-onboarding-screen";
+import { CHOICE_LABELS, choiceLabel, howtoDeployNote } from "./azure-onboarding-state";
 
 /** The four sections the screen adds after the catalog sections. */
 const NEW_SECTION_TITLES = [
@@ -399,19 +399,37 @@ describe("AzureOnboardingScreen - progress writes", () => {
     await waitFor(() => expect(screen.queryAllByText(/Your How-to progress was not saved/)).toHaveLength(0));
   });
 
-  it("a source in How-to mode hides the Defender deploy controls behind a note", async () => {
+  // AZR-109 (found live 2026-11-17): the note appeared once per deployable
+  // source without naming it, and for the Activity Log while it was Not chosen.
+  it("a CHOSEN How-to source shows one note naming it; an unchosen How-to source shows nothing", async () => {
     mount({ store: new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() }) });
     await loaded();
-    // Both deployable sources are in How-to in progressDoc, so each shows the note.
-    expect(screen.getAllByText(DEFENDER_HOWTO_NOTE)).toHaveLength(2);
+    // progressDoc: Defender chosen in How-to, the Activity Log in How-to and NOT chosen.
+    const notes = screen.getAllByText(/is set to How-to, so the app does not deploy it\./);
+    expect(notes.map((n) => n.textContent)).toEqual([howtoDeployNote(DEFENDER_TITLE)]);
+    expect(notes[0]?.textContent).toBe(
+      "The Defender for Cloud alert export is set to How-to, so the app does not deploy it. Follow its steps under How to set it up yourself, or switch it back to Automate under Choose what to onboard.",
+    );
+    expect(screen.queryByTestId("azo-howto-note-activityLog")).toBeNull();
     expect(screen.queryByRole("button", { name: "Read Defender state" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Read diagnostic settings" })).toBeNull();
+  });
+
+  it("two chosen How-to sources each get their own named note", async () => {
+    const both = progressDoc({
+      sources: { defenderExport: { chosen: true, mode: "manual" }, activityLog: { chosen: true, mode: "manual" } },
+    });
+    mount({ store: new FakeKvDocumentStore({ [PROGRESS_KEY]: both }) });
+    await loaded();
+    expect(screen.getByTestId("azo-howto-note-activityLog").textContent).toBe(howtoDeployNote("Azure Activity Log"));
+    expect(screen.getByTestId("azo-howto-note-defenderExport").textContent).toBe(howtoDeployNote(DEFENDER_TITLE));
+    expect(screen.getAllByText(/is set to How-to, so the app does not deploy it\./)).toHaveLength(2);
   });
 
   it("with no progress stored, Defender stays Automated and its deploy controls are shown", async () => {
     mount();
     await loaded();
-    expect(screen.queryByText(DEFENDER_HOWTO_NOTE)).toBeNull();
+    expect(screen.queryAllByText(/is set to How-to, so the app does not deploy it\./)).toEqual([]);
     expect(screen.getByRole("button", { name: "Read Defender state" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Read diagnostic settings" })).toBeTruthy();
   });
