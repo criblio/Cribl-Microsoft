@@ -29,6 +29,11 @@ export const PLAN_VALUE_KEYS = [
   "managementGroupId",
   "resourceGroup",
   "region",
+  // AZR-102: where the Event Hub namespace lives. Blank means the
+  // subscription and resource group above (eventHubLocation), so a plan saved
+  // before these existed addresses its namespace exactly as it did.
+  "eventHubSubscriptionId",
+  "eventHubResourceGroup",
   "namespace",
   "hubName",
   "sendRule",
@@ -51,13 +56,16 @@ export type PlanValueKey = (typeof PLAN_VALUE_KEYS)[number];
 
 /**
  * The plan values that name the Event Hub the sources send to (AZR-102): the
- * namespace with its subscription and resource group, the hub and the Send
- * rule. The screen's Event Hub picker (section 1) is their source unless the
- * operator chose their own (progress-document eventHubFollowsSection1).
+ * namespace's own subscription and resource group, the namespace, the hub and
+ * the Send rule. The screen's Event Hub picker (section 1) writes exactly these
+ * unless the operator chose their own (progress-document
+ * eventHubFollowsSection1). The SHARED subscriptionId and resourceGroup are
+ * never among them: storage, Defender, flow-log and policy steps read those,
+ * and they stay the operator's.
  */
 export const EVENT_HUB_PLAN_KEYS = [
-  "subscriptionId",
-  "resourceGroup",
+  "eventHubSubscriptionId",
+  "eventHubResourceGroup",
   "namespace",
   "hubName",
   "sendRule",
@@ -65,6 +73,40 @@ export const EVENT_HUB_PLAN_KEYS = [
 
 /** One string per key; `''` means unset. */
 export type PlanValues = Readonly<Record<PlanValueKey, string>>;
+
+/**
+ * Where the Event Hub namespace lives: its own subscription and resource
+ * group, or the shared ones when those are blank. Every Event Hub address the
+ * app builds from the plan (steps, Validate, the Cribl source) goes through
+ * this.
+ */
+export function eventHubLocation(
+  v: Pick<PlanValues, "subscriptionId" | "resourceGroup" | "eventHubSubscriptionId" | "eventHubResourceGroup">,
+): { readonly subscriptionId: string; readonly resourceGroup: string } {
+  const sub = (v.eventHubSubscriptionId ?? "").trim();
+  const rg = (v.eventHubResourceGroup ?? "").trim();
+  return { subscriptionId: sub !== "" ? sub : v.subscriptionId, resourceGroup: rg !== "" ? rg : v.resourceGroup };
+}
+
+/** The values with the two Event Hub location keys resolved by {@link eventHubLocation}, for rendering a step. */
+export function withEventHubLocation(v: PlanValues): PlanValues {
+  const loc = eventHubLocation(v);
+  return { ...v, eventHubSubscriptionId: loc.subscriptionId, eventHubResourceGroup: loc.resourceGroup };
+}
+
+/**
+ * A blank namespace location key MEANS its shared key (eventHubLocation), so a
+ * fingerprint reads it as that key: name and value. A tick taken before these
+ * keys existed fingerprinted the shared subscription and resource group, and
+ * reading a blank one this way reproduces that fingerprint exactly, so an
+ * upgrade does not mark every done Event Hub step as done against older
+ * values. It also keeps the fingerprint honest: with the key blank, changing
+ * the shared value does move the namespace.
+ */
+const BLANK_MEANS: Readonly<Partial<Record<PlanValueKey, PlanValueKey>>> = {
+  eventHubSubscriptionId: "subscriptionId",
+  eventHubResourceGroup: "resourceGroup",
+};
 
 /** The consumer group a Cribl input reads with by default. Never `$Default`. */
 export const DEFAULT_CONSUMER_GROUP = "cribl";
@@ -118,7 +160,11 @@ export function defaultPlanValues(
  * key holds.
  */
 export function planFingerprint(values: PlanValues, keys: readonly PlanValueKey[]): string {
-  const sorted = [...new Set(keys)].sort();
+  const read = [...new Set(keys)].map((k) => {
+    const shared = BLANK_MEANS[k];
+    return shared !== undefined && planValueOf(values, k) === "" ? shared : k;
+  });
+  const sorted = [...new Set(read)].sort();
   return JSON.stringify(sorted.map((k) => [k, planValueOf(values, k)]));
 }
 
@@ -159,7 +205,7 @@ export interface PlanValueLabel {
 export const PLAN_VALUE_LABELS: Readonly<Record<PlanValueKey, PlanValueLabel>> = {
   subscriptionId: {
     label: "Subscription ID",
-    info: "The Azure subscription that holds the Event Hub namespace or storage account, and whose Activity Log and Defender alerts are exported.",
+    info: "The Azure subscription that holds the storage account, and whose Activity Log and Defender alerts are exported. It holds the Event Hub namespace too unless Event Hub subscription ID names another.",
   },
   managementGroupId: {
     label: "Management group ID",
@@ -167,11 +213,19 @@ export const PLAN_VALUE_LABELS: Readonly<Record<PlanValueKey, PlanValueLabel>> =
   },
   resourceGroup: {
     label: "Resource group",
-    info: "The resource group that holds the Event Hub namespace or the storage account.",
+    info: "The resource group that holds the storage account and the Defender export. It holds the Event Hub namespace too unless Event Hub resource group names another.",
   },
   region: {
     label: "Region",
     info: "The Azure region of the namespace or storage account, for example eastus. Diagnostic settings can only send to a namespace in the same region as the resource.",
+  },
+  eventHubSubscriptionId: {
+    label: "Event Hub subscription ID",
+    info: "The subscription that holds the Event Hub namespace. Leave it blank when that is the Subscription ID above.",
+  },
+  eventHubResourceGroup: {
+    label: "Event Hub resource group",
+    info: "The resource group that holds the Event Hub namespace. Leave it blank when that is the Resource group above.",
   },
   namespace: {
     label: "Event Hub namespace",

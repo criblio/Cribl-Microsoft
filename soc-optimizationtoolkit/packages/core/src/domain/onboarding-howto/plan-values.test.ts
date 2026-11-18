@@ -47,6 +47,9 @@ describe("defaultPlanValues", () => {
         // (never the app's own registration). Ids, not credentials.
         "criblTenantId",
         "criblClientId",
+        // AZR-102: where the Event Hub namespace lives, when not the shared ones.
+        "eventHubSubscriptionId",
+        "eventHubResourceGroup",
       ].sort(),
     );
     for (const k of PLAN_VALUE_KEYS) expect(k).not.toMatch(/key|secret|password|connection/i);

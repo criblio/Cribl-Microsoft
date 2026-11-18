@@ -16,6 +16,7 @@ import {
   PLAN_VALUE_KEYS,
   isPlanValueKey,
   missingValues,
+  withEventHubLocation,
   type PlanValueKey,
   type PlanValues,
 } from "../onboarding-howto/plan-values";
@@ -69,7 +70,10 @@ export function renderStep(
   values: PlanValues,
   subSelection: readonly string[] = [],
 ): RenderedStep {
-  const filled = filledPlanValues(values);
+  // AZR-102: the Event Hub location keys render as the namespace's own
+  // subscription and resource group, or the shared ones when those are blank.
+  const resolved = withEventHubLocation(values);
+  const filled = filledPlanValues(resolved);
   const fill = (t: string) => fillTemplate(t, filled);
   return {
     id: step.id,
@@ -83,7 +87,7 @@ export function renderStep(
     warning: step.warning === undefined ? null : fill(step.warning),
     provenance: step.provenance,
     unverified: step.provenance === "inferred",
-    missing: missingValues(values, step.dependsOnValues),
+    missing: missingValues(resolved, step.dependsOnValues),
     dependsOnValues: step.dependsOnValues,
     checkKinds: step.checkKinds,
   };

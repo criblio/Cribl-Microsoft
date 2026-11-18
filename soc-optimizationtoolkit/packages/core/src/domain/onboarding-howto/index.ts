@@ -24,6 +24,8 @@ export {
   DEFAULT_CONSUMER_GROUP,
   DEFAULT_FLOW_LOG_CONTAINER,
   EVENT_HUB_PLAN_KEYS,
+  eventHubLocation,
+  withEventHubLocation,
   PLAN_VALUE_KEYS,
   PLAN_VALUE_LABELS,
   changedValueKeys,

@@ -8,6 +8,8 @@ import {
   emptyProgress,
   encodeProgress,
   eventHubFollowsSection1,
+  eventHubLocation,
+  planFingerprint,
   withEventHubSource,
   progressFrom,
   readProgressDocument,
@@ -265,16 +267,53 @@ describe("where the Event Hub plan values come from (AZR-102)", () => {
     // The first-run subscription and resource group are not Event Hub names of the operator's.
     expect(eventHubFollowsSection1(emptyProgress({ subscriptionId: "sub1", resourceGroup: "rg1" }))).toBe(true);
     const blank = emptyProgress().planValues;
-    for (const key of ["namespace", "hubName", "sendRule"] as const) {
+    for (const key of EVENT_HUB_PLAN_KEYS) {
       const saved = withPlanValues(emptyProgress(), { ...blank, [key]: "mine" });
       expect(eventHubFollowsSection1(saved), key).toBe(false);
     }
+    // The shared subscription and resource group are not the picker's and never decide it.
+    const typed = withPlanValues(emptyProgress(), { ...blank, subscriptionId: "sub-x", resourceGroup: "rg-x" });
+    expect(eventHubFollowsSection1(typed)).toBe(true);
     // Whitespace is not a name.
     expect(eventHubFollowsSection1(withPlanValues(emptyProgress(), { ...blank, namespace: "  " }))).toBe(true);
   });
 
-  it("names exactly the five Event Hub keys", () => {
-    expect([...EVENT_HUB_PLAN_KEYS]).toEqual(["subscriptionId", "resourceGroup", "namespace", "hubName", "sendRule"]);
+  it("names exactly the five Event Hub keys, never the shared subscription or resource group", () => {
+    expect([...EVENT_HUB_PLAN_KEYS]).toEqual([
+      "eventHubSubscriptionId",
+      "eventHubResourceGroup",
+      "namespace",
+      "hubName",
+      "sendRule",
+    ]);
+  });
+
+  it("the namespace's own location falls back to the shared one when blank", () => {
+    const base = emptyProgress({ subscriptionId: "sub1", resourceGroup: "rg1" }).planValues;
+    expect(eventHubLocation(base)).toEqual({ subscriptionId: "sub1", resourceGroup: "rg1" });
+    expect(eventHubLocation({ ...base, eventHubSubscriptionId: "sub-eh", eventHubResourceGroup: " " })).toEqual({
+      subscriptionId: "sub-eh",
+      resourceGroup: "rg1",
+    });
+  });
+
+  it("an old tick keeps its fingerprint: a blank namespace location key reads as its shared key", () => {
+    const p = withPlanValues(emptyProgress({ subscriptionId: "s", resourceGroup: "r" }), {
+      ...emptyProgress({ subscriptionId: "s", resourceGroup: "r" }).planValues,
+      namespace: "ns1",
+    });
+    // A tick from before AZR-102 fingerprinted the shared keys.
+    const before = planFingerprint(p.planValues, ["subscriptionId", "resourceGroup", "namespace"]);
+    const now = ["eventHubSubscriptionId", "eventHubResourceGroup", "namespace"] as const;
+    expect(planFingerprint(p.planValues, now)).toBe(before);
+    // A step that uses both reads the same as before too.
+    expect(planFingerprint(p.planValues, [...now, "subscriptionId", "resourceGroup"])).toBe(before);
+    // With the key blank, moving the shared resource group moves the namespace: stale.
+    expect(planFingerprint({ ...p.planValues, resourceGroup: "r2" }, now)).not.toBe(before);
+    // Its own value, once set, is what counts.
+    const located = { ...p.planValues, eventHubResourceGroup: "rg-eh" };
+    expect(planFingerprint(located, now)).not.toBe(before);
+    expect(planFingerprint({ ...located, resourceGroup: "r2" }, now)).toBe(planFingerprint(located, now));
   });
 });
 

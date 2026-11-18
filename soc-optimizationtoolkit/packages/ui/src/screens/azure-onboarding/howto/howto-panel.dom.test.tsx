@@ -54,8 +54,8 @@ const SELECTION: CoverageSelection = { mode: "Centralized", enabled: [], subSele
 
 /** A complete section 1 pick (AZR-102). */
 const PICKED = {
-  subscriptionId: "sub-p",
-  resourceGroup: "rg-p",
+  eventHubSubscriptionId: "sub-p",
+  eventHubResourceGroup: "rg-p",
   namespace: "picked-ns",
   hubName: "picked-hub",
   sendRule: "send-p",
@@ -384,7 +384,7 @@ describe("plan values form", () => {
 // AZR-102: one Event Hub. The plan's Event Hub names follow the section 1
 // picker (read-only here) unless the operator keeps their own.
 describe("plan values form - the Event Hub names", () => {
-  const EH_FIELDS = ["Subscription ID", "Resource group", "Event Hub namespace", "Event Hub name", "Send rule"];
+  const EH_FIELDS = ["Event Hub subscription ID", "Event Hub resource group", "Event Hub namespace", "Event Hub name", "Send rule"];
 
   function following(): OnboardingProgress {
     return withEventHubSource(withPlanValues(manualEntra(), { ...VALUES, ...PICKED }), "section1");
@@ -398,6 +398,9 @@ describe("plan values form - the Event Hub names", () => {
     for (const i of locked) expect(i.readOnly).toBe(true);
     expect((screen.getByRole("textbox", { name: "Event Hub name" }) as HTMLInputElement).value).toBe("picked-hub");
     expect((screen.getByRole("textbox", { name: "Region" }) as HTMLInputElement).readOnly).toBe(false);
+    // The shared subscription and resource group stay the operator's.
+    expect((screen.getByRole("textbox", { name: "Subscription ID" }) as HTMLInputElement).readOnly).toBe(false);
+    expect((screen.getByRole("textbox", { name: "Resource group" }) as HTMLInputElement).value).toBe("rg-1");
     expect(screen.getByTestId("azo-plan-eventhub").textContent).toBe(EVENT_HUB_FOLLOWS_NOTE + USE_OWN_EVENT_HUB_LABEL);
     expect(screen.queryByRole("button", { name: FOLLOW_SECTION1_LABEL })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: USE_OWN_EVENT_HUB_LABEL }));
@@ -423,7 +426,7 @@ describe("plan values form - the Event Hub names", () => {
     expect(block.dataset.follows).toBe("own");
     expect(block.textContent).toContain(EVENT_HUB_OWN_NOTE);
     expect(block.textContent).toContain(
-      "Section 1 and these names differ (Subscription ID, Resource group, Event Hub namespace, Event Hub name, Send rule): a deploy on this page writes to section 1's Event Hub, picked-ns/picked-hub, while the How-to steps, Validate and the Cribl source use ns1/(no hub).",
+      "Section 1 and these names differ (Event Hub subscription ID, Event Hub resource group, Event Hub namespace, Event Hub name, Send rule): a deploy on this page writes to section 1's Event Hub, picked-ns/picked-hub, while the How-to steps, Validate and the Cribl source use ns1/(no hub).",
     );
     fireEvent.click(screen.getByRole("button", { name: FOLLOW_SECTION1_LABEL }));
     expect(onChoose).toHaveBeenCalledWith("section1");

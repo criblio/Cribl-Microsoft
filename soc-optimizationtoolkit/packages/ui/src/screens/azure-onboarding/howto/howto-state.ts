@@ -52,6 +52,7 @@ import {
   stepsForSelection,
   tickState,
   verdictsForStep,
+  withEventHubLocation,
   withEventHubSource,
   withPlanValues,
   withSourceChosen,
@@ -748,9 +749,11 @@ export interface PickerTarget {
 export function pickedEventHub(target: PickerTarget): PickedEventHub | null {
   const ns = target.namespace;
   if (ns === null || target.hubName.trim() === "") return null;
+  // The namespace's OWN location keys: the shared subscription and resource
+  // group belong to the operator (storage, Defender, policy) and are never written.
   return {
-    subscriptionId: ns.subscriptionId,
-    resourceGroup: ns.resourceGroup,
+    eventHubSubscriptionId: ns.subscriptionId,
+    eventHubResourceGroup: ns.resourceGroup,
     namespace: ns.name,
     hubName: target.hubName,
     sendRule: target.rule?.name ?? "",
@@ -811,6 +814,8 @@ export interface EventHubLinkView {
 
 export const EVENT_HUB_FOLLOWS_NOTE =
   "These Event Hub names follow section 1, Event Hub the sources send to. Change the Event Hub there.";
+export const EVENT_HUB_FOLLOWS_NOTHING_PICKED_NOTE =
+  "These Event Hub names follow section 1, Event Hub the sources send to, but no Event Hub is picked there yet (a pick is not kept when the page reloads). They show the names last saved; pick the Event Hub there to change them.";
 export const EVENT_HUB_OWN_NOTE =
   "These Event Hub names are your own: the Event Hub picked in section 1 does not change them.";
 /** The control that stops following section 1. */
@@ -826,15 +831,21 @@ function hubPath(v: Partial<PlanValues>): string {
 
 export function eventHubLinkView(progress: OnboardingProgress, picked: PickedEventHub | null): EventHubLinkView {
   const follows = eventHubFollowsSection1(progress);
-  const differs = picked === null ? [] : changedValueKeys(picked, progress.planValues, EVENT_HUB_PLAN_KEYS);
+  // Compared as the steps read them: a blank namespace location means the
+  // shared subscription and resource group, so it differs only if those do.
+  const planned = withEventHubLocation(progress.planValues);
+  const differs = picked === null ? [] : changedValueKeys(picked, planned, EVENT_HUB_PLAN_KEYS);
   const drift =
     picked === null || differs.length === 0
       ? null
-      : `Section 1 and these names differ (${differs.map((k) => PLAN_VALUE_LABELS[k].label).join(", ")}): a deploy on this page writes to section 1's Event Hub, ${hubPath(picked)}, while the How-to steps, Validate and the Cribl source use ${hubPath(progress.planValues)}.`;
+      : `Section 1 and these names differ (${differs.map((k) => PLAN_VALUE_LABELS[k].label).join(", ")}): a deploy on this page writes to section 1's Event Hub, ${hubPath(picked)}, while the How-to steps, Validate and the Cribl source use ${hubPath(planned)}.`;
   return {
     follows,
     lockedKeys: follows ? EVENT_HUB_PLAN_KEYS : [],
-    note: follows ? EVENT_HUB_FOLLOWS_NOTE : EVENT_HUB_OWN_NOTE,
+    // With nothing picked (the pick is not kept across a reload) the names
+    // shown are the ones last saved, and the note says so rather than
+    // claiming they come from section 1 now.
+    note: !follows ? EVENT_HUB_OWN_NOTE : picked === null ? EVENT_HUB_FOLLOWS_NOTHING_PICKED_NOTE : EVENT_HUB_FOLLOWS_NOTE,
     drift,
   };
 }

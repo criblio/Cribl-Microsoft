@@ -835,6 +835,12 @@ describe("deployBlockView - what a deployable source's block shows", () => {
     expect(onboardingState.deployBlockView({ kind: "not-chosen" }, true, TITLE)).toEqual({ kind: "none" });
   });
 
+  it("a How-to source whose choice is unknown shows the named note, never deploy controls", () => {
+    expect(onboardingState.deployBlockView(unknown, true, TITLE)).toEqual({ kind: "howto-note", text: NOTE });
+    const selectionUnread: RowChoice = { kind: "unknown", doc: "selection", cause: "not-read" };
+    expect(onboardingState.deployBlockView(selectionUnread, true, TITLE)).toEqual({ kind: "howto-note", text: NOTE });
+  });
+
   it("keeps the deploy section for Automate (chosen or not) and for an unknown choice, which gates Deploy itself", () => {
     expect(onboardingState.deployBlockView({ kind: "chosen", mode: "automate" }, false, TITLE)).toEqual({ kind: "deploy" });
     expect(onboardingState.deployBlockView({ kind: "not-chosen" }, false, TITLE)).toEqual({ kind: "deploy" });

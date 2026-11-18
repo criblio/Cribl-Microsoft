@@ -8464,7 +8464,18 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   howto-panel.dom.test.tsx and azure-onboarding-screen.dom.test.tsx, including
   that the Defender PUT targets exactly the hub the saved plan names
   (mutation-checked). Seeding the picker from the plan stays AZR-24. Live
-  Preview verification is pending.
+  Preview verification is pending. REVIEW FIX (same day): the picker no longer
+  writes the shared subscription and resource group (storage, Defender,
+  flow-log and policy steps read those; they stay the operator's and
+  editable). New plan values eventHubSubscriptionId and eventHubResourceGroup
+  hold where the namespace lives and fall back to the shared ones when blank
+  (eventHubLocation); every Event Hub address built from the plan goes through
+  it, and a fingerprint reads a blank one as its shared key so earlier ticks
+  stay done. The migration check reads only the keys the picker writes. A pick
+  made while progress was loading is written once progress becomes writable,
+  and following section 1 with nothing picked says the names shown are the
+  last saved. Pinned and mutation-checked; Live Preview verification is
+  pending.
 
 - **AZR-107** Tenant inventory heat map, phase 1: read-only cards for Entra ID, Activity Log and Defender for Cloud at the top of Azure Native Source Onboarding
   `AZR-F9` `story` `settled` `verified: both`
@@ -8948,4 +8959,6 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   azure-onboarding-state.ts). The route description in App.tsx now names both
   deployable sources, the Activity Log setting and the Defender export. Pinned
   in azure-onboarding-state.test.ts and azure-onboarding-howto.dom.test.tsx
-  (mutation-checked). Live Preview verification is pending.
+  (mutation-checked). Live Preview verification is pending. REVIEW FIX: a
+  How-to source whose choice is unknown shows the named note, never deploy
+  controls (not reachable from rowChoices today; held as a guard).

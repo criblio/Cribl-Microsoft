@@ -32,6 +32,7 @@
 import type { KvDocumentLoad } from "../../ports/kv-document-store";
 import {
   changedValueKeys,
+  EVENT_HUB_PLAN_KEYS,
   PLAN_VALUE_KEYS,
   defaultPlanValues,
   isPlanValueKey,
@@ -127,16 +128,16 @@ export type EventHubSource = "section1" | "own";
  * Whether the Event Hub plan values follow the section 1 picker (AZR-102).
  *
  * MIGRATION. A document written before AZR-102 has no `eventHubSource`. It
- * follows section 1 only when it names no Event Hub (namespace, hub and send
- * rule all blank): names an operator typed, or copied from the picker, stay
+ * follows section 1 only when every key the picker writes
+ * (EVENT_HUB_PLAN_KEYS) is blank: names an operator typed, or copied from the picker, stay
  * theirs until they choose to follow section 1, so a pick on this screen
  * never silently replaces a saved How-to plan.
  */
 export function eventHubFollowsSection1(p: OnboardingProgress): boolean {
   if (p.eventHubSource !== undefined) return p.eventHubSource === "section1";
-  return [p.planValues.namespace, p.planValues.hubName, p.planValues.sendRule].every(
-    (v) => (v ?? "").trim() === "",
-  );
+  // Only the keys the picker writes: the shared subscription and resource
+  // group are the operator's and never decide this.
+  return EVENT_HUB_PLAN_KEYS.every((k) => (p.planValues[k] ?? "").trim() === "");
 }
 
 /** Record where the Event Hub plan values come from (AZR-102). */

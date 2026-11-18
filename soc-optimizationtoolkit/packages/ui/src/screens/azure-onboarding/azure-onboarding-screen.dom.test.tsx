@@ -946,12 +946,14 @@ describe("AzureOnboardingScreen - the Defender deploy", () => {
     const plan = (saved.at(-1)?.value as { planValues: Record<string, string>; eventHubSource?: string } | undefined);
     expect(plan?.eventHubSource).toBe("section1");
     expect({
-      subscriptionId: plan?.planValues["subscriptionId"],
-      resourceGroup: plan?.planValues["resourceGroup"],
+      eventHubSubscriptionId: plan?.planValues["eventHubSubscriptionId"],
+      eventHubResourceGroup: plan?.planValues["eventHubResourceGroup"],
       namespace: plan?.planValues["namespace"],
       hubName: plan?.planValues["hubName"],
       sendRule: plan?.planValues["sendRule"],
-    }).toEqual({ subscriptionId: SUB, resourceGroup: EH_RG, namespace: NS_NAME, hubName: HUB, sendRule: "SendOnly" });
+    }).toEqual({ eventHubSubscriptionId: SUB, eventHubResourceGroup: EH_RG, namespace: NS_NAME, hubName: HUB, sendRule: "SendOnly" });
+    // The shared subscription and resource group are the operator's and are not written by the pick.
+    expect([plan?.planValues["subscriptionId"], plan?.planValues["resourceGroup"]]).toEqual([SUB, "rg-config"]);
     // The How-to form shows them, read-only, as section 1's.
     const hubField = screen.getByRole("textbox", { name: "Event Hub name" }) as HTMLInputElement;
     expect(hubField.value).toBe(HUB);
@@ -963,9 +965,34 @@ describe("AzureOnboardingScreen - the Defender deploy", () => {
     fireEvent.click(button("Confirm deploy"));
     await waitFor(() => expect(azure.puts().length).toBe(1));
     // The export targets exactly the hub the plan names.
-    const target = `/subscriptions/${plan?.planValues["subscriptionId"]}/resourceGroups/${plan?.planValues["resourceGroup"]}/providers/Microsoft.EventHub/namespaces/${plan?.planValues["namespace"]}/eventhubs/${plan?.planValues["hubName"]}`;
+    const target = `/subscriptions/${plan?.planValues["eventHubSubscriptionId"]}/resourceGroups/${plan?.planValues["eventHubResourceGroup"]}/providers/Microsoft.EventHub/namespaces/${plan?.planValues["namespace"]}/eventhubs/${plan?.planValues["hubName"]}`;
     expect(target).toBe(HUB_ID);
     expect(JSON.stringify(azure.puts()[0]?.body)).toContain(`"eventHubResourceId":"${HUB_ID}"`);
+  });
+
+  // Review of AZR-102: a pick made while progress was loading was never written.
+  it("a pick made while the progress document is still loading is written once it loads", async () => {
+    const store = new HeldLoadStore(PROGRESS_KEY, {});
+    mount({ store });
+    await waitFor(() => expect(screen.queryByText("Loading the saved selection...")).toBeNull());
+    await chooseTarget("SendOnly");
+    await settle();
+    expect(store.saves.filter((s) => s.key === PROGRESS_KEY)).toEqual([]);
+    store.release();
+    await waitFor(() => expect(store.saves.filter((s) => s.key === PROGRESS_KEY).length).toBe(1));
+    const written = store.saves.filter((s) => s.key === PROGRESS_KEY)[0]?.value as {
+      planValues: Record<string, string>;
+      eventHubSource: string;
+    };
+    expect(written.eventHubSource).toBe("section1");
+    expect([written.planValues["namespace"], written.planValues["hubName"], written.planValues["sendRule"]]).toEqual([
+      NS_NAME,
+      HUB,
+      "SendOnly",
+    ]);
+    // Once, not a loop.
+    await settle();
+    expect(store.saves.filter((s) => s.key === PROGRESS_KEY).length).toBe(1);
   });
 
   it("a saved plan that names its own Event Hub is kept, and the difference from section 1 is named", async () => {

@@ -89,6 +89,7 @@ import {
   emptyProgress,
   encodeProgress,
   encodeSelection,
+  eventHubLocation,
   laneTopics,
   loadTenantDocument,
   listingRows,
@@ -719,6 +720,19 @@ export function AzureOnboardingScreen({
     if (p !== null) commitProgress(p, "event hub from section 1");
   }
 
+  // A pick made while progress was still loading (or could not be written)
+  // was not written then. Once progress becomes writable, write it once:
+  // followPickedEventHub returns null when the plan already names it, so this
+  // cannot loop, and later picks go through onTargetChange.
+  const progressWritable = canWriteProgress(progressLoad);
+  useEffect(() => {
+    if (!progressWritable) return;
+    const p = followPickedEventHub(latestProgressLoad.current, pickedEventHub(target));
+    if (p !== null) commitProgress(p, "event hub from section 1 after load");
+    // Runs on the transition to writable only; target is read as it is then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [progressWritable]);
+
   function onChooseEventHubSource(source: EventHubSource): void {
     const p = chooseEventHubSource(latestProgressLoad.current, source, pickedEventHub(target));
     if (p !== null) commitProgress(p, source === "own" ? "own event hub names" : "follow section 1");
@@ -845,8 +859,12 @@ export function AzureOnboardingScreen({
   // -------------------------------------------------------------------------
 
   const measuredHubs = measuredHubsOf(lastResult);
+  // AZR-102: the namespace's own subscription and resource group, or the shared ones.
+  const ehLoc = values === null ? null : eventHubLocation(values);
   const namespaceKey =
-    values === null ? "" : `${values.subscriptionId.trim()}/${values.resourceGroup.trim()}/${values.namespace.trim()}`;
+    values === null || ehLoc === null
+      ? ""
+      : `${ehLoc.subscriptionId.trim()}/${ehLoc.resourceGroup.trim()}/${values.namespace.trim()}`;
   // Rules read for another namespace than the plan's are not offered.
   const rulesForPlan = rules !== null && rules.ns === namespaceKey ? rules.read : null;
 
@@ -874,9 +892,10 @@ export function AzureOnboardingScreen({
 
   async function onReadRules(): Promise<void> {
     if (values === null) return;
+    const loc = eventHubLocation(values);
     const ns = {
-      subscriptionId: values.subscriptionId.trim(),
-      resourceGroup: values.resourceGroup.trim(),
+      subscriptionId: loc.subscriptionId.trim(),
+      resourceGroup: loc.resourceGroup.trim(),
       name: values.namespace.trim(),
     };
     if (ns.subscriptionId === "" || ns.resourceGroup === "" || ns.name === "") {

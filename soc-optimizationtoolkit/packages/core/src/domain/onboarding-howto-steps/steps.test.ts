@@ -216,7 +216,8 @@ describe("how-to step catalog", () => {
     const rows = renderStep(step, FULL).values;
     const expected = expectedExportFor({
       subscriptionId: FULL.subscriptionId,
-      namespace: { subscriptionId: FULL.subscriptionId, resourceGroup: FULL.resourceGroup, name: FULL.namespace },
+      // AZR-102: the namespace in its own subscription and resource group; the export in the shared ones.
+      namespace: { subscriptionId: FULL.eventHubSubscriptionId, resourceGroup: FULL.eventHubResourceGroup, name: FULL.namespace },
       hubName: FULL.hubName,
     });
     expect(rows.find((r) => r.label === "Scope path")?.value).toBe(expected.scopePath);
@@ -229,7 +230,7 @@ describe("how-to step catalog", () => {
       subscriptionId: FULL.subscriptionId,
       resourceGroup: FULL.resourceGroup,
       location: FULL.region,
-      namespace: { subscriptionId: FULL.subscriptionId, resourceGroup: FULL.resourceGroup, name: FULL.namespace },
+      namespace: { subscriptionId: FULL.eventHubSubscriptionId, resourceGroup: FULL.eventHubResourceGroup, name: FULL.namespace },
       hubName: FULL.hubName,
       connectionString: CONNECTION_STRING_STAND_IN,
     });
@@ -491,12 +492,12 @@ describe("the Cribl principal's Event Hubs receive role", () => {
     const step = howToStep("eh-role-receiver")!;
     expect(step.title).toBe("Give the Cribl principal Azure Event Hubs Data Receiver on the hub {{hubName}}");
     expect(step.cli).toBe(
-      'az role assignment create --assignee-object-id {{criblPrincipalObjectId}} --assignee-principal-type ServicePrincipal --role "Azure Event Hubs Data Receiver" --scope /subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}/eventhubs/{{hubName}}',
+      'az role assignment create --assignee-object-id {{criblPrincipalObjectId}} --assignee-principal-type ServicePrincipal --role "Azure Event Hubs Data Receiver" --scope /subscriptions/{{eventHubSubscriptionId}}/resourceGroups/{{eventHubResourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}/eventhubs/{{hubName}}',
     );
     expect(step.rbac.join(" ")).toContain("Microsoft.Authorization/roleAssignments/write on the hub");
     expect(step.rbac.join(" ")).toMatch(/User Access Administrator/);
     expect(step.rbac.join(" ")).toMatch(/Role Based Access Control Administrator/);
-    expect(howToStep("eh-role-receiver-auto")!.cli).toContain("--scope /subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}");
+    expect(howToStep("eh-role-receiver-auto")!.cli).toContain("--scope /subscriptions/{{eventHubSubscriptionId}}/resourceGroups/{{eventHubResourceGroup}}/providers/Microsoft.EventHub/namespaces/{{namespace}}");
     expect(howToStep("eh-role-receiver-auto")!.cli).not.toContain("eventhubs/");
   });
 

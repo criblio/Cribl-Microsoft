@@ -375,6 +375,7 @@ export function howtoDeployNote(title: string): string {
  *   deploy      its deploy section, which gates Deploy on the choice itself
  *               (Automate, not chosen, or a choice that is unknown)
  *   howto-note  the source is CHOSEN in How-to mode: the named note instead
+ *               (or in How-to mode with its choice unknown)
  *   none        the source is in How-to mode and NOT chosen: nothing. The
  *               row above already says "Not chosen"; a note telling the
  *               operator to follow steps for a source they did not choose,
@@ -393,6 +394,11 @@ export type DeployBlockView =
 export function deployBlockView(choice: RowChoice, howTo: boolean, title: string): DeployBlockView {
   if (choice.kind === "chosen" && choice.mode === "manual") return { kind: "howto-note", text: howtoDeployNote(title) };
   if (howTo && choice.kind === "not-chosen") return { kind: "none" };
+  // In How-to mode with the choice unknown: the app does not deploy it either
+  // way, so the named note, never deploy controls. rowChoices does not produce
+  // this pair today (a How-to choice is read from progress, which howTo needs
+  // loaded); held here so a future source of "unknown" cannot reopen Deploy.
+  if (howTo && choice.kind === "unknown") return { kind: "howto-note", text: howtoDeployNote(title) };
   return { kind: "deploy" };
 }
 

@@ -61,7 +61,7 @@ import {
 import { metricsRequest } from "../eventhub-discovery/eventhub-discovery";
 import { buildSubscriptionDiagnosticSettingsListRequest } from "../activity-log-export/activity-log-setting";
 import type { CheckKind } from "../onboarding-howto/check-kinds";
-import { missingValues, type PlanValueKey, type PlanValues } from "../onboarding-howto/plan-values";
+import { eventHubLocation, missingValues, type PlanValueKey, type PlanValues } from "../onboarding-howto/plan-values";
 import { onboardingSource, type OnboardingSourceId } from "../onboarding-howto/sources";
 import {
   LEGACY_POLICY_NAMES,
@@ -196,11 +196,16 @@ function v(values: PlanValues, key: PlanValueKey): string {
   return (values[key] ?? "").trim();
 }
 
-/** The namespace the plan names. Only meaningful once SUB_RG_NS are set. */
+/**
+ * The namespace the plan names, in its own subscription and resource group
+ * when the plan sets them (AZR-102, eventHubLocation). Only meaningful once
+ * SUB_RG_NS are set.
+ */
 export function planNamespace(values: PlanValues): NamespaceRef {
+  const loc = eventHubLocation(values);
   return {
-    subscriptionId: v(values, "subscriptionId"),
-    resourceGroup: v(values, "resourceGroup"),
+    subscriptionId: loc.subscriptionId.trim(),
+    resourceGroup: loc.resourceGroup.trim(),
     name: v(values, "namespace"),
   };
 }
