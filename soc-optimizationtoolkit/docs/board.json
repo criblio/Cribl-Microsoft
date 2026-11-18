@@ -5387,7 +5387,7 @@
       "priority": "now",
       "dependsOn": [],
       "detail": "FOUND 2026-11-17 in committed code (AZR-98's KNOWN GAPS, carded at closeout). The shared Event Hub prerequisite shows ruleNote (screens/azure-onboarding/azure-onboarding-state.ts:860-864) beside any Manage-capable rule: 'A dedicated rule with only Send rights is safer.' The Activity Log section on the same screen requires Manage (activity-log-state.ts:134-137, activity-log-section.tsx:316: 'A diagnostic setting needs a namespace rule with Manage rights, because Azure creates the hub itself'). An operator who follows the note makes a Send-only rule in the Azure portal (the app cannot create one: the 'Create Send-only rule' button at eventhub-prerequisite-section.tsx:353-355 is disabled, with CREATE_NOT_AVAILABLE beneath it, and its label repeats the same Send-only advice), picks it in the rule picker, and is then refused by the Activity Log gate. Reproduce through the picker, not the disabled button. SCOPE: ruleNote takes the selected items; when a selected source needs Manage (activityLog today; entraId when AZR-99 lands), the note says that source needs Manage instead of recommending Send-only; the Defender-only case keeps today's text. Pin the three cases with exact strings (azure-onboarding-state.test.ts; azure-onboarding-screen.dom.test.tsx:815 keeps its Defender-only case). If [[AZR-116]] measures that Send suffices, the fix is instead to relax the Activity Log gate.",
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled"
     },
     {
@@ -5413,7 +5413,7 @@
       "priority": "next",
       "dependsOn": [],
       "detail": "SPLIT 2026-11-17 from [[AZR-98]] (its KNOWN GAP 2). ACTIVITY_LOG_PERMISSIONS (domain/onboarding-sections/automation-permissions.ts:172-184) has measured: [] because no capability covers Microsoft.Insights/diagnosticSettings/write (and /read) at the subscription, so the section always banners 'not measured'. SCOPE: add capabilities for the subscription-scope Microsoft.Insights/diagnosticSettings read, write and delete (the delete is AZR-105's Remove, activity-log-export/activity-log-permissions.ts:34-40), measured by the same subscription-scope RBAC evaluation as CAP-7a (no probe), and move the subscription row from notMeasured to measured. DECIDED 2026-11-17: the write and delete are NOT grant-only. The setting is an extension resource on the subscription itself (/subscriptions/<sub>/providers/Microsoft.Insights/diagnosticSettings/<name>; least-privilege/operations.ts gives scope 'subscription'), so no assignment below the subscription can grant it and the subscription-scope evaluation is authoritative for a denial - unlike the Defender automation write, which lives in a resource group (GRANT_ONLY_AZURE_ACTIONS). Do not add them there; a pin holds that, which is what lets the LIVE CHECK below expect DENIED. The namespace-rule action stays not measured until [[CAP-9]]. Pins as CAP-7a's: granted, denied, unknown and never-checked rows. LIVE CHECK (also covers CAP-7a's unobserved case): an identity lacking Microsoft.Insights/diagnosticSettings/write and Microsoft.Security/automations/read shows the DENIED banner on both sections in Live Preview, with Deploy still clickable.",
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled"
     }
   ],
