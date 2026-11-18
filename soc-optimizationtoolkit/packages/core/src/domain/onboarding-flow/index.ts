@@ -38,11 +38,12 @@ export {
   encodeFlowLastSeen,
   flowInputKey,
   lastSeenFor,
+  lostFlowLastSeen,
   mergeFlowLastSeen,
   readFlowLastSeen,
   recordFlowSeen,
 } from "./last-seen";
-export type { FlowLastSeen, FlowLastSeenRead, LastSeenView } from "./last-seen";
+export type { FlowLastSeen, FlowLastSeenRead, LastSeenSource, LastSeenView } from "./last-seen";
 
 export type {
   ClassifyLaneFlowInput,

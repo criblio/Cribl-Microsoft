@@ -313,12 +313,17 @@ describe("useLiveFlow - runs", () => {
 // non-zero window row, never over a document that could not be read, and an
 // unreadable document is unknown - never "never seen".
 describe("useLiveFlow - last seen, remembered", () => {
-  const KEY = "eventhub:azure_onb_eh_ns_hub";
+  const KEY = "g1/eventhub:azure_onb_eh_ns_hub";
 
-  function setupWithStore(client: CriblClient, store: FakeKvDocumentStore, clock: { t: number }) {
+  function setupWithStore(
+    client: CriblClient,
+    store: FakeKvDocumentStore,
+    clock: { t: number },
+    lanes: readonly LiveFlowLane[] = LANES,
+  ) {
     const cap: Captured = { polls: [], live: null };
     function WithStore({ watching }: { watching: boolean }) {
-      const live = useLiveFlow({ cribl: client, groupId: "g1", lanes: LANES, watching, now: () => clock.t, store });
+      const live = useLiveFlow({ cribl: client, groupId: "g1", lanes, watching, now: () => clock.t, store });
       cap.live = live;
       return null;
     }
@@ -336,6 +341,7 @@ describe("useLiveFlow - last seen, remembered", () => {
     };
     return { cap, watch };
   }
+  const lastSeenLoads = (store: FakeKvDocumentStore) => store.loads.filter((k) => k === FLOW_LAST_SEEN_KEY).length;
   const lastSeenSaves = (store: FakeKvDocumentStore) => store.saves.filter((s) => s.key === FLOW_LAST_SEEN_KEY);
   const savedTimes = (store: FakeKvDocumentStore) =>
     (store.peek(FLOW_LAST_SEEN_KEY) as { byInput?: Record<string, number> } | undefined)?.byInput;
@@ -423,6 +429,103 @@ describe("useLiveFlow - last seen, remembered", () => {
     expect(cap.live?.lastSeen).toEqual({
       entraId: { kind: "unknown", reason: "the remembered times could not be read (HTTP 503)" },
     });
+  });
+
+  // Review round 1 (AZR-37): a failed load is retried, a concurrent writer's
+  // drop is repaired, another group's lane is never stamped, and a failing
+  // store is not hammered once a minute.
+  it("a load the store refused is read again on the next poll, and then records", async () => {
+    const store = new FakeKvDocumentStore();
+    store.scriptLoad(FLOW_LAST_SEEN_KEY, { kind: "unknown", reason: "HTTP 503", status: 503 });
+    const { client } = fakeCribl(() => rows(4));
+    const clock = { t: 3_000 };
+    const { cap, watch } = setupWithStore(client, store, clock);
+    await watch(); // the last-seen load answers 503
+    expect(lastSeenLoads(store)).toBe(1);
+    expect(cap.live?.lastSeen?.entraId).toMatchObject({ kind: "unknown" });
+    store.clearScript();
+    await runOnce(cap); // lookback: the poll reads the document again
+    await act(async () => {});
+    expect(lastSeenLoads(store)).toBe(2);
+    expect(cap.live?.lastSeen).toEqual({ entraId: { kind: "never" } });
+    clock.t = 70_000;
+    await runOnce(cap); // window, now into a document that was read
+    await act(async () => {});
+    expect(savedTimes(store)).toEqual({ [KEY]: 70_000 });
+  });
+
+  it("a document read but not understood is not read again every poll", async () => {
+    const store = new FakeKvDocumentStore({ [FLOW_LAST_SEEN_KEY]: { kind: "someone-else" } });
+    const { client } = fakeCribl(() => rows(4));
+    const { cap, watch } = setupWithStore(client, store, { t: 3_000 });
+    await watch();
+    await runOnce(cap);
+    await runOnce(cap);
+    await runOnce(cap);
+    await act(async () => {});
+    expect(lastSeenLoads(store)).toBe(1);
+    expect(lastSeenSaves(store)).toEqual([]);
+  });
+
+  it("re-saves when another tab's save in the same instant dropped this tab's entry", async () => {
+    const OTHER = "g1/eventhub:other";
+    class RacingStore extends FakeKvDocumentStore {
+      raced = false;
+      override async save(key: string, value: unknown): Promise<void> {
+        await super.save(key, value);
+        if (key === FLOW_LAST_SEEN_KEY && !this.raced) {
+          this.raced = true;
+          // The other tab loaded {} before this save and saves only its own entry after it.
+          await super.save(key, { kind: "soc.flow-last-seen", version: 1, byInput: { [OTHER]: 6_000 } });
+        }
+      }
+    }
+    const store = new RacingStore();
+    const { client } = fakeCribl(() => rows(2));
+    const { cap, watch } = setupWithStore(client, store, { t: 5_000 });
+    await watch();
+    await runOnce(cap); // lookback
+    await runOnce(cap); // window: due, write, raced
+    await act(async () => {});
+    expect(savedTimes(store)).toEqual({ [KEY]: 5_000, [OTHER]: 6_000 });
+    expect(lastSeenSaves(store)).toHaveLength(3);
+  });
+
+  it("never stamps a lane in another worker group from the watched group's window", async () => {
+    const elsewhere: LiveFlowLane = { sourceId: "activityLog", input: ENTRA.input, groupId: "g2" };
+    const store = new FakeKvDocumentStore();
+    const { client } = fakeCribl(() => rows(3));
+    const { cap, watch } = setupWithStore(client, store, { t: 8_000 }, [ENTRA, elsewhere]);
+    await watch();
+    await runOnce(cap);
+    await runOnce(cap);
+    await act(async () => {});
+    expect(savedTimes(store)).toEqual({ [KEY]: 8_000 });
+    expect(cap.live?.lastSeen).toEqual({ entraId: { kind: "seen", at: 8_000 }, activityLog: { kind: "never" } });
+  });
+
+  it("a failing save is not tried again until the interval has passed", async () => {
+    const store = new FakeKvDocumentStore();
+    store.failSaves();
+    const { client } = fakeCribl(() => rows(2));
+    const clock = { t: 1_000 };
+    const { cap, watch } = setupWithStore(client, store, clock);
+    await watch();
+    await runOnce(cap); // lookback
+    await runOnce(cap); // window: one attempt (load + failed save)
+    await act(async () => {});
+    expect(lastSeenLoads(store)).toBe(2);
+    for (let i = 1; i <= 5; i++) {
+      clock.t = 1_000 + i * 60_000;
+      await runOnce(cap);
+      await act(async () => {});
+    }
+    expect(lastSeenLoads(store)).toBe(2);
+    store.failSaves(null);
+    clock.t = 1_000 + FLOW_LAST_SEEN_MIN_WRITE_INTERVAL_MS;
+    await runOnce(cap);
+    await act(async () => {});
+    expect(savedTimes(store)).toEqual({ [KEY]: 1_000 + FLOW_LAST_SEEN_MIN_WRITE_INTERVAL_MS });
   });
 });
 

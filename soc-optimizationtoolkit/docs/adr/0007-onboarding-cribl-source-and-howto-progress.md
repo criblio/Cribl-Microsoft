@@ -434,8 +434,9 @@ Filed as cards, not built:
 - creating a Listen rule and a dedicated consumer group (AZR-36);
 - a persisted last-seen beyond the 24-hour lookback (AZR-37) - BUILT
   2026-11-17 as its own app KV document (`azure-onboarding-flow-last-seen`,
-  core domain/onboarding-flow/last-seen.ts), not a field on the progress
-  document, which the screen saves whole and a poll-time write would race;
+  keyed `group/type:id`, core domain/onboarding-flow/last-seen.ts), not a
+  field on the progress document, which the screen saves whole and a
+  poll-time write would race;
 - the export fallback and the `source.manage` gate from AZR-S2.
 
 ## Live verification (outstanding)

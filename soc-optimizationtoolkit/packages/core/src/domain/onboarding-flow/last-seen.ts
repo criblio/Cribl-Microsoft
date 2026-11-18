@@ -13,8 +13,13 @@
  * never an idle or zero row, never a refused, failed or unreadable answer. The
  * time written is the caller's clock when that window answer arrived, so it
  * means "events arrived in the five minutes before this". A later time only
- * ever replaces an earlier one (merge is per input, max), so two tabs writing
- * the same document converge and neither can move a time backwards.
+ * ever replaces an earlier one (merge is per input, max), so two tabs whose
+ * writes do not overlap converge. The KV store has no compare-and-swap: two
+ * tabs saving in the same instant each save only what they loaded, and the
+ * later save drops the other's newer entry. The hook narrows that with one
+ * re-read after each save (re-saving the merge when an entry it wrote is
+ * missing or older), and an entry still lost is rewritten on that tab's next
+ * due write while the source keeps flowing.
  *
  * WHAT IS SHOWN. Three answers, never a fourth:
  *   - seen     a remembered time, labelled as remembered, not measured now;
@@ -25,11 +30,14 @@
  *              that would claim "never seen" for a source that may have
  *              flowed yesterday.
  *
- * WHERE. Its own app KV document, keyed by Cribl input (`type:id`), not a
- * field on the onboarding progress document: the progress document is saved
- * whole by the screen, so a background write into it from the flow poll would
- * race the operator's own saves and could undo one. Input ids are unique per
- * created source, so one app-wide document serves every tenant.
+ * WHERE. Its own app KV document, keyed by worker group and Cribl input
+ * (`group/type:id`), not a field on the onboarding progress document: the
+ * progress document is saved whole by the screen, so a background write into
+ * it from the flow poll would race the operator's own saves and could undo
+ * one. The group is part of the key because the same input id can exist in
+ * two worker groups (a source created again in another group), and a window
+ * answer only measures the group it asked; one app-wide document then serves
+ * every tenant.
  *
  * Pure: no IO, no clock (the caller passes every time).
  */
@@ -42,6 +50,12 @@ export const FLOW_LAST_SEEN_KEY = "azure-onboarding-flow-last-seen";
 
 const KIND = "soc.flow-last-seen";
 const VERSION = 1;
+
+/** One Cribl input in the worker group it lives in: what a remembered time is about. */
+export interface LastSeenSource {
+  readonly groupId: string;
+  readonly input: FlowInput;
+}
 
 /** Epoch ms each input (by {@link flowInputKey}) was last measured flowing. */
 export interface FlowLastSeen {
@@ -62,15 +76,29 @@ export type LastSeenView =
 export const EMPTY_FLOW_LAST_SEEN: FlowLastSeen = { byInput: {} };
 
 /**
+ * The keys of `wrote` that `stored` lacks or holds an older time for: what a
+ * concurrent writer dropped. Empty when `stored` kept everything.
+ */
+export function lostFlowLastSeen(stored: FlowLastSeen, wrote: FlowLastSeen): string[] {
+  return Object.entries(wrote.byInput)
+    .filter(([key, at]) => {
+      const kept = stored.byInput[key];
+      return kept === undefined || kept < at;
+    })
+    .map(([key]) => key);
+}
+
+/**
  * Do not rewrite an input's time more often than this: a flowing source would
  * otherwise cost one KV write per poll (one a minute). Ten minutes of drift is
  * nothing beside a "last seen 3 days ago".
  */
 export const FLOW_LAST_SEEN_MIN_WRITE_INTERVAL_MS = 10 * 60 * 1000;
 
-/** The document key of one input: `type:id`, pack-qualified when it lives in a pack. */
-export function flowInputKey(input: FlowInput): string {
-  return input.packId ? `${input.type}:${input.packId}.${input.id}` : `${input.type}:${input.id}`;
+/** The document key of one input: `group/type:id`, pack-qualified when it lives in a pack. */
+export function flowInputKey({ groupId, input }: LastSeenSource): string {
+  const id = input.packId ? `${input.packId}.${input.id}` : input.id;
+  return `${groupId}/${input.type}:${id}`;
 }
 
 function isTime(v: unknown): v is number {
@@ -120,7 +148,7 @@ export function mergeFlowLastSeen(a: FlowLastSeen, b: FlowLastSeen): FlowLastSee
 }
 
 /**
- * Record that a measured window saw `inputs` flowing at `at`. The returned
+ * Record that a measured window saw `sources` flowing at `at`. The returned
  * `doc` always carries the new times, so the screen shows them whether or not
  * a write is due. `due` is judged against `persisted` - what was last READ or
  * WRITTEN, not what is merely shown - and is true when at least one input is
@@ -130,16 +158,16 @@ export function mergeFlowLastSeen(a: FlowLastSeen, b: FlowLastSeen): FlowLastSee
  */
 export function recordFlowSeen(
   doc: FlowLastSeen,
-  inputs: readonly FlowInput[],
+  sources: readonly LastSeenSource[],
   at: number,
   persisted: FlowLastSeen = doc,
   minIntervalMs: number = FLOW_LAST_SEEN_MIN_WRITE_INTERVAL_MS,
 ): { readonly doc: FlowLastSeen; readonly due: boolean } {
-  if (!isTime(at) || inputs.length === 0) return { doc, due: false };
+  if (!isTime(at) || sources.length === 0) return { doc, due: false };
   const byInput: Record<string, number> = { ...doc.byInput };
   let due = false;
-  for (const input of inputs) {
-    const key = flowInputKey(input);
+  for (const source of sources) {
+    const key = flowInputKey(source);
     const stored = persisted.byInput[key];
     if (stored === undefined || at - stored >= minIntervalMs) due = true;
     const prev = byInput[key];
@@ -148,12 +176,12 @@ export function recordFlowSeen(
   return { doc: { byInput }, due };
 }
 
-/** What the lane for `input` shows. Null `read` means the document has not been read yet. */
-export function lastSeenFor(read: FlowLastSeenRead | null, input: FlowInput | null): LastSeenView {
-  if (input === null) return { kind: "unknown", reason: "no Cribl source has been created for this lane" };
+/** What the lane for `source` shows. Null `read` means the document has not been read yet. */
+export function lastSeenFor(read: FlowLastSeenRead | null, source: LastSeenSource | null): LastSeenView {
+  if (source === null) return { kind: "unknown", reason: "no Cribl source has been created for this lane" };
   if (read === null) return { kind: "unknown", reason: "not read yet" };
   if (read.kind === "unknown") return { kind: "unknown", reason: `the remembered times could not be read (${read.reason})` };
-  const at = read.doc.byInput[flowInputKey(input)];
+  const at = read.doc.byInput[flowInputKey(source)];
   return at === undefined ? { kind: "never" } : { kind: "seen", at };
 }
 

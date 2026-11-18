@@ -29,23 +29,31 @@
  *
  * LAST SEEN, REMEMBERED (AZR-37). With a `store`, turning Watch on reads ONE
  * app KV document (FLOW_LAST_SEEN_KEY) - never on mount - and a window answer
- * that MEASURED an input above zero records the time it arrived. A write is
- * due at most once per input per FLOW_LAST_SEEN_MIN_WRITE_INTERVAL_MS, and is
- * a read-merge-write (per input, the later time) so another tab's times are
- * kept. A document that could not be read is never written over and never
- * shown as "never seen": its lanes say unknown.
+ * that MEASURED an input above zero records the time it arrived, for lanes in
+ * the watched worker group only (the answer measured no other group). A write
+ * is due at most once per input per FLOW_LAST_SEEN_MIN_WRITE_INTERVAL_MS, and
+ * is a read-merge-write (per input, the later time) followed by one re-read:
+ * when a concurrent writer dropped or aged an entry this tab wrote, the merge
+ * is saved once more. A write that fails, or finds the document unreadable,
+ * is not tried again for the same interval. A document that could not be read
+ * is never written over and never shown as "never seen": its lanes say
+ * unknown. When the LOAD itself failed (the store refused or did not answer),
+ * the next poll reads it again; a document read but not understood stays
+ * unknown until the screen mounts again.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   FLOW_LAST_SEEN_KEY,
+  FLOW_LAST_SEEN_MIN_WRITE_INTERVAL_MS,
   FLOW_LOOKBACK,
   FLOW_WINDOW_SECONDS,
   classifyLaneFlow,
   describeFlowRequest,
   encodeFlowLastSeen,
   lastSeenFor,
+  lostFlowLastSeen,
   mergeFlowLastSeen,
   nextFlowQuery,
   readFlowLastSeen,
@@ -183,44 +191,73 @@ export function useLiveFlow({ cribl, groupId, lanes, watching, now = Date.now, s
   // AZR-37: the remembered last-seen times. Null until Watch is first on.
   const [lastSeenRead, setLastSeenRead] = useState<FlowLastSeenRead | null>(null);
   const lastSeenRef = useRef<FlowLastSeenRead | null>(null);
+  /** The load in flight or done; null when none has run yet, or the last one failed and may be retried. */
   const lastSeenLoad = useRef<Promise<void> | null>(null);
   /** What the store held at the last read or write: the write throttle's reference. */
   const persistedRef = useRef<FlowLastSeen | null>(null);
+  /** When a write last failed or found the document unreadable: no new attempt within the interval. */
+  const writeFailedAt = useRef<number | null>(null);
+  const mounted = useRef(true);
   const setLastSeen = useCallback((next: FlowLastSeenRead) => {
     lastSeenRef.current = next;
     setLastSeenRead(next);
   }, []);
-  useEffect(() => {
-    if (!watching || store === undefined || lastSeenLoad.current !== null) return;
+  const loadLastSeen = useCallback(() => {
+    if (store === undefined || lastSeenLoad.current !== null) return;
+    // A load the store refused or never answered may be retried; a document
+    // read but not understood will read the same way again, so it is not.
+    let retry = false;
     lastSeenLoad.current = store
       .load(FLOW_LAST_SEEN_KEY)
-      .then((load) => readFlowLastSeen(load))
-      .catch((err: unknown): FlowLastSeenRead => ({ kind: "unknown", reason: err instanceof Error ? err.message : String(err) }))
+      .then((load) => {
+        retry = load.kind === "unknown";
+        return readFlowLastSeen(load);
+      })
+      .catch((err: unknown): FlowLastSeenRead => {
+        retry = true;
+        return { kind: "unknown", reason: err instanceof Error ? err.message : String(err) };
+      })
       .then((read) => {
         if (!mounted.current) return;
+        if (retry) lastSeenLoad.current = null;
         if (read.kind === "read") persistedRef.current = read.doc;
-        // Times recorded while the load was in flight are kept.
-        const held = lastSeenRef.current;
-        setLastSeen(read.kind === "read" && held?.kind === "read" ? { kind: "read", doc: mergeFlowLastSeen(read.doc, held.doc) } : read);
+        // Nothing is recorded until a load has answered (run() records only
+        // into a document that was read), so there is nothing to merge here.
+        setLastSeen(read);
       });
-  }, [watching, store, setLastSeen]);
+  }, [store, setLastSeen]);
+  useEffect(() => {
+    if (watching) loadLastSeen();
+  }, [watching, loadLastSeen]);
 
-  /** Read-merge-write, so another tab's later times survive; never over an unreadable document. */
+  /**
+   * Read-merge-write, so another tab's later times survive, then one re-read:
+   * a tab that saved in the same instant may have dropped an entry this one
+   * wrote, and the merge is saved again. Never over an unreadable document.
+   */
   const persistLastSeen = useCallback(
-    async (doc: FlowLastSeen) => {
+    async (doc: FlowLastSeen, at: number) => {
       if (store === undefined) return;
       try {
         const fresh = readFlowLastSeen(await store.load(FLOW_LAST_SEEN_KEY));
         if (fresh.kind === "unknown") {
+          writeFailedAt.current = at;
           logger?.warn("live-flow: last-seen document unreadable; not written", { reason: fresh.reason });
           return;
         }
-        const merged = mergeFlowLastSeen(fresh.doc, doc);
+        let merged = mergeFlowLastSeen(fresh.doc, doc);
         await store.save(FLOW_LAST_SEEN_KEY, encodeFlowLastSeen(merged));
+        const after = readFlowLastSeen(await store.load(FLOW_LAST_SEEN_KEY));
+        if (after.kind === "read" && lostFlowLastSeen(after.doc, merged).length > 0) {
+          merged = mergeFlowLastSeen(after.doc, merged);
+          await store.save(FLOW_LAST_SEEN_KEY, encodeFlowLastSeen(merged));
+        }
         persistedRef.current = merged;
+        writeFailedAt.current = null;
         const held = lastSeenRef.current;
         if (mounted.current && held?.kind === "read") setLastSeen({ kind: "read", doc: mergeFlowLastSeen(held.doc, merged) });
       } catch (err) {
+        writeFailedAt.current = at;
         logger?.warn("live-flow: last-seen time not saved", { error: err instanceof Error ? err.message : String(err) });
       }
     },
@@ -228,6 +265,8 @@ export function useLiveFlow({ cribl, groupId, lanes, watching, now = Date.now, s
   );
   const persistRef = useRef(persistLastSeen);
   persistRef.current = persistLastSeen;
+  const loadRef = useRef(loadLastSeen);
+  loadRef.current = loadLastSeen;
 
   // The run reads the latest values through refs, so the registry keeps one
   // stable registration while props change.
@@ -237,7 +276,6 @@ export function useLiveFlow({ cribl, groupId, lanes, watching, now = Date.now, s
   readingsRef.current = readings;
   const runsSinceLookback = useRef(0);
   const inFlight = useRef<AbortController | null>(null);
-  const mounted = useRef(true);
 
   const resetReadings = useCallback(() => {
     inFlight.current?.abort();
@@ -266,6 +304,8 @@ export function useLiveFlow({ cribl, groupId, lanes, watching, now = Date.now, s
     const { cribl: client, group: g, lanes: current, now: clock } = latest.current;
     if (!g) return;
     const before = readingsRef.current;
+    // A last-seen load that failed is retried with the poll, not left unknown for the screen's life.
+    loadRef.current();
     const kind = nextFlowQuery({
       lookback: before.lookbackStatus,
       runsSinceLookbackAttempt: runsSinceLookback.current + 1,
@@ -286,11 +326,13 @@ export function useLiveFlow({ cribl, groupId, lanes, watching, now = Date.now, s
         : { ...prev, lookbackAnswer: answer, lookbackStatus: "failed", lastQuery: kind, asOf: at };
     } else {
       const seen = new Set(prev.seen);
-      const flowing: FlowInput[] = [];
+      const flowing: LiveFlowLane[] = [];
       for (const lane of current) {
-        if (!windowSawInput(answer, lane.input)) continue;
+        // The answer measured group g only: a lane in another group is not
+        // measured (see states), so it is neither seen nor remembered.
+        if (lane.groupId !== g || !windowSawInput(answer, lane.input)) continue;
         seen.add(inputKey(lane.input));
-        flowing.push(lane.input);
+        flowing.push(lane);
       }
       next = { ...prev, windowAnswer: answer, seen, lastQuery: kind, asOf: at };
       // AZR-37: only a measured, non-zero window row is remembered, and only
@@ -299,7 +341,9 @@ export function useLiveFlow({ cribl, groupId, lanes, watching, now = Date.now, s
       if (flowing.length > 0 && held?.kind === "read") {
         const recorded = recordFlowSeen(held.doc, flowing, at, persistedRef.current ?? held.doc);
         setLastSeen({ kind: "read", doc: recorded.doc });
-        if (recorded.due) void persistRef.current(recorded.doc);
+        const failedAt = writeFailedAt.current;
+        const backingOff = failedAt !== null && at - failedAt < FLOW_LAST_SEEN_MIN_WRITE_INTERVAL_MS;
+        if (recorded.due && !backingOff) void persistRef.current(recorded.doc, at);
       }
     }
     readingsRef.current = next;
@@ -348,7 +392,7 @@ export function useLiveFlow({ cribl, groupId, lanes, watching, now = Date.now, s
       out[lane.sourceId] =
         store === undefined
           ? { kind: "unknown", reason: "this build has no app storage to remember it in" }
-          : lastSeenFor(lastSeenRead, lane.input);
+          : lastSeenFor(lastSeenRead, lane);
     }
     return out;
   }, [watching, lanes, store, lastSeenRead]);
