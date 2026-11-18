@@ -43,8 +43,10 @@
  *     carried as they are and rewritten only by that source's own choice or
  *     mode change.
  *   - PROGRESS SAVES PER CLICK (D3): a tick, a mode change, choosing a source,
- *     Apply on the plan values, the worker group and a created Cribl source
- *     each write the progress document once, serialized through one promise
+ *     Apply on the plan values, a complete Event Hub pick in section 1 while
+ *     the plan's Event Hub names follow it (AZR-102), the switch between
+ *     following section 1 and the operator's own names, the worker group and
+ *     a created Cribl source each write the progress document once, serialized through one promise
  *     chain and a latest-state ref. Only after an `absent` or readable load
  *     (canWriteProgress); a failed progress load blocks those writes, and
  *     with them every choice, because the mode lives in progress.
@@ -122,6 +124,7 @@ import type {
   ActivityLogState,
   DefenderDeployForValidation,
   DefenderState,
+  EventHubSource,
   OnboardingDeployForValidation,
   KvDocumentLoad,
   LakeRouteSourceId,
@@ -179,8 +182,11 @@ import { ChoosePanel } from "./howto/choose-panel";
 import {
   applyPlanValues,
   canWriteProgress,
+  chooseEventHubSource,
   chosenSourceIds,
   effectiveMode,
+  followPickedEventHub,
+  pickedEventHub,
   howtoModeRadioId,
   howtoRowAnchorId,
   loadedProgress,
@@ -699,19 +705,24 @@ export function AzureOnboardingScreen({
     if (p !== null) commitProgress(p, "plan values");
   }
 
-  // The AZR-18 picker's names, for "Use the Event Hub picked above". React
-  // state only: the picker itself is not seeded from the plan.
-  const pickedValues = useMemo((): Partial<PlanValues> | null => {
-    const ns = target.namespace;
-    if (ns === null) return null;
-    return {
-      subscriptionId: ns.subscriptionId,
-      resourceGroup: ns.resourceGroup,
-      namespace: ns.name,
-      hubName: target.hubName,
-      sendRule: target.rule?.name ?? "",
-    };
-  }, [target]);
+  // ONE EVENT HUB (AZR-102). The section 1 picker is the source of the Event
+  // Hub plan values: a complete pick (namespace and hub) writes them to the
+  // progress document at once, unless the operator keeps their own names. The
+  // deploy sections read the picker and the steps, Validate and the Cribl
+  // source read the plan, so both now name the same hub. The picker itself is
+  // still React state, not seeded from the plan (AZR-24).
+  const pickedHub = useMemo(() => pickedEventHub(target), [target]);
+
+  function onTargetChange(next: EventHubTarget): void {
+    setTarget(next);
+    const p = followPickedEventHub(latestProgressLoad.current, pickedEventHub(next));
+    if (p !== null) commitProgress(p, "event hub from section 1");
+  }
+
+  function onChooseEventHubSource(source: EventHubSource): void {
+    const p = chooseEventHubSource(latestProgressLoad.current, source, pickedEventHub(target));
+    if (p !== null) commitProgress(p, source === "own" ? "own event hub names" : "follow section 1");
+  }
 
   // -------------------------------------------------------------------------
   // Validate (D16)
@@ -1078,7 +1089,7 @@ export function AzureOnboardingScreen({
         onRead={() => void onReadInventory()}
       />
 
-      <EventHubPrerequisiteSection number={1} value={target} onChange={setTarget} />
+      <EventHubPrerequisiteSection number={1} value={target} onChange={onTargetChange} />
 
       <NumberedSection
         number={CHOOSER_SECTION_NUMBER}
@@ -1174,7 +1185,8 @@ export function AzureOnboardingScreen({
             load={progressLoad}
             selection={selection}
             result={lastResult}
-            pickedValues={pickedValues}
+            pickedEventHub={pickedHub}
+            onChooseEventHubSource={onChooseEventHubSource}
             onToggleTick={onToggleTick}
             onApplyPlanValues={onApplyPlanValues}
           />

@@ -4591,14 +4591,15 @@
     {
       "id": "AZR-102",
       "type": "story",
-      "status": "in-progress",
+      "status": "done",
       "priority": "next",
       "dependsOn": [],
       "title": "One Event Hub choice: the section 1 picker and the How-to 'Your names and ids' values hold separate copies of namespace, hub and rule",
-      "detail": "FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live Preview (all ten sections walked), asked for by the operator to find what is missing to finish automating the sources. Section 1 'Event Hub the sources send to' picks namespace, hub and authorization rule; section 8's plan values ('Your names and ids') hold their own Event Hub namespace, Event Hub name and Send rule, bridged by a 'Use the Event Hub picked above' button. [[AZR-24]] only persists the section 1 choice. Two copies can drift: a deploy (Defender, [[AZR-98]]) writes to the picker's hub while the How-to steps, Validate and the Cribl source plan read the plan values. Make one the source and derive the other (or show the plan value as read-only from the picker with an explicit override), and pin that a deploy and the steps name the same hub.",
+      "detail": "FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live Preview (all ten sections walked), asked for by the operator to find what is missing to finish automating the sources. Section 1 'Event Hub the sources send to' picks namespace, hub and authorization rule; section 8's plan values ('Your names and ids') hold their own Event Hub namespace, Event Hub name and Send rule, bridged by a 'Use the Event Hub picked above' button. [[AZR-24]] only persists the section 1 choice. Two copies can drift: a deploy (Defender, [[AZR-98]]) writes to the picker's hub while the How-to steps, Validate and the Cribl source plan read the plan values. Make one the source and derive the other (or show the plan value as read-only from the picker with an explicit override), and pin that a deploy and the steps name the same hub. DONE 2026-11-17 (1.13.24): the section 1 picker is the one source of the five Event Hub plan values (EVENT_HUB_PLAN_KEYS: subscription, resource group, namespace, hub, Send rule). A complete pick writes them into the progress document at once and the How-to form shows them read-only; \"Use my own Event Hub names\" keeps the operator's own, which the picker then never overwrites, and a warning names any difference from section 1. The choice is a new optional progress field eventHubSource (section1 | own). Migration: a document without it follows section 1 only when it names no Event Hub, so an existing saved plan survives as the operator's own (ADR 0007 amendment). Replaces the \"Use the Event Hub picked above\" button. Pinned in core progress-document.test.ts, howto-state.test.ts, howto-panel.dom.test.tsx and azure-onboarding-screen.dom.test.tsx, including that the Defender PUT targets exactly the hub the saved plan names (mutation-checked). Seeding the picker from the plan stays AZR-24. Live Preview verification is pending.",
       "epic": "AZR",
       "feature": "AZR-F9",
-      "settled": "settled"
+      "settled": "settled",
+      "verified": "pins"
     },
     {
       "id": "AZR-103",
@@ -5165,12 +5166,13 @@
       "epic": "AZR",
       "feature": "AZR-F9",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "title": "Direct configuration repeats an unattributed How-to note per source, and the page description names only the Defender export",
-      "detail": "FOUND 2026-11-17 in Live Preview (main at 1.13.22, lab org, read-only) after AZR-100/101. Section 5 Direct configuration showed \"This source is set to How-to, so the app does not deploy it. Follow its steps under How to set it up yourself, or switch it back to Automate under Choose what to onboard.\" twice - once for the Azure Activity Log and once for the Defender export - with neither naming its source, and the Activity Log one shown although it is Not chosen. The route description above the screen still reads \"... and deploy the Defender for Cloud alert export\", though the Activity Log is deployable too (AZR-98). FIX: name the source in the note and show it only for a chosen How-to source; update the route description."
+      "detail": "FOUND 2026-11-17 in Live Preview (main at 1.13.22, lab org, read-only) after AZR-100/101. Section 5 Direct configuration showed \"This source is set to How-to, so the app does not deploy it. Follow its steps under How to set it up yourself, or switch it back to Automate under Choose what to onboard.\" twice - once for the Azure Activity Log and once for the Defender export - with neither naming its source, and the Activity Log one shown although it is Not chosen. The route description above the screen still reads \"... and deploy the Defender for Cloud alert export\", though the Activity Log is deployable too (AZR-98). FIX: name the source in the note and show it only for a chosen How-to source; update the route description. DONE 2026-11-17 (1.13.24): the note is now named per source (howtoDeployNote: \"The <source> is set to How-to, so the app does not deploy it. ...\") and shown only for a source CHOSEN in How-to mode; a How-to source that is not chosen shows neither the note nor deploy controls (deployBlockView in azure-onboarding-state.ts). The route description in App.tsx now names both deployable sources, the Activity Log setting and the Defender export. Pinned in azure-onboarding-state.test.ts and azure-onboarding-howto.dom.test.tsx (mutation-checked). Live Preview verification is pending.",
+      "verified": "pins"
     },
     {
       "id": "DBT-305",

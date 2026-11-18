@@ -80,6 +80,27 @@ JSON of the plan values its step depends on, and reads "done against older
 values" when they change. The AZR-18 picker is still not seeded from the
 plan (AZR-24 stays open).
 
+**Amendment (2026-11-17, AZR-102): one Event Hub.** The section 1 picker
+and the plan values held separate copies of the Event Hub, bridged by a "Use
+the Event Hub picked above" button, so a deploy (which reads the picker) could
+write to one hub while the steps, Validate and the Cribl source (which read the
+plan) named another. Now the picker is the source of the five Event Hub plan
+values (`EVENT_HUB_PLAN_KEYS`: subscription, resource group, namespace, hub,
+Send rule): a complete pick (namespace and hub) writes them into the progress
+document at once, and the form shows them read-only. The operator can choose
+"Use my own Event Hub names" instead; the picker then never overwrites them,
+and a warning names any difference from section 1. The choice is the optional
+progress field `eventHubSource` (`section1` | `own`), encoded only once set,
+so a document without it encodes as before. **Migration:** a document from
+before this change has no `eventHubSource`; it follows section 1 only when it
+names no Event Hub (namespace, hub and Send rule blank), so a plan an operator
+already saved is kept as their own until they choose "Follow the Event Hub
+picked in section 1" (`eventHubFollowsSection1`). An older release decodes the
+field as dropped and its next save omits it, which reads back as the
+migration rule. The picker itself is still React state; seeding it from the
+plan remains AZR-24. Plan value edits other than the Event Hub names still
+save only on Apply.
+
 ### 2. A source is Automated or How-to, and Automated is a function
 
 `isAutomatable(id)` is `itemAvailability(id).status === 'available'`, a

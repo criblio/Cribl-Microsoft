@@ -36,10 +36,13 @@
  */
 
 import {
+  EVENT_HUB_PLAN_KEYS,
   ONBOARDING_SOURCES,
   PLAN_VALUE_LABELS,
   aggregateVerdict,
   canWriteProgressDocument,
+  changedValueKeys,
+  eventHubFollowsSection1,
   howToStep,
   isAutomatable,
   otherNameAlsoFound,
@@ -49,6 +52,7 @@ import {
   stepsForSelection,
   tickState,
   verdictsForStep,
+  withEventHubSource,
   withPlanValues,
   withSourceChosen,
   withSourceMode,
@@ -58,6 +62,7 @@ import {
 import type {
   CoverageSelection,
   CriblInputType,
+  EventHubSource,
   HowToStep,
   KvDocumentLoad,
   OnboardingProgress,
@@ -719,6 +724,119 @@ export function applyPlanValues(
   const progress = loadedProgress(state);
   if (progress === null || !canWriteProgress(state)) return null;
   return withPlanValues(progress, values);
+}
+
+// ---------------------------------------------------------------------------
+// One Event Hub (AZR-102)
+// ---------------------------------------------------------------------------
+
+/** The Event Hub plan values, as the section 1 picker names them. */
+export type PickedEventHub = Readonly<Record<(typeof EVENT_HUB_PLAN_KEYS)[number], string>>;
+
+/** The section 1 picker's choice, structurally (eventhub-prerequisite-section EventHubTarget). */
+export interface PickerTarget {
+  readonly namespace: { readonly subscriptionId: string; readonly resourceGroup: string; readonly name: string } | null;
+  readonly hubName: string;
+  readonly rule: { readonly name: string } | null;
+}
+
+/**
+ * The picker's Event Hub as plan values, or null until it names a namespace
+ * AND a hub: a namespace alone names no Event Hub a step could be written
+ * against. No rule yet is a blank Send rule, as the picker shows it.
+ */
+export function pickedEventHub(target: PickerTarget): PickedEventHub | null {
+  const ns = target.namespace;
+  if (ns === null || target.hubName.trim() === "") return null;
+  return {
+    subscriptionId: ns.subscriptionId,
+    resourceGroup: ns.resourceGroup,
+    namespace: ns.name,
+    hubName: target.hubName,
+    sendRule: target.rule?.name ?? "",
+  };
+}
+
+/**
+ * The progress after the picker named `picked`, or null when nothing is to be
+ * written: writes blocked, no complete pick, the operator keeps their own
+ * names, or the plan already names exactly this Event Hub and records that it
+ * follows section 1. This is how the plan values DERIVE from section 1: the
+ * picker writes them, so the deploy (which reads the picker) and the steps,
+ * Validate and the Cribl source (which read the plan) name one Event Hub.
+ */
+export function followPickedEventHub(
+  state: ProgressLoadState,
+  picked: PickedEventHub | null,
+): OnboardingProgress | null {
+  const progress = loadedProgress(state);
+  if (progress === null || !canWriteProgress(state) || picked === null) return null;
+  if (!eventHubFollowsSection1(progress)) return null;
+  const changed = changedValueKeys(progress.planValues, picked, EVENT_HUB_PLAN_KEYS).length > 0;
+  if (!changed && progress.eventHubSource === "section1") return null;
+  return withEventHubSource(withPlanValues(progress, { ...progress.planValues, ...picked }), "section1");
+}
+
+/**
+ * The operator's explicit choice: follow section 1 (taking the picked Event
+ * Hub at once, when there is one) or keep their own names. Null while writes
+ * are blocked or when nothing would change.
+ */
+export function chooseEventHubSource(
+  state: ProgressLoadState,
+  source: EventHubSource,
+  picked: PickedEventHub | null,
+): OnboardingProgress | null {
+  const progress = loadedProgress(state);
+  if (progress === null || !canWriteProgress(state)) return null;
+  if (source === "own") return progress.eventHubSource === "own" ? null : withEventHubSource(progress, "own");
+  const following = withEventHubSource(progress, "section1");
+  return picked === null ? following : withEventHubSource(withPlanValues(following, { ...following.planValues, ...picked }), "section1");
+}
+
+/** What the plan values form says and locks about the Event Hub names. */
+export interface EventHubLinkView {
+  /** True when the names follow section 1. */
+  readonly follows: boolean;
+  /** The keys the form shows read-only: the Event Hub keys while they follow section 1. */
+  readonly lockedKeys: readonly PlanValueKey[];
+  readonly note: string;
+  /**
+   * Set when section 1 names a different Event Hub than the plan: a deploy
+   * would write to one while the steps, Validate and the Cribl source name
+   * the other. Never silent.
+   */
+  readonly drift: string | null;
+}
+
+export const EVENT_HUB_FOLLOWS_NOTE =
+  "These Event Hub names follow section 1, Event Hub the sources send to. Change the Event Hub there.";
+export const EVENT_HUB_OWN_NOTE =
+  "These Event Hub names are your own: the Event Hub picked in section 1 does not change them.";
+/** The control that stops following section 1. */
+export const USE_OWN_EVENT_HUB_LABEL = "Use my own Event Hub names";
+/** The control that follows section 1 again. */
+export const FOLLOW_SECTION1_LABEL = "Follow the Event Hub picked in section 1";
+
+function hubPath(v: Partial<PlanValues>): string {
+  const ns = (v.namespace ?? "").trim();
+  const hub = (v.hubName ?? "").trim();
+  return `${ns === "" ? "(no namespace)" : ns}/${hub === "" ? "(no hub)" : hub}`;
+}
+
+export function eventHubLinkView(progress: OnboardingProgress, picked: PickedEventHub | null): EventHubLinkView {
+  const follows = eventHubFollowsSection1(progress);
+  const differs = picked === null ? [] : changedValueKeys(picked, progress.planValues, EVENT_HUB_PLAN_KEYS);
+  const drift =
+    picked === null || differs.length === 0
+      ? null
+      : `Section 1 and these names differ (${differs.map((k) => PLAN_VALUE_LABELS[k].label).join(", ")}): a deploy on this page writes to section 1's Event Hub, ${hubPath(picked)}, while the How-to steps, Validate and the Cribl source use ${hubPath(progress.planValues)}.`;
+  return {
+    follows,
+    lockedKeys: follows ? EVENT_HUB_PLAN_KEYS : [],
+    note: follows ? EVENT_HUB_FOLLOWS_NOTE : EVENT_HUB_OWN_NOTE,
+    drift,
+  };
 }
 
 /** The state after a successful write, so the next transition starts from it. */

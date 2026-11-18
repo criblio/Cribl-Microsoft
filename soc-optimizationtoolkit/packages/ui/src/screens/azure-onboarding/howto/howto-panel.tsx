@@ -24,20 +24,21 @@
  */
 
 import { useState } from "react";
-import type { CoverageSelection, PlanValues, ValidationResult } from "@soc/core";
+import type { CoverageSelection, EventHubSource, PlanValues, ValidationResult } from "@soc/core";
 import { PickerLine } from "../eventhub-prerequisite-section";
 import { PlanValuesForm } from "./plan-values-form";
 import { StepDialog } from "./step-dialog";
 import { StepList } from "./step-list";
 import {
   canWriteProgress,
+  eventHubLinkView,
   loadedProgress,
   progressBlockedReason,
   progressSummary,
   stepDialogView,
   stepRows,
 } from "./howto-state";
-import type { ProgressLoadState } from "./howto-state";
+import type { PickedEventHub, ProgressLoadState } from "./howto-state";
 
 export interface HowToPanelProps {
   /** The progress document's load state (howto-state progressLoadStateFrom). */
@@ -46,8 +47,14 @@ export interface HowToPanelProps {
   readonly selection: CoverageSelection | null;
   /** The last Validate result, for the verdict words; null before one ran. */
   readonly result?: ValidationResult | null;
-  /** The AZR-18 Event Hub picker's names, for "Use the Event Hub picked above". */
-  readonly pickedValues?: Partial<PlanValues> | null;
+  /**
+   * The section 1 picker's Event Hub (howto-state pickedEventHub), or null
+   * until it names a namespace and a hub. The Event Hub plan values follow it
+   * unless the operator keeps their own (AZR-102).
+   */
+  readonly pickedEventHub?: PickedEventHub | null;
+  /** Follow section 1, or keep the operator's own Event Hub names. */
+  readonly onChooseEventHubSource?: (source: EventHubSource) => void;
   /** A reason of the screen's own to block writes (shown); null or absent otherwise. */
   readonly writesBlockedReason?: string | null;
   readonly onToggleTick: (stepId: string, checked: boolean) => void;
@@ -65,7 +72,8 @@ export function HowToPanel({
   load,
   selection,
   result = null,
-  pickedValues = null,
+  pickedEventHub = null,
+  onChooseEventHubSource,
   writesBlockedReason = null,
   onToggleTick,
   onApplyPlanValues,
@@ -100,7 +108,8 @@ export function HowToPanel({
         values={progress.planValues}
         disabled={!canWrite}
         onApply={onApplyPlanValues}
-        pickedValues={pickedValues}
+        eventHub={eventHubLinkView(progress, pickedEventHub)}
+        {...(onChooseEventHubSource === undefined ? {} : { onChooseEventHubSource })}
       />
       <h4>Steps</h4>
       <p className="field-hint" role="status">

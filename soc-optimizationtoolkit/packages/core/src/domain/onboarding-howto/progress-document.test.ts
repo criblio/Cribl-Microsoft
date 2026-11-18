@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { COVERAGE_SELECTION_KIND } from "../coverage-model";
 import {
+  EVENT_HUB_PLAN_KEYS,
   ONBOARDING_PROGRESS_KEY,
   canWriteProgressDocument,
   decodeProgress,
   emptyProgress,
   encodeProgress,
+  eventHubFollowsSection1,
+  withEventHubSource,
   progressFrom,
   readProgressDocument,
   strandedCriblSources,
@@ -229,6 +232,49 @@ describe("Lake route records (AZR-35)", () => {
     const { progress, dropped } = decodeProgress(raw);
     expect([...dropped].sort()).toEqual(["criblLakeRoutes.activityLog", "criblLakeRoutes.notASource"]);
     expect(progress.criblLakeRoutes).toBeUndefined();
+  });
+});
+
+describe("where the Event Hub plan values come from (AZR-102)", () => {
+  it("round-trips both sources, and a document without one encodes exactly as before (no new key)", () => {
+    for (const source of ["section1", "own"] as const) {
+      const doc = readProgressDocument(value(encodeProgress(withEventHubSource(sample(), source))));
+      expect(doc.status === "ok" ? doc.decoded.dropped : null).toEqual([]);
+      expect(progressFrom(doc)?.eventHubSource).toBe(source);
+    }
+    expect(JSON.parse(encodeProgress(sample()))).not.toHaveProperty("eventHubSource");
+    expect(decodeProgress(JSON.parse(encodeProgress(sample()))).progress).not.toHaveProperty("eventHubSource");
+  });
+
+  it("drops and reports an unknown value, never guesses one", () => {
+    const raw = JSON.parse(encodeProgress(sample()));
+    raw.eventHubSource = "picker";
+    const { progress, dropped } = decodeProgress(raw);
+    expect(dropped).toEqual(["eventHubSource"]);
+    expect(progress.eventHubSource).toBeUndefined();
+  });
+
+  it("an explicit source decides, whatever the names", () => {
+    const named = sample(); // names ns1/h1
+    expect(eventHubFollowsSection1(withEventHubSource(named, "section1"))).toBe(true);
+    expect(eventHubFollowsSection1(withEventHubSource(named, "own"))).toBe(false);
+    expect(eventHubFollowsSection1(withEventHubSource(emptyProgress(), "own"))).toBe(false);
+  });
+
+  it("MIGRATION: a pre-AZR-102 document follows section 1 only when it names no Event Hub", () => {
+    // The first-run subscription and resource group are not Event Hub names of the operator's.
+    expect(eventHubFollowsSection1(emptyProgress({ subscriptionId: "sub1", resourceGroup: "rg1" }))).toBe(true);
+    const blank = emptyProgress().planValues;
+    for (const key of ["namespace", "hubName", "sendRule"] as const) {
+      const saved = withPlanValues(emptyProgress(), { ...blank, [key]: "mine" });
+      expect(eventHubFollowsSection1(saved), key).toBe(false);
+    }
+    // Whitespace is not a name.
+    expect(eventHubFollowsSection1(withPlanValues(emptyProgress(), { ...blank, namespace: "  " }))).toBe(true);
+  });
+
+  it("names exactly the five Event Hub keys", () => {
+    expect([...EVENT_HUB_PLAN_KEYS]).toEqual(["subscriptionId", "resourceGroup", "namespace", "hubName", "sendRule"]);
   });
 });
 

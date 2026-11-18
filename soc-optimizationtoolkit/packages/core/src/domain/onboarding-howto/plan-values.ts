@@ -49,6 +49,20 @@ export const PLAN_VALUE_KEYS = [
 
 export type PlanValueKey = (typeof PLAN_VALUE_KEYS)[number];
 
+/**
+ * The plan values that name the Event Hub the sources send to (AZR-102): the
+ * namespace with its subscription and resource group, the hub and the Send
+ * rule. The screen's Event Hub picker (section 1) is their source unless the
+ * operator chose their own (progress-document eventHubFollowsSection1).
+ */
+export const EVENT_HUB_PLAN_KEYS = [
+  "subscriptionId",
+  "resourceGroup",
+  "namespace",
+  "hubName",
+  "sendRule",
+] as const satisfies readonly PlanValueKey[];
+
 /** One string per key; `''` means unset. */
 export type PlanValues = Readonly<Record<PlanValueKey, string>>;
 
