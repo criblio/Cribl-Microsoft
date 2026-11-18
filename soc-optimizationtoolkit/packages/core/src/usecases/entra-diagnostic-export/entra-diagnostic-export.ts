@@ -95,7 +95,13 @@ export type EntraDeployOutcome =
   | { readonly kind: "written-and-read-back"; readonly settingId: string }
   | { readonly kind: "accepted-not-verified"; readonly settingId: string; readonly reasons: readonly string[] }
   | { readonly kind: "already-exists"; readonly settingId: string }
-  | { readonly kind: "present-differs"; readonly settingId: string; readonly diffs: readonly SettingDiff[] }
+  | {
+      readonly kind: "present-differs";
+      readonly settingId: string;
+      /** The rule the existing setting sends with, so the screen can tell whether this app's record names it. */
+      readonly ruleId: string;
+      readonly diffs: readonly SettingDiff[];
+    }
   | { readonly kind: "possible-duplicate"; readonly names: readonly string[] }
   | { readonly kind: "unknown-categories"; readonly names: readonly string[] }
   | {
@@ -177,7 +183,7 @@ export async function deployEntraSetting(
   const ours = classifyOursEntraSetting(settings.listing, expected);
   if (ours.kind === "present-matching") return done({ kind: "already-exists", settingId: ours.setting.id || settingId });
   if (ours.kind === "present-differs") {
-    return done({ kind: "present-differs", settingId: ours.setting.id || settingId, diffs: ours.diffs });
+    return done({ kind: "present-differs", settingId: ours.setting.id || settingId, ruleId: ours.setting.ruleId, diffs: ours.diffs });
   }
   const overlapping = findOverlappingEntraSettings(settings.listing, input.namespace, input.categories);
   if (overlapping.length > 0) return done({ kind: "possible-duplicate", names: overlapping.map((s) => s.name) });

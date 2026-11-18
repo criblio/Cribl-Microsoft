@@ -45,11 +45,13 @@ export {
   // ENTRA_ITEM_ID is re-exported by usecases/entra-diagnostic-export, like ACTIVITY_LOG_ITEM_ID.
   ENTRA_SETTING_NAME,
   classifyOursEntraSetting,
+  entraCategoriesDiff,
   entraDiagnosticInputFor,
   entraOurSettingPath,
   entraSettingDiffs,
   expectedEntraSetting,
   findOverlappingEntraSettings,
+  sameEntraCategories,
   unknownEntraCategories,
 } from "./entra-setting-deploy";
 export type { EntraSettingInput, ExpectedEntraSetting } from "./entra-setting-deploy";

@@ -144,24 +144,45 @@ export function entraSettingDiffs(
   if (observed.hub !== "") {
     diffs.push({ field: "eventHubName", expected: `(none: ${ENTRA_AUTO_HUB_TEXT})`, actual: observed.hub });
   }
-  const problems: string[] = [];
-  if (observed.enabledGroups.length > 0) problems.push(`category groups enabled: ${observed.enabledGroups.join(", ")}`);
   if (expected !== undefined) {
-    const off = expected.categories.filter((c) => !observed.enabled.some((e) => same(e, c)));
-    const extra = observed.enabled.filter((e) => !expected.categories.some((c) => same(c, e)));
-    if (off.length > 0) problems.push(`not enabled: ${off.join(", ")}`);
-    if (extra.length > 0) problems.push(`enabled but not chosen: ${extra.join(", ")}`);
-  } else if (observed.enabled.length === 0 && observed.enabledGroups.length === 0) {
-    problems.push("none enabled");
-  }
-  if (problems.length > 0) {
-    diffs.push({
-      field: "logs",
-      expected: expected === undefined ? "named categories enabled" : `exactly ${expected.categories.join(", ")}`,
-      actual: problems.join("; "),
-    });
+    const logs = entraCategoriesDiff(expected.categories, observed);
+    if (logs !== null) diffs.push(logs);
+  } else {
+    const problems: string[] = [];
+    if (observed.enabledGroups.length > 0) problems.push(`category groups enabled: ${observed.enabledGroups.join(", ")}`);
+    if (observed.enabled.length === 0 && observed.enabledGroups.length === 0) problems.push("none enabled");
+    if (problems.length > 0) diffs.push({ field: "logs", expected: "named categories enabled", actual: problems.join("; ") });
   }
   return diffs;
+}
+
+/**
+ * THE ONE RULE for an Entra setting's categories against a chosen profile,
+ * shared by Deploy ({@link entraSettingDiffs}) and Validate's entra-setting
+ * check (onboarding-validation/classify), so one setting never reads as
+ * "as expected" in one place and "differs" in another. Strict: EXACTLY the
+ * chosen categories - a chosen one not enabled is named, an extra one enabled
+ * is named (more data, and cost, than was chosen), and an enabled category
+ * GROUP is named (it enables categories nobody chose by name). Null when the
+ * setting has exactly the chosen ones.
+ */
+export function entraCategoriesDiff(
+  chosen: readonly string[],
+  observed: Pick<DiagnosticSettingRead, "enabled" | "enabledGroups">,
+): SettingDiff | null {
+  const problems: string[] = [];
+  if (observed.enabledGroups.length > 0) problems.push(`category groups enabled: ${observed.enabledGroups.join(", ")}`);
+  const off = chosen.filter((c) => !observed.enabled.some((e) => same(e, c)));
+  const extra = observed.enabled.filter((e) => !chosen.some((c) => same(c, e)));
+  if (off.length > 0) problems.push(`not enabled: ${off.join(", ")}`);
+  if (extra.length > 0) problems.push(`enabled but not chosen: ${extra.join(", ")}`);
+  if (problems.length === 0) return null;
+  return { field: "logs", expected: `exactly ${chosen.join(", ")}`, actual: problems.join("; ") };
+}
+
+/** True when two category lists hold the same categories, ignoring case and order. */
+export function sameEntraCategories(a: readonly string[], b: readonly string[]): boolean {
+  return a.every((x) => b.some((y) => same(x, y))) && b.every((y) => a.some((x) => same(x, y)));
 }
 
 /**

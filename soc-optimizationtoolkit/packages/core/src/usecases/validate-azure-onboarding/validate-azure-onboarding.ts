@@ -77,6 +77,7 @@ import { DEFENDER_EXPORT_ITEM_ID, expectedExportFor } from "../../domain/defende
 import type { DefenderExportInput } from "../../domain/defender-export/defender-automation";
 import type { ActivityLogSettingInput } from "../../domain/activity-log-export/activity-log-setting";
 import type { EntraSettingInput } from "../../domain/entra-diagnostics/entra-setting-deploy";
+import { sameEntraCategories } from "../../domain/entra-diagnostics/entra-setting-deploy";
 import { eventHubNamespacePath } from "../../domain/eventhub-arm/eventhub-arm";
 import { readAllPages, readSingle, describeRequest } from "../read-logging-map";
 import { MAX_LIST_PAGES } from "../azure-discovery";
@@ -311,6 +312,13 @@ export interface CheckResult {
   readonly stepId: string;
   readonly kind: CheckKind;
   readonly verdict: StepVerdict;
+  /**
+   * entra-setting checks only: the categories this check required - the
+   * profile chosen when Validate ran. A later deploy may amend the verdict
+   * only when it wrote exactly these (applyEntraDeploy); the profile is not a
+   * plan value, so changing it does not mark the run stale.
+   */
+  readonly entraCategories?: readonly string[];
 }
 
 /** What a Validate run found. */
@@ -493,6 +501,7 @@ export async function validateAzureOnboarding(
       stepId: check.stepId,
       kind: check.kind,
       verdict,
+      ...(check.kind === "entra-setting" ? { entraCategories: check.expectations.entraCategories ?? [] } : {}),
     });
   }
 
@@ -667,10 +676,13 @@ export const ENTRA_WRITTEN_UNCONFIRMED_DETAIL =
  *
  * Sound because the entra-setting check looks for CriblEntraIDLogs (the name
  * the deploy wrote), sending with the plan's namespace and send rule, no hub
- * name, and the chosen profile's categories enabled - and
+ * name, and exactly the run's categories enabled - and
  * "written-and-read-back" compared exactly that. It holds only when the
- * deploy's namespace is the plan's and its rule is the plan's send rule;
- * anything else returns null and the run stands.
+ * deploy's namespace is the plan's, its rule is the plan's send rule, AND it
+ * wrote exactly the categories every entra-setting check of the run required
+ * (the profile chosen when Validate ran, carried on the check: a profile
+ * change after the run does not make it stale, so the categories must be
+ * compared here); anything else returns null and the run stands.
  */
 export function applyEntraDeploy(
   result: ValidationResult,
@@ -685,7 +697,13 @@ export function applyEntraDeploy(
   };
   if (!same(eventHubNamespacePath(planNs), eventHubNamespacePath(deploy.input.namespace))) return null;
   if (!same(values.sendRule ?? "", deploy.input.ruleName)) return null;
-  if (!result.checks.some((c) => c.kind === "entra-setting")) return null;
+  const entraChecks = result.checks.filter((c) => c.kind === "entra-setting");
+  if (entraChecks.length === 0) return null;
+  // A check without its categories (a result from before they were carried)
+  // cannot be shown to match, so it stands too.
+  if (!entraChecks.every((c) => c.entraCategories !== undefined && sameEntraCategories(c.entraCategories, deploy.input.categories))) {
+    return null;
+  }
   const verdict: StepVerdict =
     deploy.outcome === "written-and-read-back"
       ? { kind: "as-expected" }

@@ -11,7 +11,8 @@ import { defaultPlanValues, type PlanValues } from "../onboarding-howto/plan-val
 // The barrels, not the modules: Validate and the core root reach them there.
 import { namespaceSupportsKafka, ruleCanListen } from "../eventhub-arm";
 import { classifyExportForPlan, DEFENDER_EXPORT_NAME } from "../defender-export";
-import { listSettingsRequest } from "../entra-diagnostics";
+import { entraSettingDiffs, listSettingsRequest } from "../entra-diagnostics";
+import { readDiagnosticSetting } from "../activity-log-export/diagnostic-setting";
 import {
   checkExpectationsFor,
   classifyArrival,
@@ -334,6 +335,36 @@ describe("Defender, Entra, Activity Log, policy, XDR", () => {
     const other = classifyCheck("entra-setting", FULL, [readRows([setting("Portal", all)])], ex);
     expect(other).toEqual({ kind: "present-other-name", name: "Portal", diffs: [] });
     expect(classifyCheck("entra-setting", FULL, [readRows([])], ex)).toEqual({ kind: "absent" });
+  });
+
+  it("entra-setting: an extra enabled category differs, exactly as the Entra Deploy judges it (one rule)", () => {
+    const ex = checkExpectationsFor("entraId", FULL, ["Standard"]);
+    const all = ex.entraCategories ?? [];
+    const row = {
+      name: "CriblEntraIDLogs",
+      properties: {
+        eventHubAuthorizationRuleId: `${NS_PATH}/authorizationRules/sender`,
+        eventHubName: "",
+        logs: [...all, "MicrosoftGraphActivityLogs"].map((category) => ({ category, enabled: true })),
+      },
+    };
+    const v = classifyCheck("entra-setting", FULL, [readRows([row])], ex);
+    const expectedLogs = {
+      field: "logs",
+      expected: `exactly ${all.join(", ")}`,
+      actual: "enabled but not chosen: MicrosoftGraphActivityLogs",
+    };
+    expect(v).toEqual({ kind: "present-differs", diffs: [expectedLogs] });
+    // The Deploy's comparison of the same setting with the same target.
+    const deployDiffs = entraSettingDiffs(
+      { ruleId: `${NS_PATH}/authorizationRules/sender`, categories: all },
+      readDiagnosticSetting(row),
+    );
+    expect(deployDiffs).toEqual([expectedLogs]);
+    // An enabled category group differs in both too.
+    const grouped = { ...row, properties: { ...row.properties, logs: [...all.map((category) => ({ category, enabled: true })), { categoryGroup: "allLogs", enabled: true }] } };
+    const g = classifyCheck("entra-setting", FULL, [readRows([grouped])], ex);
+    expect(g.kind === "present-differs" && g.diffs.map((d) => d.actual)).toEqual(["category groups enabled: allLogs"]);
   });
 
   it("activity-log-setting: a setting to another namespace is absent for the plan", () => {

@@ -702,6 +702,37 @@ describe("an Entra ID deploy made after the run (AZR-99)", () => {
     }
   });
 
+  it("a deploy of other categories than the run required says nothing about the run (profile changed after Validate)", async () => {
+    // Validate ran with HighVolume; the operator then picked Standard and deployed.
+    const wide = await validateAzureOnboarding(
+      new RecordingAzure(),
+      planValidation([{ id: "entraId", subSelection: ["HighVolume"] }], FULL),
+    );
+    const wideChecks = wide.checks.filter((c) => c.kind === "entra-setting");
+    expect(wideChecks).toHaveLength(1);
+    expect(wideChecks[0]!.entraCategories).toEqual(entraCategoriesFor(["HighVolume"]));
+    expect(entraCategoriesFor(["HighVolume"])).not.toEqual(TARGET.categories);
+    expect(applyEntraDeploy(wide, FULL, deploy("written-and-read-back"))).toBeNull();
+    expect(applyEntraDeploy(wide, FULL, deploy("accepted-not-verified"))).toBeNull();
+    // A subset or superset is not a match either.
+    const before = await absentRun();
+    expect(applyEntraDeploy(before, FULL, deploy("written-and-read-back", { ...TARGET, categories: TARGET.categories.slice(1) }))).toBeNull();
+    expect(
+      applyEntraDeploy(before, FULL, deploy("written-and-read-back", { ...TARGET, categories: [...TARGET.categories, "MicrosoftGraphActivityLogs"] })),
+    ).toBeNull();
+    // The same categories in another order and case are a match.
+    const reordered = [...TARGET.categories].reverse().map((c) => c.toLowerCase());
+    expect(settingVerdicts(applyEntraDeploy(before, FULL, deploy("written-and-read-back", { ...TARGET, categories: reordered }))!)).toEqual([
+      { kind: "as-expected" },
+    ]);
+  });
+
+  it("a result whose entra check does not carry its categories is never amended", async () => {
+    const before = await absentRun();
+    const stripped = { ...before, checks: before.checks.map(({ entraCategories: _drop, ...c }) => c) };
+    expect(applyEntraDeploy(stripped, FULL, deploy("written-and-read-back"))).toBeNull();
+  });
+
   it("applyOnboardingDeploy routes an Entra deploy to the Entra amend only", async () => {
     const run = await validateAzureOnboarding(new RecordingAzure(), planValidation(["entraId", "activityLog"], FULL));
     const after = applyOnboardingDeploy(run, FULL, deploy("written-and-read-back"))!;
