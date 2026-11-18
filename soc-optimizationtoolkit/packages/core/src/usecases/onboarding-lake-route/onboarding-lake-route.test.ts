@@ -300,6 +300,16 @@ describe("applyLakeRoute - order, one commit, stop on failure", () => {
     expect(outcome).toMatchObject({ kind: "deployed", dataset: "existed" });
     // AZR-105: a dataset the app did not create is never recorded as created.
     expect(outcome.record).toEqual({ groupId: G, datasetId: "azure_defender_alerts", pipelineId: PIPE, routeId: ROUTE_ID });
+    // It was read as absent, then someone else made it: any earlier proof is stale.
+    expect(outcome.datasetSeenAbsent).toBe(true);
+  });
+
+  it("AZR-105: a dataset read as present is not seen absent, so an earlier created-proof may carry over", async () => {
+    const leader = new LakeLeader();
+    leader.datasets = ["azure_defender_alerts"];
+    const r = await planned(leader);
+    const outcome = await applyLakeRoute({ cribl: leader }, r);
+    expect(outcome).toMatchObject({ kind: "deployed", dataset: "existed", datasetSeenAbsent: false });
   });
 
   it("a pipeline create that fails STOPS after the dataset, and the outcome names the dataset as created", async () => {

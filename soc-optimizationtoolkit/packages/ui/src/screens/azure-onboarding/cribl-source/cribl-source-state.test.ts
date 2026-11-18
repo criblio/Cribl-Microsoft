@@ -442,6 +442,16 @@ describe("outcomeView", () => {
 });
 
 describe("planResultView and refusal copy", () => {
+  it("AZR-105: an app-owned paused input reads as Paused, ok tone, never as a fault", () => {
+    const v = planResultView({ kind: "already-applied", paused: true, record: { groupId: "g1", inputId: "in1", inputType: "eventhub", secretId: "s1" } });
+    expect(v).toEqual({
+      tone: "ok",
+      headline: "Already created, and paused: input in1 in worker group g1 matches the plan and is paused. Resume it under Remove or pause what this app created.",
+      detail: "",
+      inCribl: null,
+    });
+  });
+
   it("names the differing fields and the already-applied record", () => {
     expect(planResultView({ kind: "refused", reason: "input-differs", detail: "", fields: ["topics"] }).detail).toContain("topics");
     expect(planResultView({ kind: "already-applied", record: RECORD }).headline).toContain(RECORD.inputId);

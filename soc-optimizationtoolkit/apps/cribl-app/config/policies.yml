@@ -133,6 +133,17 @@
 #                                             operator's explicit opt-in (it
 #                                             holds data) and only one the app
 #                                             recorded creating
+# WHY PER-ID AND NOT NARROWER: these grants cover every id under the path,
+# not only the app's own (azure_onb_*). The policy grammar has literal and
+# `:name` segments only - no id prefix or glob - and a `*` segment is refused
+# by the coverage gate (DBT-153, Undefined in the platform's matcher). So the
+# narrowing is done in code instead: nothing is deleted or PATCHed without the
+# three ownership signals (domain/onboarding-teardown).
+# The in-use checks READ, already declared: /m/{groupId}/system/outputs and
+# /m/{groupId}/jobs (destinations and collectors), and for the Lake dataset
+# every worker group's routes and destinations (/master/groups, then
+# /m/{groupId}/routes and /system/outputs per group), plus /m/{groupId}/version
+# and /products/stream/groups/{id} to tell whether earlier removals are live.
 # The route removal goes through the routes PATCH declared above, and the
 # commit and deploy through the kit routes declared below.
 #

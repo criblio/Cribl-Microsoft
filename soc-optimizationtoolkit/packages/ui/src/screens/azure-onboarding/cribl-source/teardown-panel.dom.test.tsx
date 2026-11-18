@@ -93,8 +93,8 @@ describe("TeardownPanel", () => {
     expect(lines).toEqual([
       "Remove, in this order, only what this app can prove it created:",
       `1. Remove route ${LAKE.routeId} from routing table default in worker group g1. No other route is changed.`,
-      `2. Delete Cribl source ${SOURCE.inputId} in worker group g1. It stops reading from Azure.`,
-      `3. Delete secret ${SOURCE.secretId} in worker group g1, which holds that source's credential.`,
+      `2. Delete Cribl source ${SOURCE.inputId} in worker group g1. It stops reading from Azure. Checked every route filter in the worker group: none names it.`,
+      `3. Delete secret ${SOURCE.secretId} in worker group g1, which holds that source's credential. Checked every source, destination and collector in the worker group: none names it.`,
       `Kept: pipeline ${LAKE.pipelineId} in worker group g1. Still used by route other, so it was kept.`,
       `Kept: Cribl Lake dataset ${LAKE.datasetId} and the data it holds. Kept: it holds the data already stored. Tick the option to delete it as well.`,
       "The commit can include at most these files, and only those still uncommitted after the removals: groups/g1/local/cribl/pipelines/route.yml, groups/g1/local/cribl/inputs.yml.",
@@ -115,9 +115,25 @@ describe("TeardownPanel", () => {
     fireEvent.click(within(r).getByRole("checkbox"));
     await waitFor(() => expect(within(r).queryByRole("button", { name: "Confirm: remove these objects" })).toBeNull());
     fireEvent.click(within(r).getByRole("button", { name: "Remove what this app created" }));
-    await waitFor(() => expect(within(r).getByText(`4. After the deploy, delete Cribl Lake dataset ${LAKE.datasetId} and every event it holds. This cannot be undone.`)).toBeTruthy());
+    await waitFor(() => expect(within(r).getByText(`4. After the deploy, delete Cribl Lake dataset ${LAKE.datasetId} and every event it holds. This cannot be undone. Checked every route and Cribl Lake destination in every worker group this app can read: none sends to it.`)).toBeTruthy());
     expect(h.onPlanRemove).toHaveBeenLastCalledWith("activityLog", true);
     expect(h.onApplyRemove).not.toHaveBeenCalled();
+  });
+
+  it("review finding 1: removals still pending from an earlier run are named, and nothing-to-remove that is not live keeps the records", async () => {
+    const pendingOnly: ReadyTeardown = {
+      ...readyRemove(false),
+      steps: readyRemove(false).steps.map((st) => (st.kind === "dataset" ? st : { ...st, verdict: { kind: "already-gone" as const } })),
+      scope: { alreadyDirty: ["groups/g1/local/cribl/inputs.yml"], elsewhere: [], unplaced: [], unknown: false },
+    };
+    const h = hooks({ onPlanRemove: vi.fn(async (): Promise<PlanTeardownResult> => ({ kind: "ready", ready: pendingOnly })) });
+    render(<TeardownPanel hooks={h} />);
+    const r = row();
+    fireEvent.click(within(r).getByRole("button", { name: "Remove what this app created" }));
+    await waitFor(() => expect(within(r).getByRole("button", { name: "Confirm: remove these objects" })).toBeTruthy());
+    const text = within(r).getByRole("alert").textContent ?? "";
+    expect(text).toContain("Nothing is left to delete, but this source's earlier removals are still uncommitted in worker group g1. Commit and deploy them");
+    expect(text).toContain("These files already have uncommitted changes (an earlier removal by this app, or someone else's work), which the commit will carry too: groups/g1/local/cribl/inputs.yml.");
   });
 
   it("Pause is its own two clicks, quoting the source and the hub retention caveat", async () => {

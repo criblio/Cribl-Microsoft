@@ -15,7 +15,7 @@
  * Visible copy carries no card ids, dates or phases.
  */
 
-import { describeTeardownObject } from "@soc/core";
+import { IN_USE_CHECKED, describeTeardownObject } from "@soc/core";
 import type {
   ApplyPauseOutcome,
   ApplyTeardownOutcome,
@@ -119,13 +119,13 @@ function deleteLine(step: TeardownStep, groupId: string, ready: ReadyTeardown): 
     case "route":
       return `Remove route ${step.id} from routing table ${ready.routeWrite?.tableId ?? "(unknown)"} in worker group ${groupId}. No other route is changed.`;
     case "pipeline":
-      return `Delete pipeline ${step.id} in worker group ${groupId}. No route, source or other recorded route of this app uses it.`;
+      return `Delete pipeline ${step.id} in worker group ${groupId}. Checked ${IN_USE_CHECKED.pipeline}: none uses it.`;
     case "input":
-      return `Delete Cribl source ${step.id} in worker group ${groupId}. It stops reading from Azure.`;
+      return `Delete Cribl source ${step.id} in worker group ${groupId}. It stops reading from Azure. Checked ${IN_USE_CHECKED.input}: none names it.`;
     case "secret":
-      return `Delete secret ${step.id} in worker group ${groupId}, which holds that source's credential.`;
+      return `Delete secret ${step.id} in worker group ${groupId}, which holds that source's credential. Checked ${IN_USE_CHECKED.secret}: none names it.`;
     case "dataset":
-      return `After the deploy, delete Cribl Lake dataset ${step.id} and every event it holds. This cannot be undone.`;
+      return `After the deploy, delete Cribl Lake dataset ${step.id} and every event it holds. This cannot be undone. Checked ${IN_USE_CHECKED.dataset}: none sends to it.`;
   }
 }
 
@@ -134,8 +134,12 @@ export function teardownConfirmText(ready: ReadyTeardown): string[] {
   const { groupId } = ready;
   const lines: string[] = [];
   const goes = ready.steps.filter((s) => s.verdict.kind === "delete");
-  lines.push(`Remove, in this order, only what this app can prove it created:`);
-  goes.forEach((s, i) => lines.push(`${i + 1}. ${deleteLine(s, groupId, ready)}`));
+  if (goes.length > 0) {
+    lines.push(`Remove, in this order, only what this app can prove it created:`);
+    goes.forEach((s, i) => lines.push(`${i + 1}. ${deleteLine(s, groupId, ready)}`));
+  } else {
+    lines.push(`Nothing is left to delete, but this source's earlier removals are still uncommitted in worker group ${groupId}. Commit and deploy them, so they are live and the app can forget these objects.`);
+  }
   for (const s of ready.steps) {
     if (s.verdict.kind === "keep") lines.push(`Kept: ${describeTeardownObject(s, groupId)}. ${s.verdict.detail}`);
     if (s.verdict.kind === "already-gone") lines.push(`Already gone: ${describeTeardownObject(s, groupId)}.`);
@@ -143,7 +147,9 @@ export function teardownConfirmText(ready: ReadyTeardown): string[] {
   if (ready.commitFiles.length > 0) {
     lines.push(`The commit can include at most these files, and only those still uncommitted after the removals: ${ready.commitFiles.join(", ")}.`);
     if (ready.scope.alreadyDirty.length > 0) {
-      lines.push(`These files already have someone else's uncommitted changes, which the commit will carry too: ${ready.scope.alreadyDirty.join(", ")}.`);
+      lines.push(
+        `These files already have uncommitted changes (an earlier removal by this app, or someone else's work), which the commit will carry too: ${ready.scope.alreadyDirty.join(", ")}.`,
+      );
     }
     if (ready.scope.elsewhere.length > 0) lines.push(`Other uncommitted changes in Cribl are left alone: ${ready.scope.elsewhere.join(", ")}.`);
     lines.push(`Then deploy worker group ${groupId}, which restarts its workers.`);
@@ -154,6 +160,14 @@ export function teardownConfirmText(ready: ReadyTeardown): string[] {
 export function teardownPlanView(result: Exclude<PlanTeardownResult, { kind: "ready" }>): OutcomeView {
   if (result.kind === "nothing-to-remove") {
     const kept = result.steps.filter((s) => s.verdict.kind === "keep");
+    if (result.unsettled !== undefined) {
+      return {
+        tone: "warning",
+        headline: "Nothing to delete, but the removals are not live yet, so the app keeps its records.",
+        detail: result.unsettled,
+        inCribl: null,
+      };
+    }
     return {
       tone: kept.length > 0 ? "warning" : "ok",
       headline: kept.length > 0 ? "Nothing this app can remove: what is left is kept." : "Nothing left to remove: every object is already gone.",

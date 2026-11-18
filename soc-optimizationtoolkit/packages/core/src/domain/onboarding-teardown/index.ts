@@ -6,6 +6,7 @@
  */
 
 export {
+  IN_USE_CHECKED,
   classifyActivityLogRemoval,
   classifyInputForPause,
   describeTeardownObject,
@@ -24,6 +25,8 @@ export type {
   CriblTeardownPlan,
   CriblTeardownReads,
   CriblTeardownRefusalReason,
+  OtherGroupRead,
+  OtherGroupsRead,
   OtherLakeRoute,
   PauseVerdict,
   TeardownKeepReason,

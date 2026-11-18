@@ -37,6 +37,16 @@
  *                 until then): re-read routes, datasets; DELETE
  *                 /products/lake/lakes/default/datasets/<id> (leader)
  *
+ * REVIEW FIXES (before merge). Plan step 8 covers the markers of EVERY group
+ * object this source has, not only those that go this run, and also reads
+ * destinations (/system/outputs) and collectors (/jobs) for the in-use checks
+ * and, for the dataset, every other worker group's routes and destinations.
+ * "Already gone" is gone only when the group is SETTLED: nothing of this
+ * source pending, and the workers run HEAD (groupSettled). So step 5 commits
+ * and deploys any removal an earlier run left pending (the confirm names those
+ * files), step 6 waits on settled, and a plan with nothing to send and an
+ * unsettled group keeps the records and says why.
+ *
  * A DELETE answered 404 is already gone (success). A 401/403 stops and says
  * it was refused for permission (`denied`). Every kit outcome is kept by name.
  * Never throws for an HTTP answer.
@@ -64,6 +74,8 @@ import {
   type CriblTeardownInput,
   type CriblTeardownReads,
   type CriblTeardownRefusalReason,
+  type OtherGroupRead,
+  type OtherGroupsRead,
   type TeardownObjectKind,
   type TeardownRead,
   type TeardownStep,
@@ -74,8 +86,10 @@ import {
   commitAndDeploy,
   commitScope,
   commitScopeGrew,
+  deployedVersion,
   observeCommitDeploy,
   pendingFiles,
+  sameCommit,
   type CommitDeployOutcome,
   type CommitScope,
 } from "../../kit/config-writes/commitDeploy";
@@ -83,7 +97,8 @@ import { planChange, sameValue, verifyStored, writeApproved, type DiffRow } from
 import { isOk, type ApiResponse, type Request } from "../../kit/config-writes/transport";
 import { commitDeployTimeouts, criblRequestFor } from "../../kit/cribl-request";
 import { APP_ID } from "../../domain/cribl-secrets/secret-body";
-import type { CriblClient } from "../../ports/cribl-client";
+import type { CriblClient, CriblGroupSummary } from "../../ports/cribl-client";
+import { listingRows, listingWasRead, type Listing } from "../../domain/inventory-listing/inventory-listing";
 import type { Logger } from "../../ports/logger";
 import {
   ROUTE_COMMIT_MARKERS,
@@ -172,15 +187,103 @@ async function readDatasets(request: Request): Promise<TeardownRead> {
   return itemsOf(await safeCall(request, "GET", "/products/lake/lakes/default/datasets"), "the Lake dataset list");
 }
 
-/** Every read a plan of `input` needs, in the order the header lists. */
-async function readAll(request: Request, input: CriblTeardownInput): Promise<{ reads: CriblTeardownReads; routes: RoutesRead }> {
+async function readOutputs(request: Request): Promise<TeardownRead> {
+  return itemsOf(await safeCall(request, "GET", "/system/outputs"), "the destinations list");
+}
+
+async function readJobs(request: Request): Promise<TeardownRead> {
+  return itemsOf(await safeCall(request, "GET", "/jobs"), "the collectors list");
+}
+
+/**
+ * Group products that hold no Stream routes or destinations, so are not read
+ * for the dataset check. Inferred from the spec's ConfigGroup `type` enum, not
+ * measured: a Search, local Search, Lake access or Outpost group has no
+ * routing table to send to Lake from.
+ */
+const NO_ROUTES_PRODUCTS: ReadonlySet<string> = new Set(["search", "local_search", "lake_access", "outpost"]);
+
+/**
+ * Every other worker group's routes and destinations (for the Lake dataset,
+ * which any group can send to). Refused when the group list, or any one
+ * group's routes or destinations, cannot be read: the dataset is then kept.
+ */
+async function readOtherGroups(cribl: CriblClient, groupId: string): Promise<OtherGroupsRead> {
+  let listing: Listing<CriblGroupSummary>;
+  try {
+    listing = await cribl.listGroups();
+  } catch (error) {
+    return { state: "refused", status: 0, detail: `the worker group list could not be read (${errorText(error)})` };
+  }
+  if (!listingWasRead(listing)) {
+    return { state: "refused", status: 0, detail: "the worker group list came back empty, so which groups exist is unknown" };
+  }
+  const groups: OtherGroupRead[] = [];
+  for (const g of listingRows(listing)) {
+    if (g.id === groupId || NO_ROUTES_PRODUCTS.has((g.product ?? "").toLowerCase())) continue;
+    const other = criblRequestFor(cribl, g.id);
+    const routes = await readRoutes(other);
+    if (routes.read.state === "refused") return { state: "refused", status: routes.read.status, detail: `worker group ${g.id}: ${routes.read.detail}` };
+    const outputs = await readOutputs(other);
+    if (outputs.state === "refused") return { state: "refused", status: outputs.status, detail: `worker group ${g.id}: ${outputs.detail}` };
+    groups.push({ groupId: g.id, routes: routes.routes, outputs: outputs.items });
+  }
+  return { state: "read", groups };
+}
+
+/**
+ * Every read a plan of `input` needs, in the order the header lists. The
+ * other groups (many GETs) are read only when `others` is set: in the plan,
+ * and right before the dataset's DELETE.
+ */
+async function readAll(
+  cribl: CriblClient,
+  request: Request,
+  input: CriblTeardownInput,
+  others = true,
+): Promise<{ reads: CriblTeardownReads; routes: RoutesRead }> {
   const need = teardownReadsNeeded(input);
+  const groupId = teardownGroup(input);
   const inputs = await readInputs(request);
   const routes = await readRoutes(request);
   const secret = need.secret && input.criblSource !== null ? await readSecret(request, input.criblSource.secretId) : null;
   const pipelines = need.pipelines ? await readPipelines(request) : null;
   const datasets = need.datasets ? await readDatasets(request) : null;
-  return { reads: { inputs, routes: routes.read, secret, pipelines, datasets }, routes };
+  const outputs = need.outputs ? await readOutputs(request) : null;
+  const jobs = need.jobs ? await readJobs(request) : null;
+  const otherGroups = need.otherGroups && others && "groupId" in groupId ? await readOtherGroups(cribl, groupId.groupId) : null;
+  return { reads: { inputs, routes: routes.read, secret, pipelines, datasets, outputs, jobs, otherGroups }, routes };
+}
+
+/**
+ * Whether the group is SETTLED: the workers run the newest commit (deployed
+ * configVersion matches HEAD). Called once nothing of this source is pending.
+ * A removal that was committed but never deployed is still live on the
+ * workers, so its object is not yet gone.
+ */
+async function groupSettled(request: Request, groupId: string): Promise<{ readonly settled: boolean; readonly detail: string }> {
+  const head = await safeCall(request, "GET", "/version?offset=0&limit=1");
+  const items = isOk(head.status) ? (head.body as { items?: unknown } | null)?.items : undefined;
+  const hash = Array.isArray(items) ? (items[0] as { hash?: unknown } | undefined)?.hash : undefined;
+  if (typeof hash !== "string" || hash === "") {
+    return { settled: false, detail: `The newest commit of worker group ${groupId} could not be read, so whether earlier removals are deployed is unknown.` };
+  }
+  let deployed: string | null;
+  try {
+    deployed = await deployedVersion(request, groupId);
+  } catch {
+    deployed = null;
+  }
+  if (deployed === null) {
+    return { settled: false, detail: `The version worker group ${groupId} runs could not be read, so whether earlier removals are deployed is unknown.` };
+  }
+  if (!sameCommit(deployed, hash)) {
+    return {
+      settled: false,
+      detail: `Worker group ${groupId} runs ${deployed}, not its newest commit ${hash}, so earlier removals may not be live yet. Deploy the group in Cribl, then check again.`,
+    };
+  }
+  return { settled: true, detail: `Worker group ${groupId} runs its newest commit ${hash}.` };
 }
 
 /** The group-relative commit markers of the objects that go. */
@@ -230,6 +333,12 @@ export type PlanTeardownResult =
       readonly groupId: string;
       readonly steps: readonly TeardownStep[];
       readonly records: { readonly criblSource: CriblSourceRecord | null; readonly lakeRoute: LakeRouteRecord | null };
+      /**
+       * Set when the group is not settled (it does not run its newest commit,
+       * or that could not be read): already-gone objects keep their records,
+       * and this says why.
+       */
+      readonly unsettled?: string;
     }
   | { readonly kind: "refused"; readonly reason: PlanTeardownRefusalReason; readonly detail: string; readonly denied?: true };
 
@@ -275,13 +384,29 @@ export async function planSourceTeardown(ports: TeardownPorts, input: PlanTeardo
     return { kind: "refused", reason, detail, ...(denied ? { denied: true as const } : {}) };
   };
 
-  const { reads, routes } = await readAll(request, input);
+  const { reads, routes } = await readAll(ports.cribl, request, input);
   const plan = planCriblTeardown(input, reads);
   if (plan.kind === "refused") return refuse(plan.reason, plan.detail, plan.denied === true);
 
   const goes = deletes(plan.steps);
-  if (goes.length === 0) {
-    ports.logger?.info(`${TEARDOWN_LOG_PREFIX} nothing to remove`, { groupId, sourceId: input.sourceId });
+  const pipelineId = input.lakeRoute?.pipelineId ?? null;
+  // Every group object this source has (whatever its verdict): an earlier
+  // run's removal of any of them may still be pending, and this run must
+  // commit it before calling it gone.
+  const candidates = plan.steps.map((s) => s.kind).filter((k) => k !== "dataset");
+  const markers = teardownCommitMarkers(candidates, pipelineId);
+  let scope: CommitScope = { alreadyDirty: [], elsewhere: [], unplaced: [], unknown: false };
+  if (markers.length > 0) {
+    const read = await scopeFor(request, groupId, markers);
+    if (read.kind === "refused") return refuse(read.reason, read.detail);
+    scope = read.scope;
+  }
+
+  if (goes.length === 0 && scope.alreadyDirty.length === 0) {
+    // Nothing to send and nothing pending. Gone counts only when the workers
+    // run the newest commit too (an earlier removal committed, not deployed).
+    const settled = markers.length === 0 ? { settled: true, detail: "" } : await groupSettled(request, groupId);
+    ports.logger?.info(`${TEARDOWN_LOG_PREFIX} nothing to remove`, { groupId, sourceId: input.sourceId, settled: settled.settled });
     return {
       kind: "nothing-to-remove",
       groupId,
@@ -290,8 +415,9 @@ export async function planSourceTeardown(ports: TeardownPorts, input: PlanTeardo
         criblSource: input.criblSource,
         lakeRoute: input.lakeRoute,
         results: resultsFromVerdicts(plan.steps),
-        committed: true,
+        committed: settled.settled,
       }),
+      ...(settled.settled ? {} : { unsettled: settled.detail }),
     };
   }
 
@@ -314,15 +440,6 @@ export async function planSourceTeardown(ports: TeardownPorts, input: PlanTeardo
       return refuse("table-moved", `Routing table ${routes.tableId} changed while it was being read. Nothing was changed; check again.`);
     }
     routeWrite = { tableId: routes.tableId, routes: without, diff: planned.diff };
-  }
-
-  const pipelineId = input.lakeRoute?.pipelineId ?? null;
-  const markers = teardownCommitMarkers(goes, pipelineId);
-  let scope: CommitScope = { alreadyDirty: [], elsewhere: [], unplaced: [], unknown: false };
-  if (markers.length > 0) {
-    const read = await scopeFor(request, groupId, markers);
-    if (read.kind === "refused") return refuse(read.reason, read.detail);
-    scope = read.scope;
   }
 
   ports.logger?.info(`${TEARDOWN_LOG_PREFIX} planned`, { groupId, sourceId: input.sourceId, goes: goes.join(",") });
@@ -357,6 +474,8 @@ export interface TeardownStepOutcome {
 export type TeardownCommitResult =
   | { readonly kind: "not-needed" }
   | { readonly kind: "commit-sequence-failed"; readonly detail: string }
+  /** Nothing of this source was pending, but the workers do not run the newest commit (or that could not be read). */
+  | { readonly kind: "unsettled"; readonly detail: string }
   | (CommitDeployOutcome & { readonly detail: string });
 
 export interface ApplyTeardownOutcome {
@@ -455,12 +574,13 @@ export async function applySourceTeardown(ports: TeardownPorts, ready: ReadyTear
     outcomes.set(kind, { kind, id: prev.id, result, detail, ...(denied ? { denied: true as const } : {}) });
   };
   let commit: TeardownCommitResult = { kind: "not-needed" };
+  // True only once the group is known to run a commit without this source's pending changes.
+  let settled = ready.markers.length === 0;
   const finish = (kind: ApplyTeardownOutcome["kind"], why: string): ApplyTeardownOutcome => {
     const steps = ready.steps.map((s) => outcomes.get(s.kind) as TeardownStepOutcome);
     const results: Partial<Record<TeardownObjectKind, TeardownStepResult>> = {};
     for (const s of steps) results[s.kind] = s.result;
-    const committed = commit.kind === "deployed" || commit.kind === "not-needed";
-    const records = recordsAfterTeardown({ criblSource: input.criblSource, lakeRoute: input.lakeRoute, results, committed });
+    const records = recordsAfterTeardown({ criblSource: input.criblSource, lakeRoute: input.lakeRoute, results, committed: settled });
     const outcome: ApplyTeardownOutcome = { kind, steps, commit, records, detail: why };
     const log = { groupId, sourceId: input.sourceId, results: steps.map((s) => `${s.kind}:${s.result}`).join(","), commit: commit.kind };
     if (kind === "removed") ports.logger?.info(`${TEARDOWN_LOG_PREFIX} removed`, log);
@@ -486,7 +606,7 @@ export async function applySourceTeardown(ports: TeardownPorts, ready: ReadyTear
 
   /** Re-read and re-plan, then this kind's fresh verdict. */
   const freshVerdict = async (kind: TeardownObjectKind) => {
-    const { reads } = await readAll(request, input);
+    const { reads } = await readAll(ports.cribl, request, input, kind === "dataset");
     const plan = planCriblTeardown(input, reads);
     if (plan.kind === "refused") return { kind: "refused" as const, detail: plan.detail, denied: plan.denied === true };
     const step = plan.steps.find((s) => s.kind === kind);
@@ -596,24 +716,37 @@ export async function applySourceTeardown(ports: TeardownPorts, ready: ReadyTear
 
   if (voided && removedGroup.length === 0) return finish("void", stopped ?? "Changed since the confirm; nothing was removed.");
 
-  // 5. Commit and deploy what was removed (also after a stop).
-  if (removedGroup.length > 0) {
-    const markers = teardownCommitMarkers(removedGroup, input.lakeRoute?.pipelineId ?? null);
+  // 5. Commit and deploy (also after a stop): what this run removed, and any
+  // removal of this source an earlier run left pending. Gone counts only once
+  // the workers run a commit without them.
+  if (ready.markers.length > 0) {
+    const what = removedGroup.length > 0 ? removedGroup.map((k) => `${k} ${outcomes.get(k)?.id ?? ""}`).join(", ") : "pending removals";
     try {
       const outcome = await commitAndDeploy(request, {
         group: groupId,
-        markers,
-        message: `${TEARDOWN_LOG_PREFIX}: remove ${removedGroup.map((k) => `${k} ${outcomes.get(k)?.id ?? ""}`).join(", ")} (${input.sourceId})`,
+        markers: ready.markers,
+        message: `${TEARDOWN_LOG_PREFIX}: remove ${what} (${input.sourceId})`,
       });
-      commit = { ...outcome, detail: teardownCommitDetail(outcome, groupId) };
+      if (outcome.kind === "deployed") {
+        settled = true;
+        commit = { ...outcome, detail: teardownCommitDetail(outcome, groupId) };
+      } else if (outcome.kind === "nothing-to-commit") {
+        const check = await groupSettled(request, groupId);
+        settled = check.settled;
+        commit = check.settled
+          ? { ...outcome, detail: removedGroup.length > 0 ? teardownCommitDetail(outcome, groupId) : `Nothing of this source was pending. ${check.detail}` }
+          : { kind: "unsettled", detail: check.detail };
+      } else {
+        commit = { ...outcome, detail: teardownCommitDetail(outcome, groupId) };
+      }
     } catch (error) {
       commit = {
         kind: "commit-sequence-failed",
-        detail: `The removals were made, but a call in the commit and deploy sequence got no answer (${errorText(error)}); check the group's pending changes in Cribl.`,
+        detail: `A call in the commit and deploy sequence got no answer (${errorText(error)}); check the group's pending changes in Cribl.`,
       };
     }
   }
-  const groupDeployed = commit.kind === "deployed" || commit.kind === "not-needed";
+  const groupDeployed = settled;
 
   // 6. The dataset, only after the group change is live.
   const datasetStep = ready.steps.find((s) => s.kind === "dataset");

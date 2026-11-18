@@ -254,7 +254,9 @@ describe("teardown records (AZR-105)", () => {
     let p = withLakeRoute(sample(), "activityLog", { ...RECORD, pipelineId: null, routeId: null, datasetCreated: true });
     p = withLakeRoute(p, "activityLog", RECORD);
     expect(p.criblLakeRoutes?.activityLog).toEqual({ ...RECORD, datasetCreated: true });
-    // ...but not across a different group or dataset.
+    // ...but not when that apply saw the dataset absent and did not create it.
+    expect(withLakeRoute(p, "activityLog", RECORD, { datasetSeenAbsent: true }).criblLakeRoutes?.activityLog).toEqual(RECORD);
+    // ...and not across a different group or dataset.
     p = withLakeRoute(p, "activityLog", { ...RECORD, groupId: "other" });
     expect(p.criblLakeRoutes?.activityLog).toEqual({ ...RECORD, groupId: "other" });
   });

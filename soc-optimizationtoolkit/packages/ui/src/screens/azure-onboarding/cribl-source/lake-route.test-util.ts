@@ -67,4 +67,5 @@ export const DEPLOYED: ApplyLakeRouteOutcome = {
   route: null,
   detail: "Cribl Lake dataset azure_defender_alerts was created. Pipeline azure_onb_unroll_records was created. Route azure_onb_defender_alerts_lake: Committed abc and deployed it.",
   record: { groupId: "g1", datasetId: "azure_defender_alerts", pipelineId: "azure_onb_unroll_records", routeId: "azure_onb_defender_alerts_lake" },
+  datasetSeenAbsent: true,
 };

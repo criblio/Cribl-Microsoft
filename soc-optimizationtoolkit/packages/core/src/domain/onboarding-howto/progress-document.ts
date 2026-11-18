@@ -571,16 +571,23 @@ export function strandedCriblSources(current: OnboardingProgress, legacyRaw: unk
  * after one that created the dataset finds it present and reports it as
  * "existed"; replacing the record whole would then forget that the app made
  * it, and a later Remove could never delete it. So `datasetCreated` carries
- * over from the earlier record when the group and the dataset are the same.
+ * over from the earlier record when the group and the dataset are the same -
+ * unless this apply SAW THE DATASET ABSENT (`datasetSeenAbsent`) and still did
+ * not create it: the dataset the app made is gone and another took its id.
+ * LIMIT: a dataset deleted and recreated between two applies, never seen
+ * absent by the app, keeps the carried proof; the teardown's description-stamp
+ * check is then what stops a hand-made one being deleted.
  */
 export function withLakeRoute(
   p: OnboardingProgress,
   id: OnboardingSourceId,
   record: LakeRouteRecord,
+  opts: { readonly datasetSeenAbsent?: boolean } = {},
 ): OnboardingProgress {
   const prev = p.criblLakeRoutes?.[id];
   const keepCreated =
     record.datasetCreated !== true &&
+    opts.datasetSeenAbsent !== true &&
     prev?.datasetCreated === true &&
     prev.groupId === record.groupId &&
     prev.datasetId === record.datasetId;

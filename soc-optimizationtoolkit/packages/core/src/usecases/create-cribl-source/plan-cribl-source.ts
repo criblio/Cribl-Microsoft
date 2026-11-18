@@ -267,6 +267,8 @@ export type PlanCriblSourceResult =
        * input (nothing is written) and says to replace the credential.
        */
       readonly credentialWarning?: string;
+      /** AZR-105: the input is this app's and matches, but is paused (disabled by the app's Pause). */
+      readonly paused?: true;
     }
   | {
       readonly kind: "refused";
@@ -808,13 +810,18 @@ export async function planCriblSource(
       kind: "already-applied",
       record: { groupId, inputId, inputType: source.criblInputType, secretId },
       credentialWarning: manageAdoptionWarning(inputId, manageRuleName),
+      ...(inputVerdict.paused === true ? { paused: true as const } : {}),
     };
   }
   switch (inputVerdict.kind) {
     case "unknown":
       return refused("inputs-unreadable", `Cribl's inputs could not be read (${inputVerdict.detail}), so whether ${inputId} exists is unknown.`);
     case "ours-matching":
-      return { kind: "already-applied", record: { groupId, inputId, inputType: source.criblInputType, secretId } };
+      return {
+        kind: "already-applied",
+        record: { groupId, inputId, inputType: source.criblInputType, secretId },
+        ...(inputVerdict.paused === true ? { paused: true as const } : {}),
+      };
     case "differs":
       return refused(
         "input-differs",

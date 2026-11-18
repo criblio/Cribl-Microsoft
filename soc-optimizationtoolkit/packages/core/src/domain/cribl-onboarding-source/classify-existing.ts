@@ -56,7 +56,8 @@ export type ExistingRead =
 
 export type ExistingInputVerdict =
   | { readonly kind: "absent" }
-  | { readonly kind: "ours-matching" }
+  /** `paused`: ours and identical except `disabled: true`, which only the app's Pause sets (AZR-105). */
+  | { readonly kind: "ours-matching"; readonly paused?: true }
   | { readonly kind: "differs"; readonly fields: readonly string[] }
   | { readonly kind: "foreign"; readonly missing: readonly string[] }
   | { readonly kind: "unknown"; readonly detail: string };
@@ -135,7 +136,13 @@ export function classifyExistingInput(args: {
   });
   if (!ownership.mine) return { kind: "foreign", missing: ownership.missing };
   const fields = identityDiffs(type, found, expected);
-  return fields.length === 0 ? { kind: "ours-matching" } : { kind: "differs", fields };
+  if (fields.length === 0) return { kind: "ours-matching" };
+  // AZR-105: the app's own Pause sets disabled:true and nothing else. That is
+  // the same input, paused - not a difference to refuse over.
+  if (fields.length === 1 && fields[0] === "disabled" && found["disabled"] === true && expected["disabled"] === false) {
+    return { kind: "ours-matching", paused: true };
+  }
+  return { kind: "differs", fields };
 }
 
 /**

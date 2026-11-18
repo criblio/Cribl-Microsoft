@@ -105,7 +105,32 @@ export interface CriblTeardownReads {
   readonly pipelines: TeardownRead | null;
   /** GET /products/lake/lakes/default/datasets (leader). */
   readonly datasets: TeardownRead | null;
+  /**
+   * GET /system/outputs of the teardown group: destinations, whose
+   * post-processing pipeline, secrets and cribl_lake dataset can name an object
+   * the app would delete. Absent (older callers) reads as not read.
+   */
+  readonly outputs?: TeardownRead | null;
+  /** GET /jobs of the teardown group: collectors, which can name a pipeline or a secret. */
+  readonly jobs?: TeardownRead | null;
+  /**
+   * The routes and destinations of EVERY OTHER worker group the app can see,
+   * for the Lake dataset (a leader object any group can send to). Refused when
+   * the groups, or any one group's routes or destinations, could not be read.
+   */
+  readonly otherGroups?: OtherGroupsRead | null;
 }
+
+/** One other group's routes array and destinations. */
+export interface OtherGroupRead {
+  readonly groupId: string;
+  readonly routes: readonly unknown[];
+  readonly outputs: readonly unknown[];
+}
+
+export type OtherGroupsRead =
+  | { readonly state: "read"; readonly groups: readonly OtherGroupRead[] }
+  | { readonly state: "refused"; readonly status: number; readonly detail: string };
 
 /** Whether a refused read was a permission refusal. */
 export function isDenied(status: number): boolean {
@@ -198,11 +223,63 @@ export function teardownGroup(
 }
 
 /** Which optional reads a plan needs for this source's records. */
-export function teardownReadsNeeded(input: CriblTeardownInput): { readonly secret: boolean; readonly pipelines: boolean; readonly datasets: boolean } {
+export function teardownReadsNeeded(input: CriblTeardownInput): {
+  readonly secret: boolean;
+  readonly pipelines: boolean;
+  readonly datasets: boolean;
+  readonly outputs: boolean;
+  readonly jobs: boolean;
+  readonly otherGroups: boolean;
+} {
+  const secret = input.criblSource !== null;
+  const pipelines = input.lakeRoute !== null && input.lakeRoute.pipelineId !== null;
+  const datasets = input.lakeRoute !== null && input.removeDataset;
+  return { secret, pipelines, datasets, outputs: secret || pipelines || datasets, jobs: secret || pipelines, otherGroups: datasets };
+}
+
+/** What the in-use checks read, said in the confirm so the operator knows what was looked at. */
+export const IN_USE_CHECKED = {
+  pipeline: "every route, source (QuickConnect connections included), destination and collector in the worker group, and this app's other recorded routes",
+  secret: "every source, destination and collector in the worker group",
+  input: "every route filter in the worker group",
+  dataset: "every route and Cribl Lake destination in every worker group this app can read",
+} as const;
+
+/**
+ * Who among `lists` names `needle` anywhere in its config (canonical JSON, so
+ * any field: a QuickConnect connection's pipeline, a destination's
+ * post-processing pipeline, a collector's secret). A list that was not read
+ * makes the answer unknown: the object is kept rather than deleted on partial
+ * knowledge.
+ */
+function namedBy(
+  needle: string,
+  lists: readonly { readonly label: string; readonly read: TeardownRead | null | undefined; readonly skipId?: string }[],
+): { readonly users: string[] } | { readonly unread: Extract<TeardownRead, { state: "refused" }> | null; readonly what: string } {
+  const quoted = JSON.stringify(needle);
+  const users: string[] = [];
+  for (const l of lists) {
+    if (l.read === null || l.read === undefined) return { unread: null, what: `The ${l.label}s` };
+    if (l.read.state === "refused") return { unread: l.read, what: `The ${l.label}s` };
+    for (const it of l.read.items) {
+      if (!isRecord(it)) continue;
+      if (l.skipId !== undefined && it["id"] === l.skipId) continue;
+      if (canonical(it).includes(quoted)) users.push(`${l.label} ${String(it["id"])}`);
+    }
+  }
+  return { users };
+}
+
+function cannotCheck(object: string, what: string, read: Extract<TeardownRead, { state: "refused" }> | null): TeardownVerdict {
+  if (read === null) return { kind: "keep", reason: "unreadable", detail: `${what} were not read, so whether anything still uses ${object} is unknown. It was kept.` };
+  const denied = isDenied(read.status);
   return {
-    secret: input.criblSource !== null,
-    pipelines: input.lakeRoute !== null && input.lakeRoute.pipelineId !== null,
-    datasets: input.lakeRoute !== null && input.removeDataset,
+    kind: "keep",
+    reason: "unreadable",
+    detail: denied
+      ? `${what} could not be read: Cribl refused it (HTTP ${read.status}), so whether anything still uses ${object} is unknown. It was kept.`
+      : `${what} could not be read (${read.detail}), so whether anything still uses ${object} is unknown. It was kept.`,
+    ...(denied ? { denied: true as const } : {}),
   };
 }
 
@@ -254,6 +331,46 @@ function inUse(by: readonly string[]): TeardownVerdict {
 /** A route row's id, or a placeholder for one without. */
 function routeName(r: Record<string, unknown>): string {
   return typeof r["id"] === "string" && r["id"] !== "" ? `route ${r["id"]}` : "a route without an id";
+}
+
+/** Whether a route row sends to the dataset (`cribl_lake:<id>` as its output, or anywhere in it). */
+function routeSendsTo(r: unknown, datasetId: string): boolean {
+  return isRecord(r) && canonical(r).includes(JSON.stringify(lakeOutputFor(datasetId)).slice(0, -1));
+}
+
+/** Whether a destination is a Cribl Lake destination naming the dataset. */
+function outputSendsTo(o: unknown, datasetId: string): boolean {
+  return isRecord(o) && o["type"] === "cribl_lake" && canonical(o).includes(JSON.stringify(datasetId));
+}
+
+/**
+ * Who sends to the Lake dataset: the teardown group's staying routes and its
+ * Cribl Lake destinations, then every other worker group's. Unknown (the
+ * dataset is kept) when any of those could not be read.
+ */
+function datasetUsers(
+  datasetId: string,
+  groupId: string,
+  staying: readonly Record<string, unknown>[],
+  reads: CriblTeardownReads,
+): { readonly users: string[] } | { readonly unread: TeardownVerdict } {
+  const object = `Cribl Lake dataset ${datasetId}`;
+  const own = reads.outputs;
+  if (own === null || own === undefined) return { unread: cannotCheck(object, `Worker group ${groupId}'s destinations`, null) };
+  if (own.state === "refused") return { unread: cannotCheck(object, `Worker group ${groupId}'s destinations`, own) };
+  const others = reads.otherGroups;
+  if (others === null || others === undefined) return { unread: cannotCheck(object, "The other worker groups' routes and destinations", null) };
+  if (others.state === "refused") return { unread: cannotCheck(object, "The other worker groups' routes and destinations", others) };
+  const users = [
+    ...staying.filter((r) => routeSendsTo(r, datasetId)).map((r) => `${routeName(r)} in ${groupId}`),
+    ...own.items.filter((o) => outputSendsTo(o, datasetId)).map((o) => `destination ${String((o as Record<string, unknown>)["id"])} in ${groupId}`),
+  ];
+  for (const g of others.groups) {
+    if (g.groupId === groupId) continue;
+    for (const r of g.routes) if (routeSendsTo(r, datasetId)) users.push(`${routeName(r as Record<string, unknown>)} in ${g.groupId}`);
+    for (const o of g.outputs) if (outputSendsTo(o, datasetId)) users.push(`destination ${String((o as Record<string, unknown>)["id"])} in ${g.groupId}`);
+  }
+  return { users };
 }
 
 /**
@@ -326,14 +443,25 @@ export function planCriblTeardown(input: CriblTeardownInput, reads: CriblTeardow
         });
         if (!proof.mine) verdict = notProven(proof.missing);
         else {
-          const users = [
-            ...staying.filter((r) => r["pipeline"] === pipelineId).map(routeName),
-            ...inputs.filter((i): i is Record<string, unknown> => isRecord(i) && i["pipeline"] === pipelineId).map((i) => `source ${String(i["id"])}`),
-            ...input.otherLakeRoutes
-              .filter((o) => o.record.groupId === groupId && o.record.pipelineId === pipelineId && o.record.routeId !== null)
-              .map((o) => `this app's recorded route ${o.record.routeId as string} (${o.sourceId})`),
-          ];
-          verdict = users.length > 0 ? inUse([...new Set(users)]) : { kind: "delete" };
+          // Sources (pre-processing pipeline and QuickConnect connections),
+          // destinations (post-processing pipeline) and collectors, anywhere
+          // in their config.
+          const named = namedBy(pipelineId, [
+            { label: "source", read: reads.inputs },
+            { label: "destination", read: reads.outputs },
+            { label: "collector", read: reads.jobs },
+          ]);
+          if ("unread" in named) verdict = cannotCheck(`pipeline ${pipelineId}`, named.what, named.unread);
+          else {
+            const users = [
+              ...staying.filter((r) => r["pipeline"] === pipelineId).map(routeName),
+              ...named.users,
+              ...input.otherLakeRoutes
+                .filter((o) => o.record.groupId === groupId && o.record.pipelineId === pipelineId && o.record.routeId !== null)
+                .map((o) => `this app's recorded route ${o.record.routeId as string} (${o.sourceId})`),
+            ];
+            verdict = users.length > 0 ? inUse([...new Set(users)]) : { kind: "delete" };
+          }
         }
       }
     }
@@ -381,13 +509,13 @@ export function planCriblTeardown(input: CriblTeardownInput, reads: CriblTeardow
         });
         if (!proof.mine) verdict = notProven(proof.missing);
         else {
-          const needle = JSON.stringify(src.secretId);
-          const users = inputs
-            .filter((i): i is Record<string, unknown> => isRecord(i))
-            .filter((i) => !(inputGoes && i["id"] === src.inputId))
-            .filter((i) => canonical(i).includes(needle))
-            .map((i) => `source ${String(i["id"])}`);
-          verdict = users.length > 0 ? inUse(users) : { kind: "delete" };
+          const named = namedBy(src.secretId, [
+            { label: "source", read: reads.inputs, ...(inputGoes ? { skipId: src.inputId } : {}) },
+            { label: "destination", read: reads.outputs },
+            { label: "collector", read: reads.jobs },
+          ]);
+          if ("unread" in named) verdict = cannotCheck(`secret ${src.secretId}`, named.what, named.unread);
+          else verdict = named.users.length > 0 ? inUse(named.users) : { kind: "delete" };
         }
       }
     }
@@ -421,9 +549,11 @@ export function planCriblTeardown(input: CriblTeardownInput, reads: CriblTeardow
         });
         if (!proof.mine) verdict = notProven(proof.missing);
         else {
-          const output = lakeOutputFor(datasetId);
-          const users = staying.filter((r) => r["output"] === output).map(routeName);
-          verdict = users.length > 0 ? inUse(users) : { kind: "delete" };
+          // A leader object: any worker group can send to it. Every group's
+          // routes and Cribl Lake destinations are checked; one that could
+          // not be read keeps the dataset.
+          const users = datasetUsers(datasetId, groupId, staying, reads);
+          verdict = "unread" in users ? users.unread : users.users.length > 0 ? inUse(users.users) : { kind: "delete" };
         }
       }
     }
@@ -480,10 +610,11 @@ export function describeTeardownObject(step: Pick<TeardownStep, "kind" | "id">, 
 export type TeardownStepResult = "removed" | "already-gone" | "kept" | "not-reached" | "failed";
 
 /**
- * Which records still describe something that is there. An object counts as
- * GONE only when it was already gone, or its removal was committed and
- * deployed (`committed`), or it is the leader's dataset whose DELETE was
- * accepted. A removal left uncommitted keeps its record: discarding the
+ * Which records still describe something that is there. A group object counts
+ * as GONE only when it was removed or read as already gone AND the group is
+ * settled (`committed`: nothing of it pending, and the deployed version is
+ * HEAD); the leader's dataset counts when its DELETE was accepted or it was
+ * already gone. A removal left uncommitted keeps its record: discarding the
  * pending change in Cribl brings the object back, and without the record the
  * app could never prove it again.
  */
@@ -491,14 +622,21 @@ export function recordsAfterTeardown(args: {
   readonly criblSource: CriblSourceRecord | null;
   readonly lakeRoute: LakeRouteRecord | null;
   readonly results: Readonly<Partial<Record<TeardownObjectKind, TeardownStepResult>>>;
-  /** True when the group change (route, pipeline, input, secret) was committed and deployed, or none was needed. */
+  /**
+   * True only when the group is SETTLED: none of this source's files are
+   * pending, and the workers run HEAD (the removals are committed and deployed).
+   */
   readonly committed: boolean;
 }): { readonly criblSource: CriblSourceRecord | null; readonly lakeRoute: LakeRouteRecord | null } {
   const { results, committed } = args;
+  // A group object that reads as gone may only be gone in the WORKING config:
+  // an earlier run's removal left uncommitted (or committed, not deployed)
+  // comes back if someone discards it. So "already gone" counts only when the
+  // group is settled, exactly like "removed". The leader's dataset has no
+  // commit: gone is gone.
   const gone = (k: TeardownObjectKind): boolean => {
     const r = results[k];
-    if (r === "already-gone") return true;
-    if (r !== "removed") return false;
+    if (r !== "removed" && r !== "already-gone") return false;
     return k === "dataset" ? true : committed;
   };
   let criblSource = args.criblSource;

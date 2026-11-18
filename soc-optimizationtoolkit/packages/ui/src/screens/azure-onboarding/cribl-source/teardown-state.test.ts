@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApplyTeardownOutcome, CriblSourceRecord, LakeRouteRecord } from "@soc/core";
-import { pauseArmKey, removeArmKey, teardownOutcomeView, teardownRows, twoClick, twoClickReducer, type TwoClickState } from "./teardown-state";
+import { pauseArmKey, removeArmKey, teardownOutcomeView, teardownPlanView, teardownRows, twoClick, twoClickReducer, type TwoClickState } from "./teardown-state";
 
 const SOURCE: CriblSourceRecord = { groupId: "g1", inputId: "azure_onb_eh_t_ns_x", inputType: "eventhub", secretId: "azure_onb_eh_t_ns_x_secret" };
 const LAKE: LakeRouteRecord = { groupId: "g1", datasetId: "azure_activity_log", pipelineId: null, routeId: "azure_onb_activity_log_lake" };
@@ -48,6 +48,24 @@ describe("twoClickReducer", () => {
     s = twoClickReducer(s, { type: "reset" });
     expect(s).toEqual({ phase: "applying", key: "a" });
     expect(twoClickReducer(s, { type: "apply-result", outcome: "O" })).toEqual({ phase: "done", outcome: "O" });
+  });
+});
+
+describe("teardownPlanView", () => {
+  it("review finding 1: nothing to delete but not live says so, as a warning, with the reason", () => {
+    const v = teardownPlanView({
+      kind: "nothing-to-remove",
+      groupId: "g1",
+      steps: [],
+      records: { criblSource: SOURCE, lakeRoute: null },
+      unsettled: "Worker group g1 runs a, not its newest commit b.",
+    });
+    expect(v).toEqual({
+      tone: "warning",
+      headline: "Nothing to delete, but the removals are not live yet, so the app keeps its records.",
+      detail: "Worker group g1 runs a, not its newest commit b.",
+      inCribl: null,
+    });
   });
 });
 

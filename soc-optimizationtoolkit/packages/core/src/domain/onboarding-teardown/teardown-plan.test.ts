@@ -48,6 +48,9 @@ function reads(over: Partial<CriblTeardownReads> = {}): CriblTeardownReads {
     secret: { state: "read", items: [{ id: SECRET_ID, description: `secret ${STAMP}` }] },
     pipelines: { state: "read", items: [{ id: UNROLL_PIPELINE_ID, conf: { description: UNROLL_PIPELINE_DESCRIPTION } }, { id: "main", conf: {} }] },
     datasets: { state: "read", items: [{ id: DATASET_ID, description: `Azure onboarding ${STAMP}` }, { id: "default_logs" }] },
+    outputs: { state: "read", items: [{ id: "default", type: "devnull" }] },
+    jobs: { state: "read", items: [] },
+    otherGroups: { state: "read", groups: [{ groupId: "g2", routes: [DEFAULT_ROUTE], outputs: [] }] },
     ...over,
   };
 }
@@ -107,7 +110,7 @@ describe("planCriblTeardown", () => {
     expect(verdictOf(plan, "pipeline")).toEqual({ kind: "keep", reason: "in-use", detail: `Still used by route ${ROUTE_ID}, so it was kept.` });
     expect(verdictOf(plan, "input")).toEqual({ kind: "keep", reason: "in-use", detail: `Still used by route ${ROUTE_ID}, so it was kept.` });
     expect(verdictOf(plan, "secret")).toEqual({ kind: "keep", reason: "in-use", detail: `Still used by source ${INPUT_ID}, so it was kept.` });
-    expect(verdictOf(plan, "dataset")).toEqual({ kind: "keep", reason: "in-use", detail: `Still used by route ${ROUTE_ID}, so it was kept.` });
+    expect(verdictOf(plan, "dataset")).toEqual({ kind: "keep", reason: "in-use", detail: `Still used by route ${ROUTE_ID} in g1, so it was kept.` });
     expect(teardownDeletions(steps(plan))).toEqual([]);
   });
 
@@ -210,9 +213,16 @@ describe("planCriblTeardown", () => {
   });
 
   it("asks only for the reads it needs", () => {
-    expect(teardownReadsNeeded(input({ removeDataset: false }))).toEqual({ secret: true, pipelines: true, datasets: false });
-    expect(teardownReadsNeeded(input({ lakeRoute: null }))).toEqual({ secret: true, pipelines: false, datasets: false });
-    expect(teardownReadsNeeded(input({ criblSource: null, lakeRoute: { ...LAKE, pipelineId: null } }))).toEqual({ secret: false, pipelines: false, datasets: true });
+    expect(teardownReadsNeeded(input({ removeDataset: false }))).toEqual({ secret: true, pipelines: true, datasets: false, outputs: true, jobs: true, otherGroups: false });
+    expect(teardownReadsNeeded(input({ lakeRoute: null }))).toEqual({ secret: true, pipelines: false, datasets: false, outputs: true, jobs: true, otherGroups: false });
+    expect(teardownReadsNeeded(input({ criblSource: null, lakeRoute: { ...LAKE, pipelineId: null } }))).toEqual({
+      secret: false,
+      pipelines: false,
+      datasets: true,
+      outputs: true,
+      jobs: false,
+      otherGroups: true,
+    });
   });
 
   it("compares two plans by what they delete", () => {
@@ -223,7 +233,71 @@ describe("planCriblTeardown", () => {
   });
 });
 
+describe("in-use checks beyond routes (review findings 2-4)", () => {
+  it("keeps the pipeline while a QuickConnect connection, a destination or a collector names it", () => {
+    const qc = { id: "in_qc", type: "syslog", connections: [{ pipeline: UNROLL_PIPELINE_ID, output: "devnull" }] };
+    const a = planCriblTeardown(input(), reads({ inputs: { state: "read", items: [OUR_INPUT, qc] } }));
+    expect(verdictOf(a, "pipeline")).toEqual({ kind: "keep", reason: "in-use", detail: "Still used by source in_qc, so it was kept." });
+    const post = { id: "out_s3", type: "s3", pipeline: UNROLL_PIPELINE_ID };
+    const b = planCriblTeardown(input(), reads({ outputs: { state: "read", items: [post] } }));
+    expect(verdictOf(b, "pipeline")).toEqual({ kind: "keep", reason: "in-use", detail: "Still used by destination out_s3, so it was kept." });
+    const job = { id: "job1", input: { pipeline: UNROLL_PIPELINE_ID } };
+    const c = planCriblTeardown(input(), reads({ jobs: { state: "read", items: [job] } }));
+    expect(verdictOf(c, "pipeline")).toEqual({ kind: "keep", reason: "in-use", detail: "Still used by collector job1, so it was kept." });
+  });
+
+  it("keeps the pipeline and the secret when the destinations cannot be read, saying what was not read", () => {
+    const plan = planCriblTeardown(input(), reads({ outputs: { state: "refused", status: 403, detail: "the destinations list: HTTP 403" } }));
+    expect(verdictOf(plan, "pipeline")).toEqual({
+      kind: "keep",
+      reason: "unreadable",
+      detail: `The destinations could not be read: Cribl refused it (HTTP 403), so whether anything still uses pipeline ${UNROLL_PIPELINE_ID} is unknown. It was kept.`,
+      denied: true,
+    });
+    expect(verdictOf(plan, "secret").kind === "keep" && verdictOf(plan, "secret")).toMatchObject({ reason: "unreadable", denied: true });
+    expect(verdictOf(plan, "input").kind).toBe("delete");
+  });
+
+  it("keeps the secret while a destination or a collector names it", () => {
+    const dest = { id: "out_eh", type: "azure_eventhub", sasl: { textSecret: SECRET_ID } };
+    const a = planCriblTeardown(input(), reads({ outputs: { state: "read", items: [dest] } }));
+    expect(verdictOf(a, "secret")).toEqual({ kind: "keep", reason: "in-use", detail: "Still used by destination out_eh, so it was kept." });
+    const job = { id: "job2", collector: { conf: { textSecret: SECRET_ID } } };
+    const b = planCriblTeardown(input(), reads({ jobs: { state: "read", items: [job] } }));
+    expect(verdictOf(b, "secret")).toEqual({ kind: "keep", reason: "in-use", detail: "Still used by collector job2, so it was kept." });
+  });
+
+  it("keeps the dataset while ANOTHER worker group routes to it, or a Cribl Lake destination names it", () => {
+    const remote = { id: "r_remote", filter: "true", output: `cribl_lake:${DATASET_ID}` };
+    const a = planCriblTeardown(input(), reads({ otherGroups: { state: "read", groups: [{ groupId: "g2", routes: [remote], outputs: [] }] } }));
+    expect(verdictOf(a, "dataset")).toEqual({ kind: "keep", reason: "in-use", detail: "Still used by route r_remote in g2, so it was kept." });
+    const lakeDest = { id: "lake_out", type: "cribl_lake", destPath: DATASET_ID };
+    const b = planCriblTeardown(input(), reads({ otherGroups: { state: "read", groups: [{ groupId: "g3", routes: [], outputs: [lakeDest] }] } }));
+    expect(verdictOf(b, "dataset")).toEqual({ kind: "keep", reason: "in-use", detail: "Still used by destination lake_out in g3, so it was kept." });
+    const c = planCriblTeardown(input(), reads({ outputs: { state: "read", items: [lakeDest] } }));
+    expect(verdictOf(c, "dataset")).toEqual({ kind: "keep", reason: "in-use", detail: "Still used by destination lake_out in g1, so it was kept." });
+  });
+
+  it("never deletes the dataset on partial knowledge: an unreadable group keeps it", () => {
+    const plan = planCriblTeardown(input(), reads({ otherGroups: { state: "refused", status: 403, detail: "worker group g2: the routing table: HTTP 403" } }));
+    expect(verdictOf(plan, "dataset")).toEqual({
+      kind: "keep",
+      reason: "unreadable",
+      detail: `The other worker groups' routes and destinations could not be read: Cribl refused it (HTTP 403), so whether anything still uses Cribl Lake dataset ${DATASET_ID} is unknown. It was kept.`,
+      denied: true,
+    });
+    const notRead = planCriblTeardown(input(), reads({ otherGroups: null }));
+    expect(verdictOf(notRead, "dataset").kind === "keep" && verdictOf(notRead, "dataset")).toMatchObject({ reason: "unreadable" });
+  });
+});
+
 describe("recordsAfterTeardown", () => {
+  it("review finding 1: already-gone objects keep their records while the group is not settled", () => {
+    const gone = { route: "already-gone", pipeline: "already-gone", input: "already-gone", secret: "already-gone", dataset: "kept" } as const;
+    expect(recordsAfterTeardown({ criblSource: SOURCE, lakeRoute: LAKE, results: gone, committed: false })).toEqual({ criblSource: SOURCE, lakeRoute: LAKE });
+    expect(recordsAfterTeardown({ criblSource: SOURCE, lakeRoute: LAKE, results: gone, committed: true }).criblSource).toBeNull();
+  });
+
   it("forgets only what is gone for good: already gone, or removed and committed", () => {
     const all = { route: "removed", pipeline: "removed", input: "removed", secret: "removed", dataset: "removed" } as const;
     expect(recordsAfterTeardown({ criblSource: SOURCE, lakeRoute: LAKE, results: all, committed: true })).toEqual({ criblSource: null, lakeRoute: null });

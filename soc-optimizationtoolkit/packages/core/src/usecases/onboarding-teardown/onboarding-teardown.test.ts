@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import { UNROLL_PIPELINE_DESCRIPTION, UNROLL_PIPELINE_ID } from "../../domain/onboarding-lake-route";
 import type { CriblSourceRecord, LakeRouteRecord } from "../../domain/onboarding-howto/progress-document";
 import { FakeRoutesLeader, G, HASH, ROUTE_FILE } from "../route-insert/fake-routes-leader.test-util";
+import { toListing } from "../../domain/inventory-listing/inventory-listing";
 import {
   applyInputPause,
   applySourceTeardown,
@@ -45,6 +46,17 @@ class TeardownLeader extends FakeRoutesLeader {
   datasets: Record<string, unknown>[] = [{ id: DATASET_ID, description: `Azure onboarding ${STAMP}` }];
   /** Status to answer a DELETE with, by path; default deletes. */
   deleteStatus: Record<string, number> = {};
+  outputs: Record<string, unknown>[] = [{ id: "default", type: "devnull" }];
+  jobs: Record<string, unknown>[] = [];
+  /** Another worker group's routes and destinations (read for the dataset). */
+  g2Routes: Record<string, unknown>[] = [{ id: "default", filter: "true", output: "default", final: true }];
+  g2Outputs: Record<string, unknown>[] = [];
+  /** What the workers run; the deploy moves it to HEAD. */
+  deployed = "0000000000000000000000000000000000000000";
+
+  override async listGroups(): Promise<never> {
+    return toListing([{ id: G, product: "stream" }, { id: "g2", product: "stream" }, { id: "default_search", product: "search" }]) as never;
+  }
 
   constructor() {
     super();
@@ -67,6 +79,25 @@ class TeardownLeader extends FakeRoutesLeader {
         if (file !== null && !this.pending.includes(file)) this.pending.push(file);
         return { status: 200, body: {} };
       };
+      if (req.groupId === G && req.method === "GET" && req.path === "/system/outputs") {
+        return { status: 200, body: { items: structuredClone(this.outputs), count: this.outputs.length } };
+      }
+      if (req.groupId === G && req.method === "GET" && req.path === "/jobs") {
+        return { status: 200, body: { items: structuredClone(this.jobs), count: this.jobs.length } };
+      }
+      if (req.groupId === "g2" && req.method === "GET" && req.path === "/routes") {
+        return { status: 200, body: { items: [{ id: "default", routes: structuredClone(this.g2Routes) }], count: 1 } };
+      }
+      if (req.groupId === "g2" && req.method === "GET" && req.path === "/system/outputs") {
+        return { status: 200, body: { items: structuredClone(this.g2Outputs), count: this.g2Outputs.length } };
+      }
+      if (req.groupId === undefined && req.method === "PATCH" && req.path === `/products/stream/groups/${G}/deploy`) {
+        this.deployed = String((req.body as { version: string }).version);
+        return { status: 200, body: {} };
+      }
+      if (req.groupId === undefined && req.method === "GET" && req.path === `/products/stream/groups/${G}`) {
+        return { status: 200, body: { items: [{ id: G, configVersion: this.deployed }] } };
+      }
       if (req.groupId === G && req.path === "/system/inputs" && req.method === "GET") {
         return { status: 200, body: { items: structuredClone(this.inputs), count: this.inputs.length } };
       }
@@ -129,8 +160,14 @@ describe("planSourceTeardown - read-only", () => {
       `GET /m/${G}/system/secrets/${SECRET_ID}`,
       `GET /m/${G}/pipelines`,
       `GET ${DATASETS}`,
-      `GET /m/${G}/routes/default`,
+      `GET /m/${G}/system/outputs`,
+      `GET /m/${G}/jobs`,
+      // The dataset is a leader object: every other group's routes and
+      // destinations are read (the Search group holds none and is skipped).
+      `GET /m/g2/routes`,
+      `GET /m/g2/system/outputs`,
       `GET /m/${G}/version/status`,
+      `GET /m/${G}/routes/default`,
     ]);
     expect(r.steps.map((s) => `${s.kind}:${s.verdict.kind}`)).toEqual(["route:delete", "pipeline:delete", "input:delete", "secret:delete", "dataset:delete"]);
     expect(r.commitFiles).toEqual([
@@ -142,6 +179,24 @@ describe("planSourceTeardown - read-only", () => {
     ]);
     // The approved diff removes exactly our route.
     expect(r.routeWrite?.routes.map((x) => (x as { id: string }).id)).toEqual(["r_fw", "r_okta", "r_complex", "default"]);
+  });
+
+  it("review finding 1: already gone but the workers do not run HEAD is nothing-to-remove that keeps every record", async () => {
+    const leader = new TeardownLeader();
+    leader.inputs = [];
+    leader.secrets = [];
+    leader.pipelines = [];
+    leader.datasets = [];
+    (leader.table["routes"] as unknown[]).shift();
+    leader.head = HASH; // committed by an earlier run, never deployed
+    const r = await planSourceTeardown({ cribl: leader }, input());
+    // The leader's dataset needs no commit: gone is gone, so only its proof goes.
+    const { datasetCreated: _c, ...lakeWithoutDataset } = LAKE;
+    expect(r).toMatchObject({ kind: "nothing-to-remove", records: { criblSource: SOURCE, lakeRoute: lakeWithoutDataset } });
+    expect(r.kind === "nothing-to-remove" && r.unsettled).toBe(
+      `Worker group ${G} runs 0000000000000000000000000000000000000000, not its newest commit ${HASH}, so earlier removals may not be live yet. Deploy the group in Cribl, then check again.`,
+    );
+    expect(leader.writes()).toEqual([]);
   });
 
   it("everything already gone is nothing-to-remove, and every record goes", async () => {
@@ -233,6 +288,51 @@ describe("applySourceTeardown", () => {
     });
     expect(leader.writes().some((w) => w.startsWith("DELETE /products"))).toBe(false);
     expect(outcome.records).toEqual({ criblSource: SOURCE, lakeRoute: LAKE });
+  });
+
+  it("review finding 1: a rerun after a refused commit commits the earlier pending removals BEFORE deleting the dataset", async () => {
+    const leader = new TeardownLeader();
+    const first = ready(await planSourceTeardown({ cribl: leader }, input({ removeDataset: false })));
+    leader.hooks.unshift((req) => (req.method === "POST" && req.path === "/version/commit" && leader.log.filter((l) => l.startsWith("POST")).length === 1 ? { status: 500, body: {} } : undefined));
+    const run1 = await applySourceTeardown({ cribl: leader }, first);
+    expect(run1.commit.kind).toBe("commit-failed");
+    expect(run1.records).toEqual({ criblSource: SOURCE, lakeRoute: LAKE });
+    expect(leader.pending.sort()).toEqual([INPUTS_FILE, PIPE_FILE, ROUTE_FILE, SECRETS_FILE].sort());
+
+    // Run 2, with the dataset: every group object reads as gone in the working
+    // config, but its removal is pending. The confirm names those files, and the
+    // apply commits and deploys them before the dataset goes.
+    const second = ready(await planSourceTeardown({ cribl: leader }, input()));
+    expect(second.steps.filter((s) => s.kind !== "dataset").every((s) => s.verdict.kind === "already-gone")).toBe(true);
+    expect([...second.scope.alreadyDirty].sort()).toEqual([INPUTS_FILE, PIPE_FILE, ROUTE_FILE, SECRETS_FILE].sort());
+    const writesBefore = leader.writes().length;
+    const run2 = await applySourceTeardown({ cribl: leader }, second);
+    expect(leader.writes().slice(writesBefore)).toEqual([
+      `POST /m/${G}/version/commit`,
+      `PATCH /products/stream/groups/${G}/deploy`,
+      `DELETE ${DATASETS}/${DATASET_ID}`,
+    ]);
+    expect(run2.kind).toBe("removed");
+    expect(run2.records).toEqual({ criblSource: null, lakeRoute: null });
+  });
+
+  it("review finding 1: a rerun after a failed deploy keeps the dataset and the records (the deployed route still sends there)", async () => {
+    const leader = new TeardownLeader();
+    const first = ready(await planSourceTeardown({ cribl: leader }, input({ removeDataset: false })));
+    leader.hooks.unshift((req) => (req.method === "PATCH" && req.path.endsWith("/deploy") ? { status: 500, body: {} } : undefined));
+    await applySourceTeardown({ cribl: leader }, first);
+    expect(leader.pending).toEqual([]); // committed, not deployed
+
+    const second = ready(await planSourceTeardown({ cribl: leader }, input()));
+    const run2 = await applySourceTeardown({ cribl: leader }, second);
+    expect(run2.commit).toEqual({
+      kind: "unsettled",
+      detail: `Worker group ${G} runs 0000000000000000000000000000000000000000, not its newest commit ${HASH}, so earlier removals may not be live yet. Deploy the group in Cribl, then check again.`,
+    });
+    expect(leader.writes().some((w) => w.startsWith("DELETE /products"))).toBe(false);
+    expect(run2.steps.find((s) => s.kind === "dataset")?.result).toBe("not-reached");
+    expect(run2.kind).toBe("stopped");
+    expect(run2.records).toEqual({ criblSource: SOURCE, lakeRoute: LAKE });
   });
 
   it("an object removed by someone else meanwhile is already gone: success, no DELETE sent", async () => {

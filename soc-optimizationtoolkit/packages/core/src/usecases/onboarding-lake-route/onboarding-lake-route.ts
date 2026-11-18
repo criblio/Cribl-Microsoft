@@ -358,6 +358,12 @@ export interface ApplyLakeRouteOutcome {
   readonly detail: string;
   /** What to record in the progress document, or null when nothing was created or proved. */
   readonly record: LakeRouteRecord | null;
+  /**
+   * AZR-105: true when this apply read the dataset as ABSENT. If it then did
+   * not create it (a 409: someone else made it in between), any earlier proof
+   * that the app created a dataset with this id is stale (withLakeRoute drops it).
+   */
+  readonly datasetSeenAbsent: boolean;
 }
 
 /** route-insert outcomes in which the routes PATCH was applied (whatever happened to the commit). */
@@ -417,6 +423,7 @@ export async function applyLakeRoute(ports: LakeRoutePorts, ready: ReadyLakeRout
   const grouped = groupRequest(ports.cribl, groupId);
   const request = ports.onCommitStep ? observeCommitDeploy(grouped, ports.onCommitStep) : grouped;
   let dataset: DatasetStep = "not-reached";
+  let datasetSeenAbsent = false;
   let pipeline: PipelineStep = "not-reached";
 
   const record = (routeId: string | null): LakeRouteRecord | null => {
@@ -439,7 +446,7 @@ export async function applyLakeRoute(ports: LakeRoutePorts, ready: ReadyLakeRout
       parts.push("The new pipeline is not committed: it stays pending in the worker group.");
     }
     parts.push(why);
-    const outcome: ApplyLakeRouteOutcome = { kind, stage, dataset, pipeline, route, detail: parts.join(" "), record: record(routeId) };
+    const outcome: ApplyLakeRouteOutcome = { kind, stage, dataset, pipeline, route, detail: parts.join(" "), record: record(routeId), datasetSeenAbsent };
     const log = { groupId, sourceId, stage, dataset, pipeline, route: route?.kind ?? null };
     if (kind === "deployed") ports.logger?.info(`${LAKE_ROUTE_LOG_PREFIX} deployed`, log);
     else ports.logger?.warn(`${LAKE_ROUTE_LOG_PREFIX} ${kind}`, log);
@@ -471,6 +478,7 @@ export async function applyLakeRoute(ports: LakeRoutePorts, ready: ReadyLakeRout
     dataset = "failed";
     return end("stopped", "dataset", `The Lake dataset listing could not be re-read (${datasetBefore.detail}). Nothing was written.`);
   }
+  datasetSeenAbsent = datasetBefore.kind === "absent";
   if (datasetBefore.kind === "present") {
     dataset = "existed";
   } else {

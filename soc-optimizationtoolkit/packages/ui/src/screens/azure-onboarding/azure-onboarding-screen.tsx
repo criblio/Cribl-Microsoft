@@ -1020,7 +1020,7 @@ export function AzureOnboardingScreen({
     const outcome = await applyLakeRoute(criblPorts, ready);
     if (outcome.record !== null) {
       const p = loadedProgress(latestProgressLoad.current);
-      const recorded = p !== null && commitProgress(withLakeRoute(p, ready.sourceId, outcome.record), "lake route");
+      const recorded = p !== null && commitProgress(withLakeRoute(p, ready.sourceId, outcome.record, { datasetSeenAbsent: outcome.datasetSeenAbsent }), "lake route");
       if (!recorded) {
         showMessage("howto", {
           tone: "warning",
