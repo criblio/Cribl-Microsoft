@@ -4871,7 +4871,7 @@
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [
         "AZR-61"
@@ -4887,7 +4887,7 @@
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [
         "AZR-61"
@@ -4918,7 +4918,7 @@
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [
         "AZR-61"
@@ -4934,7 +4934,7 @@
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "backlog",
+      "status": "in-progress",
       "settled": "settled",
       "dependsOn": [
         "AZR-61"
