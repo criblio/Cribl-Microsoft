@@ -17,6 +17,7 @@ import {
   roleAssignmentRequest,
 } from "./index";
 import { privilegeOperation } from "../least-privilege";
+import { EVENT_HUB_RECEIVER_ROLES } from "../eventhub-arm";
 import type { ChangeRequestContext } from "./index";
 import type { AzureConfig, AzureSetupPath } from "../azure-config";
 
@@ -232,13 +233,17 @@ describe("appRegistrationRequest", () => {
 });
 
 describe("roleAssignmentRequest role selection", () => {
-  it("existing: Reader + Monitoring/Log Analytics Contributor as the path's own roles, unchanged", () => {
+  it("existing: Reader + Monitoring Contributor, and Log Analytics Contributor on the workspace (AZR-85)", () => {
     const out = roleAssignmentRequest(ctxFor("existing"));
     expect(out).toContain("- Reader at /subscriptions/33333333-3333-3333-3333-333333333333\n");
     expect(out).toContain(
       "- Monitoring Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab\n",
     );
+    // RE-PINNED (AZR-85): at the group it also reached every other resource there.
     expect(out).toContain(
+      "- Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab/providers/Microsoft.OperationalInsights/workspaces/law-soc-lab\n",
+    );
+    expect(out).not.toContain(
       "- Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab\n",
     );
     // One justification line per role, and the SP named by client id.
@@ -344,6 +349,30 @@ describe("resourceCreationRequest", () => {
     expect(out).toContain("Create an Event Hub namespace");
     expect(out).not.toContain("Create a lab resource group");
     expect(out).not.toContain("self-destructs");
+  });
+
+  it("states the Event Hub tier the app accepts, in plan-cribl-source's words (AZR-88)", () => {
+    for (const path of ["existing", "lab-new-rg", "lab-byo-rg"] as const) {
+      const out = resourceCreationRequest(ctxFor(path));
+      expect(out, path).toContain(
+        "  Pricing tier: Standard or Premium, not Basic. Basic has no Kafka\n" +
+          "  endpoint for Cribl to read, and the app refuses a Basic namespace.\n",
+      );
+      expect(out, path).toContain("Event Hub tier: Standard or Premium (not Basic)");
+    }
+  });
+
+  it("asks for Azure Event Hubs Data Receiver for the Cribl principal, never Data Owner (AZR-88, ADR 0008)", () => {
+    const out = resourceCreationRequest(ctxFor("existing"));
+    expect(out).toContain(
+      "- Assign Azure Event Hubs Data Receiver on that namespace (or on each\n" +
+        "  hub Cribl reads) to the service principal Cribl Stream signs in as:\n" +
+        "  <cribl service principal object id>.",
+    );
+    expect(out).toContain("not Azure Event Hubs Data Owner: the app refuses\n  both.");
+    expect(out).toContain("Cribl role:     Azure Event Hubs Data Receiver for the Cribl service principal");
+    // The one role plan-cribl-source accepts, read from the same list.
+    expect(EVENT_HUB_RECEIVER_ROLES.map((r) => r.roleName)).toEqual(["Azure Event Hubs Data Receiver"]);
   });
 
   it("renders placeholders for a blank context", () => {

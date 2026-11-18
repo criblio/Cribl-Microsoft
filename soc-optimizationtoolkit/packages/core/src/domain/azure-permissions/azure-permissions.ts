@@ -173,6 +173,14 @@ export interface RequiredAction {
    * (see the lab action list, which is core throughout and says so once).
    */
   necessity?: PermissionNecessity;
+  /**
+   * `workspace` when the role that grants the action is asked on the
+   * configured workspace resource rather than at the path's scope (AZR-85:
+   * Log Analytics Contributor on the workspace). Evaluators that know the
+   * workspace read its permissions for these actions; at the resource group a
+   * workspace-only grant is invisible, so a NOT granted there is no denial.
+   */
+  resourceScope?: "workspace";
 }
 
 /**
@@ -246,6 +254,8 @@ export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
     {
       action: operationAction("table.write"),
       label: "Create custom tables",
+      // AZR-85: Log Analytics Contributor is asked on the workspace.
+      resourceScope: "workspace",
     },
     {
       action: "Microsoft.Resources/deployments/write",
@@ -270,6 +280,36 @@ export const REQUIRED_ACTIONS: Record<SetupPath, RequiredAction[]> = {
     {
       action: operationAction("dcr.roleAssignment.write"),
       label: `Grant Cribl's identity access to each DCR (${leastRoleFor("dcr.roleAssignment.write")})`,
+      necessity: "feature",
+    },
+    // AZR-86 (audit discrepancy 17): content install also PUTs Content Hub
+    // packages and the solutions' parsers (savedSearches), and nothing
+    // measured either - alertRules/write alone passed an identity whose
+    // custom role could write rules but not install the solution.
+    {
+      action: operationAction("sentinel.contentPackage.write"),
+      label: `Install Content Hub solutions (${leastRoleFor("sentinel.contentPackage.write")})`,
+      necessity: "feature",
+    },
+    {
+      action: operationAction("savedSearch.write"),
+      label: `Install solution parsers as saved searches (${leastRoleFor("savedSearch.write")})`,
+      necessity: "feature",
+    },
+    // AZR-85 review: Enable Sentinel PUTs a Microsoft.OperationsManagement
+    // solution at the resource group. Log Analytics Contributor at the group
+    // used to cover it by accident; asked on the workspace it does not.
+    {
+      action: operationAction("sentinel.solution.write"),
+      label: `Enable Microsoft Sentinel on the workspace (${leastRoleFor("sentinel.solution.write")})`,
+      necessity: "feature",
+    },
+    // Create workspace on the targeting screen. Monitoring Contributor at the
+    // group, already asked on this path, includes it; measured so a custom
+    // role without it reads as missing rather than unknown.
+    {
+      action: operationAction("workspace.write"),
+      label: `Create a Log Analytics workspace (${leastRoleFor("workspace.write")})`,
       necessity: "feature",
     },
   ],
@@ -367,6 +407,13 @@ export interface PermissionCheckResult {
   granted: boolean;
   /** Carried over from the {@link RequiredAction}, so renderers can group. */
   necessity: PermissionNecessity;
+  /**
+   * Set, with the reason, when the action could not be evaluated at the scope
+   * its role is asked at (AZR-85: a workspace action read only at the resource
+   * group). `granted` is then false but NOT a measurement: renderers show
+   * unknown, and {@link coreGranted} does not fail on it.
+   */
+  unmeasured?: string;
 }
 
 /**
@@ -412,7 +459,8 @@ export function allGranted(results: PermissionCheckResult[]): boolean {
  */
 export function coreGranted(results: PermissionCheckResult[]): boolean {
   return results.every(
-    (result) => result.necessity !== "core" || result.granted,
+    (result) =>
+      result.necessity !== "core" || result.granted || result.unmeasured !== undefined,
   );
 }
 
@@ -421,6 +469,7 @@ export function missingFeatureActions(
   results: PermissionCheckResult[],
 ): PermissionCheckResult[] {
   return results.filter(
-    (result) => result.necessity === "feature" && !result.granted,
+    (result) =>
+      result.necessity === "feature" && !result.granted && result.unmeasured === undefined,
   );
 }

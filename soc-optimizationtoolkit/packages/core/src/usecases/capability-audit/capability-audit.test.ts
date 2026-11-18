@@ -208,6 +208,71 @@ describe("persistence", () => {
     expect(stored.verdicts["defender-automation.write"]).toBe("granted");
   });
 
+  describe("the existing path's audit measures Defender at the subscription (AZR-86)", () => {
+    const SUB_PERMISSIONS = `/subscriptions/${SUB}/providers/Microsoft.Authorization/permissions`;
+
+    it("reads the subscription once and records the Defender verdicts", async () => {
+      const azure = new FakeAzureManagement();
+      // Group perms (Owner grants tables/write, so no workspace read), four
+      // probes, then the subscription perms holding Security Admin's actions.
+      azure.respondWith(
+        permsResponse(OWNER),
+        OK,
+        OK,
+        OK,
+        OK,
+        permsResponse(permSet({ actions: ["Microsoft.Security/*"] })),
+      );
+      const result = await runCapabilityAudit({ azure, cribl: new FakeCriblClient() }, INPUT);
+      expect(azure.calls).toHaveLength(6);
+      expect(azure.calls[5]?.method).toBe("GET");
+      expect(azure.calls[5]?.path).toBe(SUB_PERMISSIONS);
+      expect(result.set.verdicts["defender-plans.read"]).toBe("granted");
+      expect(result.set.verdicts["defender-automation.read"]).toBe("granted");
+      expect(result.set.verdicts["defender-automation.write"]).toBe("granted");
+      // The group's own verdicts are untouched.
+      expect(result.set.verdicts["dcr.write"]).toBe("granted");
+    });
+
+    it("records a subscription miss as denied, except the grant-only export write", async () => {
+      const azure = new FakeAzureManagement();
+      azure.respondWith(
+        permsResponse(OWNER),
+        OK,
+        OK,
+        OK,
+        OK,
+        permsResponse(permSet({ actions: ["Microsoft.Insights/*"] })),
+      );
+      const result = await runCapabilityAudit({ azure, cribl: new FakeCriblClient() }, INPUT);
+      // The two reads are the subscription's own, so a miss is a denial; the
+      // write is not measured there, because the export may be granted on
+      // the resource group it is written to.
+      expect(result.set.verdicts["defender-plans.read"]).toBe("denied");
+      expect(result.set.verdicts["defender-automation.read"]).toBe("denied");
+      expect(result.set.verdicts["defender-automation.write"]).toBeUndefined();
+    });
+
+    it("records nothing when the subscription cannot be read", async () => {
+      const azure = new FakeAzureManagement();
+      azure.respondWith(permsResponse(OWNER), OK, OK, OK, OK, { status: 403, body: {} });
+      const result = await runCapabilityAudit({ azure, cribl: new FakeCriblClient() }, INPUT);
+      expect(azure.calls[5]?.path).toBe(SUB_PERMISSIONS);
+      expect(result.set.verdicts["defender-plans.read"]).toBeUndefined();
+      expect(result.set.verdicts["defender-automation.read"]).toBeUndefined();
+    });
+
+    it("adds no request to an existing-subscription audit, which measures them itself", async () => {
+      const azure = new FakeAzureManagement();
+      azure.respondWith(permsResponse(permSet({ actions: ["Microsoft.Security/*"] })), OK, OK);
+      await runCapabilityAudit(
+        { azure, cribl: new FakeCriblClient() },
+        { ...INPUT, setupPath: "existing-subscription" },
+      );
+      expect(azure.calls.filter((c) => c.path === SUB_PERMISSIONS)).toHaveLength(1);
+    });
+  });
+
   it("re-audits after a scope change, because the key changed", async () => {
     const cache = new FakeContentCache();
     await runCapabilityAudit(ownerPorts(cache), INPUT);

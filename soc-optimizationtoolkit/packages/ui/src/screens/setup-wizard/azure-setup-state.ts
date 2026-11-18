@@ -277,6 +277,15 @@ function resourceGroupPermissionsPath(sub: string, rg: string): string {
   );
 }
 
+function workspacePermissionsPath(sub: string, rg: string, ws: string): string {
+  return (
+    `/subscriptions/${encodeURIComponent(sub)}` +
+    `/resourceGroups/${encodeURIComponent(rg)}` +
+    `/providers/Microsoft.OperationalInsights/workspaces/${encodeURIComponent(ws)}` +
+    "/providers/Microsoft.Authorization/permissions"
+  );
+}
+
 /**
  * The scope check(s) the selected setup path requires, mapping the coarse
  * shell {@link AzureSetupPath} to the @soc/core required-action set keys.
@@ -287,9 +296,11 @@ export function permissionScopeChecks(
   path: AzureSetupPath,
   subscriptionId: string,
   resourceGroup: string,
+  workspaceName = "",
 ): ScopeCheck[] {
   const sub = subscriptionId.trim();
   const rg = resourceGroup.trim();
+  const ws = workspaceName.trim();
   if (path === "existing") {
     const checks: ScopeCheck[] = [];
     if (sub === "") {
@@ -313,12 +324,31 @@ export function permissionScopeChecks(
           "Resource group scope: select a subscription and workspace above to validate RG-level writes (existing-rg).",
       });
     } else {
+      // AZR-85: Log Analytics Contributor is asked on the workspace, which a
+      // group read cannot see, so its actions are read at the workspace. The
+      // workspace read includes what the group and subscription grant.
+      const atGroup = REQUIRED_ACTIONS["existing-rg"].filter((r) => r.resourceScope !== "workspace");
+      const atWorkspace = REQUIRED_ACTIONS["existing-rg"].filter((r) => r.resourceScope === "workspace");
       checks.push({
         kind: "check",
         label: "Resource group scope (existing-rg)",
         permissionsPath: resourceGroupPermissionsPath(sub, rg),
-        required: REQUIRED_ACTIONS["existing-rg"],
+        required: atGroup,
       });
+      if (ws === "") {
+        checks.push({
+          kind: "needs-input",
+          message:
+            "Workspace scope: select a workspace above to validate the table writes Log Analytics Contributor grants on it (existing-rg).",
+        });
+      } else {
+        checks.push({
+          kind: "check",
+          label: "Workspace scope (existing-rg)",
+          permissionsPath: workspacePermissionsPath(sub, rg, ws),
+          required: atWorkspace,
+        });
+      }
     }
     return checks;
   }

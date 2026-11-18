@@ -118,7 +118,9 @@ export function labPermissionRequirements(
     scope:
       req.scopeLevel === "subscription"
         ? "Subscription"
-        : `Resource group '${req.resourceGroup ?? resourceGroupName}'`,
+        : req.scopeLevel === "workspace"
+          ? "Lab workspace"
+          : `Resource group '${req.resourceGroup ?? resourceGroupName}'`,
     role: req.condition === undefined ? req.role : `${req.role} (constrained)`,
     reason: req.condition === undefined ? req.justification : `${req.justification} ${req.condition}`,
   }));

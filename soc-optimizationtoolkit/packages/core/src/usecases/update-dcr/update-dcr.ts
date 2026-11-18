@@ -545,8 +545,10 @@ async function effectivePermissionsAt(
 /**
  * Check the caller's effective RBAC permissions for a DCR update BEFORE
  * attempting it (user request 2026-07-13): dataCollectionRules/write at the
- * DCR's resource group, plus workspaces/tables/write at the workspace's
- * group when a table schema edit is part of the action.
+ * DCR's resource group, plus workspaces/tables/write when a table schema edit
+ * is part of the action - read at the workspace itself when its name is
+ * given (AZR-85: Log Analytics Contributor is asked there, and a group read
+ * cannot see it), else at the workspace's group.
  */
 export async function checkDcrUpdatePermissions(
   azure: AzureManagement,
@@ -556,6 +558,8 @@ export async function checkDcrUpdatePermissions(
     dcrResourceGroup: string;
     /** The workspace's resource group (table edits land here). */
     workspaceResourceGroup?: string;
+    /** The workspace name; when given, the table action is read on the workspace. */
+    workspaceName?: string;
     /** Also require the table schema-edit action (add/remove field). */
     includeTableEdit?: boolean;
   },
@@ -574,7 +578,10 @@ export async function checkDcrUpdatePermissions(
   }
 
   if (input.includeTableEdit === true && input.workspaceResourceGroup) {
-    const tableScope = rgScope(input.workspaceResourceGroup);
+    const tableScope =
+      input.workspaceName !== undefined && input.workspaceName !== ""
+        ? `${rgScope(input.workspaceResourceGroup)}/providers/Microsoft.OperationalInsights/workspaces/${input.workspaceName}`
+        : rgScope(input.workspaceResourceGroup);
     // Same scope: reuse the response instead of a second GET.
     const tablePerms =
       tableScope === dcrScope

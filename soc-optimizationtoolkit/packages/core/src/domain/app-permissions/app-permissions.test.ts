@@ -328,7 +328,7 @@ describe("AZR-61 - roles come from the least-privilege registry", () => {
     // literal, and two already disagreed with no pin (Sentinel content and
     // the DCR grant are registry 'resource' scope, asked at the RG). A
     // registry scope correction must reach the ticket, or be argued against.
-    const breadth = { resource: 0, resourceGroup: 1, subscription: 2, managementGroup: 3 } as const;
+    const breadth = { resource: 0, workspace: 0, resourceGroup: 1, subscription: 2, managementGroup: 3 } as const;
     for (const role of FEATURE_ROLES) {
       const registry = privilegeOperation(role.operationId).scope;
       if (role.broaderScopeWhy === undefined) {
@@ -441,6 +441,42 @@ describe("AZR-84 - grants on resources outside the configured scope", () => {
     expect(scopeCovers("subscription", { scopeLevel: "resource", outsideConfiguredScope: true })).toBe(false);
     expect(scopeCovers("subscription", { scopeLevel: "resource" })).toBe(true);
     expect(scopeCovers("resourceGroup", { scopeLevel: "resource" })).toBe(false);
+  });
+
+  it("asks for the Enable Sentinel solution write at the group, with its skip caveat (AZR-85 review)", () => {
+    const row = appPermissionPlan("existing").find(
+      (p) => p.key === "Log Analytics Contributor (resource group)",
+    );
+    expect(row?.feature).toBe("Enable Microsoft Sentinel on the workspace");
+    expect(row?.scopeCaveat).toBe("skip if Microsoft Sentinel is already enabled on the workspace");
+    expect(row?.justification).toContain(
+      "A custom role with only Microsoft.OperationsManagement/solutions/write and Microsoft.OperationsManagement/solutions/read at the resource group is narrower still.",
+    );
+    // Lab paths hold Contributor, which covers it; they never ask.
+    for (const path of ["lab-new-rg", "lab-byo-rg"] as const) {
+      expect(appPermissionPlan(path).some((p) => p.key === "Log Analytics Contributor (resource group)"), path).toBe(false);
+    }
+  });
+
+  it("covers the configured workspace from its group or subscription, and a workspace grant covers only it (AZR-85)", () => {
+    expect(scopeCovers("subscription", { scopeLevel: "workspace" })).toBe(true);
+    expect(scopeCovers("resourceGroup", { scopeLevel: "workspace" })).toBe(true);
+    expect(scopeCovers("workspace", { scopeLevel: "workspace" })).toBe(true);
+    expect(scopeCovers("workspace", { scopeLevel: "resourceGroup" })).toBe(false);
+    expect(scopeCovers("workspace", { scopeLevel: "resource" })).toBe(false);
+    expect(scopeCovers("workspace", { scopeLevel: "subscription" })).toBe(false);
+  });
+
+  it("asks Log Analytics Contributor on the workspace, and the preflight measures it there (AZR-85)", () => {
+    const plan = appPermissionPlan("existing");
+    const la = plan.filter((p) => p.name === "Log Analytics Contributor");
+    // The setup role on the workspace, and (review C) the Enable Sentinel
+    // solution write at the group, a separate, refusable feature row.
+    expect(la.map((p) => [p.key, p.scopeLevel, p.necessity])).toEqual([
+      ["Log Analytics Contributor", "workspace", "core"],
+      ["Log Analytics Contributor (resource group)", "resourceGroup", "feature"],
+    ]);
+    expect(preflightUnmeasuredGrants(plan).map((g) => g.name)).not.toContain("Log Analytics Contributor");
   });
 
   it("reports those grants to the preflight as not measured, with the ticket's words", () => {

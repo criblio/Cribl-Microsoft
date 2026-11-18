@@ -121,10 +121,16 @@ Assign each role to the service principal for Cribl SOC Optimization Toolkit (cl
                     someone else to deploy, but cannot deploy it itself - no  
                     data path is created.  
 - Log Analytics Contributor  [core]  
-    Scope:          /subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/rg-sentinel  
+    Scope:          /subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/rg-sentinel/providers/Microsoft.OperationalInsights/workspaces/law-sentinel  
     Needed for:     Create custom tables  
-    Why:            Create custom Log Analytics tables and configure the  
-                    workspace for ingestion.  
+    Why:            Create custom Log Analytics tables in the workspace. Asked  
+                    on the workspace itself, not its resource group, where the  
+                    role would also reach every other resource there. A custom  
+                    role with only  
+                    Microsoft.OperationalInsights/workspaces/read,  
+                    Microsoft.OperationalInsights/workspaces/tables/read,  
+                    Microsoft.OperationalInsights/workspaces/tables/write on  
+                    the workspace is narrower still.  
     If not granted: Onboarding a source to a table that does not exist yet  
                     fails; existing native tables can still be targeted.  
 
@@ -236,6 +242,23 @@ one named capability and can be refused independently.
     If not granted: Validate's policy checks read as could not be read, and  
                     the Logging Map lists subscriptions without the management  
                     group tree.  
+- Log Analytics Contributor  [feature]  
+    Scope:          /subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/rg-sentinel  
+                    (skip if Microsoft Sentinel is already enabled on the  
+                    workspace)  
+    Needed for:     Enable Microsoft Sentinel on the workspace  
+    Why:            Enable Sentinel writes the SecurityInsights solution for  
+                    the workspace, a Microsoft.OperationsManagement/solutions  
+                    resource in the workspace's resource group rather than  
+                    under the workspace, so the workspace grant above does not  
+                    reach it. A custom role with only  
+                    Microsoft.OperationsManagement/solutions/write and  
+                    Microsoft.OperationsManagement/solutions/read at the  
+                    resource group is narrower still.  
+    If not granted: Enable Sentinel on the targeting screen fails with a 403;  
+                    enabling it in the portal (Microsoft Sentinel > Create,  
+                    then pick the workspace) does the same thing. Nothing else  
+                    is affected.  
 - Security Admin  [feature]  
     Scope:          /subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/rg-sentinel  
                     (the default; the role is needed on whichever resource  
@@ -432,10 +455,16 @@ Assign each role to the service principal for Cribl SOC Optimization Toolkit (cl
                     someone else to deploy, but cannot deploy it itself - no  
                     data path is created.  
 - Log Analytics Contributor  [core]  
-    Scope:          /subscriptions/`<subscription id>`/resourceGroups/`<resource group>`  
+    Scope:          /subscriptions/`<subscription id>`/resourceGroups/`<resource group>`/providers/Microsoft.OperationalInsights/workspaces/`<workspace name>`  
     Needed for:     Create custom tables  
-    Why:            Create custom Log Analytics tables and configure the  
-                    workspace for ingestion.  
+    Why:            Create custom Log Analytics tables in the workspace. Asked  
+                    on the workspace itself, not its resource group, where the  
+                    role would also reach every other resource there. A custom  
+                    role with only  
+                    Microsoft.OperationalInsights/workspaces/read,  
+                    Microsoft.OperationalInsights/workspaces/tables/read,  
+                    Microsoft.OperationalInsights/workspaces/tables/write on  
+                    the workspace is narrower still.  
     If not granted: Onboarding a source to a table that does not exist yet  
                     fails; existing native tables can still be targeted.  
 
@@ -547,6 +576,23 @@ one named capability and can be refused independently.
     If not granted: Validate's policy checks read as could not be read, and  
                     the Logging Map lists subscriptions without the management  
                     group tree.  
+- Log Analytics Contributor  [feature]  
+    Scope:          /subscriptions/`<subscription id>`/resourceGroups/`<resource group>`  
+                    (skip if Microsoft Sentinel is already enabled on the  
+                    workspace)  
+    Needed for:     Enable Microsoft Sentinel on the workspace  
+    Why:            Enable Sentinel writes the SecurityInsights solution for  
+                    the workspace, a Microsoft.OperationsManagement/solutions  
+                    resource in the workspace's resource group rather than  
+                    under the workspace, so the workspace grant above does not  
+                    reach it. A custom role with only  
+                    Microsoft.OperationsManagement/solutions/write and  
+                    Microsoft.OperationsManagement/solutions/read at the  
+                    resource group is narrower still.  
+    If not granted: Enable Sentinel on the targeting screen fails with a 403;  
+                    enabling it in the portal (Microsoft Sentinel > Create,  
+                    then pick the workspace) does the same thing. Nothing else  
+                    is affected.  
 - Security Admin  [feature]  
     Scope:          /subscriptions/`<subscription id>`/resourceGroups/`<resource group>`  
                     (the default; the role is needed on whichever resource  

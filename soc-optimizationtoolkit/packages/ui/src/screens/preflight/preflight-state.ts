@@ -157,18 +157,22 @@ export function deriveAzureDots(
     label: check.label,
     // When the permissions API itself could not be read, we do not KNOW whether
     // the action is granted - surface `unknown`, never a false `missing`.
+    // A check read only above the scope its role is asked at (AZR-85) is
+    // unknown too, with the reason.
     status: !result.permissionsFetched
       ? ("unknown" as DotStatus)
       : check.granted
         ? ("granted" as DotStatus)
-        : ("missing" as DotStatus),
+        : check.unmeasured !== undefined
+          ? ("unknown" as DotStatus)
+          : ("missing" as DotStatus),
     detail: !result.permissionsFetched
       ? result.error !== ""
         ? result.error
         : "permissions could not be read"
       : check.granted
         ? "effective action granted"
-        : "effective action not granted",
+        : (check.unmeasured ?? "effective action not granted"),
     required: true,
   }));
   for (const probe of result.probes) {
@@ -437,7 +441,7 @@ function firstAzureIssue(result: AzurePreflight): string | null {
     return "cannot read Azure permissions";
   }
   for (const check of result.checks) {
-    if (!check.granted) {
+    if (!check.granted && check.unmeasured === undefined) {
       return `cannot ${check.label.toLowerCase()}`;
     }
   }

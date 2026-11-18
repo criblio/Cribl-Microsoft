@@ -1,6 +1,8 @@
 export {
   runPermissionPreflight,
   runAzurePreflight,
+  evaluateActionsAtScope,
+  workspaceArmScope,
   runCriblPreflight,
   scopeKindForSetupPath,
   buildArmScope,
@@ -27,11 +29,13 @@ export type {
   CriblShellMode,
   LeastPrivilegeRoleDefinition,
   PreflightScopeKind,
+  ScopeEvaluation,
 } from "./permission-preflight";
 export {
   AZURE_ACTION_CAPABILITIES,
   AZURE_PROBE_CAPABILITIES,
   CRIBL_PROBE_CAPABILITIES,
+  azureCheckVerdicts,
   capabilitiesCheckedForSetupPath,
   capabilitiesFromReport,
   capabilitiesFromSides,

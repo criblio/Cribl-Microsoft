@@ -29,7 +29,41 @@
  * Pure: no IO, no fetch, no React.
  */
 
-import type { InvalidationResult, TargetScope } from "@soc/core";
+import type { CapabilityVerdict, InvalidationResult, TargetScope } from "@soc/core";
+
+// ---------------------------------------------------------------------------
+// Enable Sentinel: what the permission audit says about it (AZR-85 review)
+// ---------------------------------------------------------------------------
+
+/** The grant Enable Sentinel needs, in the words every note uses. */
+const SENTINEL_ENABLE_GRANT =
+  "Microsoft.OperationsManagement/solutions/write at the resource group " +
+  "(Log Analytics Contributor there, or a custom role with that action)";
+
+/**
+ * The note beside the Enable Sentinel button, or null when the audit measured
+ * the grant. It informs and never forbids: the button stays clickable in every
+ * case, since enabling is idempotent and the 403 is the real answer.
+ *
+ * The audit measured the COMMITTED resource group only, so a browsed group
+ * elsewhere is not checked - saying granted or denied there would borrow a
+ * verdict from another scope.
+ */
+export function sentinelEnableNote(
+  verdict: CapabilityVerdict,
+  scopeMatchesAudit: boolean,
+): string | null {
+  if (!scopeMatchesAudit) {
+    return `Not checked for this resource group: Enable needs ${SENTINEL_ENABLE_GRANT}; the permission audit measured the committed scope only.`;
+  }
+  if (verdict === "granted") {
+    return null;
+  }
+  if (verdict === "denied") {
+    return `The permission audit found this identity lacks ${SENTINEL_ENABLE_GRANT}, so Enable is expected to fail with a 403. Ask for that grant, or enable Sentinel in the portal.`;
+  }
+  return `Not measured yet: Enable needs ${SENTINEL_ENABLE_GRANT}.`;
+}
 
 // ---------------------------------------------------------------------------
 // Resource-group name rules

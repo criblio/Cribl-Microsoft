@@ -95,6 +95,7 @@ function azurePreflight(partial: Partial<AzurePreflight> = {}): AzurePreflight {
     scopeKind: "resource-group",
     scope: `/subscriptions/${SUB}/resourceGroups/${RG}`,
     permissionsFetched: true,
+    workspaceScope: "",
     checks: [],
     probes: [],
     hasRequiredAccess: false,
@@ -229,7 +230,8 @@ describe("mapping tables", () => {
     // still real MEASUREMENTS - they only decline to gate deploy readiness - so
     // they belong in this list exactly like core ones.
     expect(capabilitiesCheckedForSetupPath("existing-rg").sort()).toEqual(
-      ["arm.deploy", "dcr.write", "role.assign", "table.write"].sort(),
+      // RE-PINNED (AZR-85 review): sentinel.enable, the Enable Sentinel solution write.
+      ["arm.deploy", "dcr.write", "role.assign", "sentinel.enable", "table.write"].sort(),
     );
     // RE-PINNED 2026-10-27 (CAP-7a): the three Defender capabilities joined
     // existing-subscription, the one path evaluated at the subscription their
@@ -322,6 +324,7 @@ describe("only measurements are recorded", () => {
     const set = capabilitiesFromReport(
       report({
         permissionsFetched: false,
+        workspaceScope: "",
         checks: REQUIRED_ACTIONS["existing-rg"].map((r) => checkResult(r, false)),
         error: "fetch RBAC permissions: HTTP 500",
       }),
@@ -338,6 +341,7 @@ describe("only measurements are recorded", () => {
         configured: false,
         scope: "",
         permissionsFetched: false,
+        workspaceScope: "",
         checks: REQUIRED_ACTIONS["existing-rg"].map((r) => checkResult(r, false)),
         error: "No resource group configured",
       }),
@@ -467,6 +471,7 @@ describe("writes come from effective actions, never from a probe", () => {
     const set = capabilitiesFromReport(
       report({
         permissionsFetched: false,
+        workspaceScope: "",
         probes: [
           { name: "dcr-list", label: "List DCRs", status: "ok", detail: "" },
           { name: "workspace-get", label: "Read workspace", status: "ok", detail: "" },
@@ -487,6 +492,7 @@ describe("writes come from effective actions, never from a probe", () => {
     const set = capabilitiesFromReport(
       report({
         permissionsFetched: true,
+        workspaceScope: "",
         checks: [
           {
             action: "Microsoft.Insights/dataCollectionRules/write",
@@ -610,7 +616,7 @@ describe("over a real preflight report", () => {
     // The capability restatement of the suite's key pin: read does not imply
     // write. A Reader must never surface a granted write capability.
     const azure = new FakeAzureManagement();
-    azure.respondWith(permsResponse(READER), OK, OK, OK);
+    azure.respondWith(permsResponse(READER), permsResponse(READER), OK, OK, OK);
     const preflight = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
 
     const set = capabilitiesFromReport(report(preflight), META);
@@ -719,7 +725,7 @@ describe("over a real preflight report", () => {
     // CAP-1. existing-rg is what the audit runs by default, and its RBAC checks
     // say nothing about Resource Graph, so the probe is the whole measurement.
     const azure = new FakeAzureManagement();
-    azure.respondWith(permsResponse(READER), OK, OK, OK, GRAPH_ROW);
+    azure.respondWith(permsResponse(READER), permsResponse(READER), OK, OK, OK, GRAPH_ROW);
     const preflight = await runAzurePreflight(azure, "existing-rg", FULL_TARGET);
     const set = capabilitiesFromReport(report(preflight), META);
     expect(set.verdicts["resourcegraph.read"]).toBe("granted");

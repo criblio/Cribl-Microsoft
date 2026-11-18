@@ -110,10 +110,16 @@ Assign each role to the service principal for Cribl SOC Toolkit (client id:
                     someone else to deploy, but cannot deploy it itself - no
                     data path is created.
 - Log Analytics Contributor  [core]
-    Scope:          /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab
+    Scope:          /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab/providers/Microsoft.OperationalInsights/workspaces/law-soc-lab
     Needed for:     Create custom tables
-    Why:            Create custom Log Analytics tables and configure the
-                    workspace for ingestion.
+    Why:            Create custom Log Analytics tables in the workspace. Asked
+                    on the workspace itself, not its resource group, where the
+                    role would also reach every other resource there. A custom
+                    role with only
+                    Microsoft.OperationalInsights/workspaces/read,
+                    Microsoft.OperationalInsights/workspaces/tables/read,
+                    Microsoft.OperationalInsights/workspaces/tables/write on
+                    the workspace is narrower still.
     If not granted: Onboarding a source to a table that does not exist yet
                     fails; existing native tables can still be targeted.
 
@@ -225,6 +231,23 @@ one named capability and can be refused independently.
     If not granted: Validate's policy checks read as could not be read, and
                     the Logging Map lists subscriptions without the management
                     group tree.
+- Log Analytics Contributor  [feature]
+    Scope:          /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab
+                    (skip if Microsoft Sentinel is already enabled on the
+                    workspace)
+    Needed for:     Enable Microsoft Sentinel on the workspace
+    Why:            Enable Sentinel writes the SecurityInsights solution for
+                    the workspace, a Microsoft.OperationsManagement/solutions
+                    resource in the workspace's resource group rather than
+                    under the workspace, so the workspace grant above does not
+                    reach it. A custom role with only
+                    Microsoft.OperationsManagement/solutions/write and
+                    Microsoft.OperationsManagement/solutions/read at the
+                    resource group is narrower still.
+    If not granted: Enable Sentinel on the targeting screen fails with a 403;
+                    enabling it in the portal (Microsoft Sentinel > Create,
+                    then pick the workspace) does the same thing. Nothing else
+                    is affected.
 - Security Admin  [feature]
     Scope:          /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab
                     (the default; the role is needed on whichever resource
@@ -468,7 +491,7 @@ What is requested
 Assign the following roles to the service principal for Cribl SOC Toolkit (client id: 11111111-1111-1111-1111-111111111111):
 - Reader at /subscriptions/33333333-3333-3333-3333-333333333333
 - Monitoring Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab
-- Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab
+- Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab/providers/Microsoft.OperationalInsights/workspaces/law-soc-lab
 - Microsoft Sentinel Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab  [feature]
 - RBAC Administrator at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab  [feature]
     Condition: Constrain roles and principal types: only Monitoring Metrics Publisher, only to service principals.
@@ -477,6 +500,7 @@ Assign the following roles to the service principal for Cribl SOC Toolkit (clien
 - Monitoring Reader at the DCE, which a DCR may name in another resource group or subscription (skip if a role above already covers it)  [feature]
 - Reader at the Event Hub namespace (skip if a role above already covers it)  [feature]
 - Reader at /providers/Microsoft.Management/managementGroups/<management group id> (the highest management group the customer will grant, not the Tenant Root Group)  [feature]
+- Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab (skip if Microsoft Sentinel is already enabled on the workspace)  [feature]
 - Security Admin at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab (the default; the role is needed on whichever resource group you deploy CriblDefenderExport into in the Defender section)  [feature]
 
 [feature] roles each unlock one named capability and can be refused on
@@ -486,7 +510,7 @@ Justification
 -------------
 - Reader (/subscriptions/33333333-3333-3333-3333-333333333333): Discover subscriptions, resource groups, workspaces, and existing DCRs before deploying.
 - Monitoring Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Create and update Data Collection Rules in the workspace resource group.
-- Log Analytics Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Create custom Log Analytics tables and configure the workspace for ingestion.
+- Log Analytics Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab/providers/Microsoft.OperationalInsights/workspaces/law-soc-lab): Create custom Log Analytics tables in the workspace. Asked on the workspace itself, not its resource group, where the role would also reach every other resource there. A custom role with only Microsoft.OperationalInsights/workspaces/read, Microsoft.OperationalInsights/workspaces/tables/read, Microsoft.OperationalInsights/workspaces/tables/write on the workspace is narrower still.
 - Microsoft Sentinel Contributor (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Installing analytic rules and workbooks, and onboarding a workspace to Sentinel, WRITE Microsoft.SecurityInsights resources. Log Analytics Contributor grants read across the subscription but no Microsoft.SecurityInsights write, so without this role the install fails on the first rule.
 - RBAC Administrator (/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab): Data only flows through a Data Collection Rule if the sending identity holds Monitoring Metrics Publisher ON THAT RULE, and creating a role assignment is itself a privileged action that Contributor does not include. Attach the condition below so this grant cannot be used to assign anything else.
 - Azure Event Hubs Data Owner on the Event Hub namespace that holds the rule - skip if a role above already covers it: Creating the Cribl Event Hub source with the listKeys credential, and deploying the Defender continuous export, read the connection string of a namespace shared access rule (POST .../authorizationRules/{rule}/listKeys). That is an /action, which Reader does not grant: Reader passes every Event Hub rule check in Validate while listKeys still returns 403. A custom role with only authorizationRules/listKeys/action and authorizationRules/read on the namespace is narrower still.
@@ -494,6 +518,7 @@ Justification
 - Monitoring Reader on the DCE, which a DCR may name in another resource group or subscription - skip if a role above already covers it: The deployment preview reads the Data Collection Endpoint a DCR names (GET on its resource id) to show where Cribl sends data. A DCR may name a DCE in another resource group or subscription.
 - Reader on the Event Hub namespace - skip if a role above already covers it: Validate, Create Cribl source and the Defender export read the namespace, its shared access rules and its consumer groups. The namespace may sit in another resource group or subscription, which subscription Reader does not reach.
 - Reader at /providers/Microsoft.Management/managementGroups/<management group id> - the highest management group the customer will grant, not the Tenant Root Group: Validate's policy checks and the Logging Map read policy assignments, exemptions, definitions and remediations, and the management group tree, at your management group. Reader there covers all of them; Management Group Reader alone misses remediations and the tree. It reaches every subscription beneath the group. A custom role with only Microsoft.Authorization/policyAssignments/read, Microsoft.Authorization/policyDefinitions/read, Microsoft.Authorization/policyExemptions/read, Microsoft.Management/managementGroups/descendants/read, Microsoft.Management/managementGroups/read, Microsoft.PolicyInsights/remediations/read at the management group is narrower still.
+- Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab - skip if Microsoft Sentinel is already enabled on the workspace: Enable Sentinel writes the SecurityInsights solution for the workspace, a Microsoft.OperationsManagement/solutions resource in the workspace's resource group rather than under the workspace, so the workspace grant above does not reach it. A custom role with only Microsoft.OperationsManagement/solutions/write and Microsoft.OperationsManagement/solutions/read at the resource group is narrower still.
 - Security Admin at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab - the default; the role is needed on whichever resource group you deploy CriblDefenderExport into in the Defender section: The export is a Microsoft.Security/automations resource (CriblDefenderExport) the app creates in the resource group chosen in the Defender section; creating it needs automations/write, which neither Reader nor the Monitoring and Log Analytics roles include.
 
 Cribl side (stated, not requested)

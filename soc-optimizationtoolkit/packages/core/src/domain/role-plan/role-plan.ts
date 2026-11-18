@@ -32,7 +32,22 @@
  */
 
 import type { AzureSetupPath } from "../azure-config";
-import { leastRoleFor } from "../least-privilege";
+import { leastRoleFor, privilegeOperation } from "../least-privilege";
+
+/**
+ * The actions a custom role narrower than Log Analytics Contributor must hold
+ * on the workspace for the app's table work (AZR-85), read from the registry:
+ * the table read and write the app calls, and the workspace read.
+ */
+export const WORKSPACE_TABLE_ACTIONS: readonly string[] = Object.freeze(
+  [
+    ...new Set(
+      (["table.read", "table.write", "workspace.read"] as const).map(
+        (id) => privilegeOperation(id).operation,
+      ),
+    ),
+  ].sort(),
+);
 
 /**
  * The lab paths' umbrella role (see the module header for why it is not read
@@ -55,8 +70,12 @@ export const LAB_RBAC_CONDITION =
  *
  * - `subscription`  - assigned at `/subscriptions/{sub}`.
  * - `resourceGroup` - assigned at `/subscriptions/{sub}/resourceGroups/{rg}`.
+ * - `workspace`     - assigned on the configured Log Analytics workspace,
+ *   `/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.OperationalInsights/workspaces/{ws}`
+ *   (AZR-85). A named resource the configuration holds, unlike the
+ *   app-permissions `resource` level, which is a resource it does not.
  */
-export type RoleScopeLevel = "subscription" | "resourceGroup";
+export type RoleScopeLevel = "subscription" | "resourceGroup" | "workspace";
 
 /**
  * The resource group Azure keeps each region's default Network Watcher in.
@@ -117,8 +136,10 @@ export interface RoleRequirement {
  * The canonical RBAC role model for a setup path. This is the single definition
  * both the az-CLI builder and the change-request ticket generator draw from.
  *
- * - `existing`   - Reader on the subscription, plus Monitoring Contributor and
- *   Log Analytics Contributor scoped to the workspace resource group.
+ * - `existing`   - Reader on the subscription, Monitoring Contributor scoped to
+ *   the workspace resource group, and Log Analytics Contributor on the
+ *   workspace itself (AZR-85: at the group it also carried VM-extension,
+ *   storage listKeys and deployment rights over everything there).
  * - `lab-new-rg` - Contributor on the subscription (resource-group creation is a
  *   subscription-level action and covers all lab operations), plus RBAC
  *   Administrator on the subscription, assigned via the portal and CONSTRAINED
@@ -217,9 +238,11 @@ export function rolePlanForSetupPath(path: AzureSetupPath): RoleRequirement[] {
     },
     {
       role: leastRoleFor("table.write"),
-      scopeLevel: "resourceGroup",
+      scopeLevel: "workspace",
       justification:
-        "Create custom Log Analytics tables and configure the workspace for ingestion.",
+        "Create custom Log Analytics tables in the workspace. Asked on the workspace itself, not its resource group, where the role would also reach every other resource there. A custom role with only " +
+        WORKSPACE_TABLE_ACTIONS.join(", ") +
+        " on the workspace is narrower still.",
       feature: "Create custom tables",
       withoutIt:
         "Onboarding a source to a table that does not exist yet fails; existing native tables can still be targeted.",
@@ -273,13 +296,22 @@ export interface RoleAssignmentCliParams {
   subscriptionId: string;
   /** Target resource group name (workspace RG for `existing`, else lab RG). */
   resourceGroup: string;
+  /**
+   * The workspace a `workspace`-scoped role is assigned on (AZR-85). Optional
+   * so a caller with no workspace still renders, as `<workspaceName>`.
+   */
+  workspaceName?: string;
 }
 
 /** Build the fully-qualified az `--scope` string for a scope level. */
-function scopeFor(level: RoleScopeLevel, sub: string, rg: string): string {
-  return level === "subscription"
-    ? "/subscriptions/" + sub
-    : "/subscriptions/" + sub + "/resourceGroups/" + rg;
+function scopeFor(level: RoleScopeLevel, sub: string, rg: string, ws: string): string {
+  if (level === "subscription") {
+    return "/subscriptions/" + sub;
+  }
+  const group = "/subscriptions/" + sub + "/resourceGroups/" + rg;
+  return level === "workspace"
+    ? group + "/providers/Microsoft.OperationalInsights/workspaces/" + ws
+    : group;
 }
 
 /** The az CLI role-assignment command for one requirement. */
@@ -288,6 +320,7 @@ function commandFor(
   client: string,
   sub: string,
   rg: string,
+  ws: string,
 ): string {
   return (
     'az role assignment create --assignee ' +
@@ -295,7 +328,7 @@ function commandFor(
     ' --role "' +
     req.role +
     '" --scope ' +
-    scopeFor(req.scopeLevel, sub, req.resourceGroup ?? rg)
+    scopeFor(req.scopeLevel, sub, req.resourceGroup ?? rg, ws)
   );
 }
 
@@ -330,6 +363,10 @@ export function renderRoleAssignmentCli(
         ? "<workspaceRg>"
         : "<labRg>"
       : params.resourceGroup.trim();
+  const ws =
+    (params.workspaceName ?? "").trim() === ""
+      ? "<workspaceName>"
+      : (params.workspaceName ?? "").trim();
 
   // Command lines come from the canonical plan: portal-assigned roles carry a
   // comment block instead of a command, so they are filtered out here.
@@ -339,14 +376,14 @@ export function renderRoleAssignmentCli(
   const commands = rolePlanForSetupPath(path)
     .filter((req) => req.assignViaPortal !== true)
     .filter((req) => onlyRoles === undefined || onlyRoles.includes(req.role))
-    .map((req) => commandFor(req, client, sub, rg));
+    .map((req) => commandFor(req, client, sub, rg, ws));
   if (commands.length === 0) {
     commands.push("# No roles are requested, so there is nothing to assign.");
   }
 
   if (path === "existing") {
     return [
-      "# Existing workspace: least privilege, scoped to its resource group",
+      "# Existing workspace: least privilege, scoped to its resource group and the workspace",
       ...commands,
     ].join("\n");
   }
