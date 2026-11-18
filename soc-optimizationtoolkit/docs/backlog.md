@@ -927,7 +927,15 @@ portal visit is still owed is the same category of confident wrong answer as
 item 4.
 
 Graph access needs a `graph.microsoft.com` proxy domain with
-`Organization.Read.All` and `SecurityEvents.Read.All`.
+`Organization.Read.All` and `SecurityEvents.Read.All` - as LOG-09 has it. AZR-S1
+found the `security/incidents` probe documents `SecurityIncident.Read.All`
+instead; see point 7 of "6c and 6d are COMPLEMENTARY" in 6d.
+
+**What path A does NOT carry (AZR-S1, 2026-11-17).** No streamed table is at
+incident grain, and AlertInfo has no status, classification, owner or incident
+id. Path A is detection telemetry; triage state comes only from 6d path B. Say
+so on the worklist, so nobody turns on AlertInfo streaming expecting the SOC's
+case state.
 
 ### 6d. Pull collectors - no push path exists
 
@@ -942,8 +950,14 @@ section out - the checkboxes here create CRIBL config, not Azure config.
   collector, and it lands on the same unmeasured-Resource-Graph capability gap
   already recorded in items 1 and 4.
 
-**Path B (SECONDARY) for incident data - the incidents API via a Cribl REST
-Collector**
+**Path B for incident data - the incidents API via a Cribl REST Collector**
+
+(Was labelled SECONDARY. AZR-S1 found it is not ranked below path A but beside
+it: it is the only source of triage state - see "6c and 6d are COMPLEMENTARY"
+below. AZR-S1 also found the request below is right only for a workspace NOT
+onboarded to the Defender portal; an onboarded one should poll Graph
+`security/incidents` instead. The same rules about filtering on last-modified
+and expecting repeats apply to both.)
 
 Pull Sentinel incidents with a Cribl REST/API Endpoint Collector. The request as
 given, and it is a specification rather than a sketch - each point below is a
@@ -986,31 +1000,132 @@ the vendored spec - collectors are modelled as collection jobs, which is what
 this precedent already builds, so pin the conf against
 `packages/core/assets/cribl-openapi.json` instead of hand-writing it.
 
-#### 6c and 6d are probably COMPLEMENTARY, not alternatives - verify this first
+#### 6c and 6d are COMPLEMENTARY, not alternatives - ANSWERED 2026-11-17 (AZR-S1)
 
-This is the question that decides how the two are presented, and it should be
-settled before either is built. Our own catalog describes XDR streaming as
-carrying **alerts** (LOG-09: "MDE/MDI/MDO/MDCA/XDR alerts"), while path B returns
-the Sentinel **incident** object - severity, classification, owner, incident
-number, the triage state a SOC actually works. Those are different things at
-different grains, and if the streaming export carries no incident-level object
-then path A cannot replace path B for incident data no matter how it is ranked.
+The question, as filed: our catalog describes XDR streaming as carrying
+**alerts** (LOG-09: "MDE/MDI/MDO/MDCA/XDR alerts"), while path B returns the
+**incident** object with the triage state a SOC works. Does the streaming export
+carry an incident-grain table, or only alert-grain ones? If only alerts, the
+honest presentation is "alerts via A, incidents via B", both offered, with the
+recommendation applying to the alert half only.
 
-Verify against the APIs rather than reasoning it out: does the XDR streaming
-export carry an incident-grain table, or only alert-grain ones? If only alerts,
-then the honest presentation is "alerts via A, incidents via B", both offered,
-and the recommendation applies to the ALERT half only. Getting this wrong in
-either direction is costly - presenting A as a replacement loses incident triage
-state silently, presenting them as unrelated makes an operator build two
-overlapping feeds without being told they overlap.
+**How this was answered, and what it is not.** From Microsoft Learn's published
+schemas and API references, read 2026-11-17. No API was called - the spike ran
+without live Azure or Defender access - so this is documentation of the
+contracts, not a measurement of a tenant. What a live check would add is listed
+at the end; none of it could flip the main answer, because the main answer rests
+on a column list, not on behaviour.
 
-Also worth checking while in there: the incidents API returns an incident that
-REFERENCES its alerts rather than embedding their detail, with alerts and
-entities as separate sub-resources. A SOC consuming incidents downstream usually
-wants the entities, and discovering that after path B ships means a second
-collector and a join. Microsoft Graph `security/incidents` - which LOG-09 already
-calls for its usage probe - is a third shape worth pricing while answering this,
-though it is not one of the two paths requested.
+**1. The Streaming API carries NO incident-grain table.** Microsoft's table of
+streamable tables
+(<https://learn.microsoft.com/en-us/defender-xdr/supported-event-types>, page
+updated 2026-08-07) lists 23 tables as GA in every cloud: AlertEvidence,
+AlertInfo, CloudAppEvents, the ten Device* tables, the four Email* tables, the
+three Identity* tables, and UrlClickEvents. BehaviorEntities and BehaviorInfo
+are "Not available". There is no incident table on the list, and none exists in
+the advanced hunting schema to be added. This matches the 6c catalog exactly,
+so the catalog needs no change.
+
+**2. AlertInfo carries no triage state either - not even at alert grain.** Its
+full column list
+(<https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-alertinfo-table>)
+is Timestamp, AlertId, Title, Category, Severity, ServiceSource,
+DetectionSource, AttackTechniques. No status, classification, determination,
+owner, comments, last-modified time, and - the sharpest finding - **no incident
+id**, so a streamed alert cannot even be joined to the incident it belongs to.
+AlertEvidence joins to AlertInfo "on the `AlertId` column" and adds entities,
+not state. A streamed alert is a detection record written once, not a case that
+changes; triage happens after the record is emitted and never flows back
+through path A. This is stronger than the card assumed: path A is not
+"alert-grain triage state", it is no triage state at all.
+
+**3. So the presentation is "detections via A, incidents (with triage state) via
+B".** Both are offered; neither replaces the other; they overlap only on alert
+identity (AlertId on both sides). Path A's RECOMMENDED label applies to
+detection/alert telemetry, path B is the ONLY source of status, classification,
+owner and comments. An operator who wants both builds both, and should be told
+the join key is the alert id carried inside the incident's alerts.
+
+**4. Which incidents API - it depends on whether Sentinel is onboarded to the
+Defender portal.** This changes AZR-7, which was written against the Sentinel
+API only.
+
+- **Onboarded (unified SOC) tenant - Microsoft Graph `security/incidents` is the
+  authoritative source.** Once a workspace is onboarded, every incident -
+  including those from Sentinel analytics rules - is generated by the Defender
+  XDR engine, and for incidents and alerts Microsoft says "we recommend that you
+  use the Microsoft Graph REST API"
+  (<https://learn.microsoft.com/en-us/azure/sentinel/move-to-defender>). The
+  Sentinel `SecurityInsights` incident in such a tenant is a synchronised copy:
+  the same page warns of up to 5 minutes before Defender incidents reach
+  Sentinel, a batching window in which several changes to one incident within
+  5-10 minutes reach Sentinel as one update carrying only the latest, a changed
+  response body (`providerName` becomes Microsoft XDR), and no `Description` in
+  SecurityIncident. Polling the copy adds latency on top of our 5-minute
+  schedule and can never see an intermediate state. One edge the other way: the
+  same page says incidents created through the Sentinel API, a playbook or by
+  hand in the Azure portal are not synchronised to the Defender portal, so Graph
+  misses those.
+- **Not onboarded (Sentinel in the Azure portal only) - the Sentinel API is the
+  only source.** Graph's alert resource states that to see Sentinel alerts and
+  incidents "you must onboard Sentinel to the Defender Portal"
+  (<https://learn.microsoft.com/en-us/graph/api/resources/security-alert?view=graph-rest-1.0>),
+  so in this tenant Graph returns Defender XDR incidents only and the existing
+  path B request is right.
+
+**5. Shapes compared - the entities question from the original section is
+answered in Graph's favour.**
+
+| | Graph `security/incidents` | Sentinel `Microsoft.SecurityInsights/incidents` | Defender `api.security.microsoft.com/api/incidents` |
+|---|---|---|---|
+| Triage state | status, classification, determination, assignedTo, comments, resolvingComment, customTags | status, classification, classificationReason, classificationComment, owner, labels | status, classification, determination, assignedTo, comments, tags |
+| Change cursor | `lastUpdateDateTime` (`$filter` supported) | `properties/lastModifiedTimeUtc` | `lastUpdateTime` |
+| Alerts and entities | `$expand=alerts` embeds each alert with its `evidence` array | NOT embedded - only `additionalData.alertsCount` and `commentsCount`; alerts, entities, comments are separate sub-resources | embedded alerts and entities |
+| Paging | `@odata.nextLink`; `$count`, `$filter`, `$skip`, `$top`, `$expand` - **no `$orderby` listed** | `nextLink`/`$skipToken`, `$top` max 1000, `$orderby` | `$top` max 100, `$skip`; 50 calls/min, 1500/hour |
+| Auth | Graph app permission `SecurityIncident.Read.All` (admin consent) | Azure RBAC Microsoft Sentinel Reader on the workspace | Defender app permission `Incident.Read.All` |
+
+Sources:
+<https://learn.microsoft.com/en-us/graph/api/resources/security-incident?view=graph-rest-1.0>,
+<https://learn.microsoft.com/en-us/graph/api/security-list-incidents?view=graph-rest-1.0>,
+<https://learn.microsoft.com/en-us/rest/api/securityinsights/incidents/list?view=rest-securityinsights-2025-09-01>,
+<https://learn.microsoft.com/en-us/defender-xdr/api-list-incidents>.
+
+The Defender `api.security.microsoft.com` API is the legacy shape - its own page
+opens with "Try our new APIs using MS Graph security API" and its 100-row page
+and 50 calls/min ceiling make it the worst of the three for a collector. Do not
+build on it.
+
+**6. Graph `alerts_v2` (`security/alerts_v2`) is the alert grain WITH triage
+state.** Its alert resource carries status, classification, determination,
+assignedTo, comments, `incidentId`, `lastUpdateDateTime` and `evidence`
+(security-alert page above). It is what an operator wants if they want
+alert-level triage; it is NOT what streaming gives them. It is redundant with
+`security/incidents?$expand=alerts` for a collector that already pulls
+incidents, so it is not a separate path to build - note it as the answer if
+someone asks for "alerts with status".
+
+**7. Correction to 6c's permission line.** 6c says Graph access needs
+`Organization.Read.All` and `SecurityEvents.Read.All`. Listing
+`security/incidents` - which the LOG-09 usage probe does - documents
+`SecurityIncident.Read.All` as its least-privileged application permission.
+`SecurityEvents.Read.All` belongs to the legacy Graph security alerts. Whoever
+builds AZR-6 should ask for `SecurityIncident.Read.All` for the probe and
+measure it, per the capability model, rather than port LOG-09's list.
+
+**What a live check would add** (none of it changes the answer in 1-3):
+
+- Whether Graph `security/incidents` honours `$filter=lastUpdateDateTime ge X`
+  together with `$expand=alerts`, its real `$top` ceiling and throttling, and
+  whether a page returned without `$orderby` is safe to window by
+  `lastUpdateDateTime` - the absent `$orderby` is the design risk for a
+  watermark-style collector.
+- Whether an alert-level change (an analyst resolving one alert) bumps the
+  parent incident's `lastUpdateDateTime`, i.e. whether polling incidents alone
+  sees alert triage.
+- How the app detects that a workspace is onboarded to the Defender portal, so
+  it can pick the source rather than ask (AZR-110).
+- That a tenant's streamed AlertInfo rows really carry no extra columns beyond
+  the documented eight (the page notes streaming covers GA columns only).
 
 ### 6e. Blob-only sources - cannot reach Event Hub
 

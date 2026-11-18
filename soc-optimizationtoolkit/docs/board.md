@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**107 in the backlog, 39 in progress, 220 done.**
+**107 in the backlog, 39 in progress, 221 done.**
 
 ## By menu item
 
@@ -36,7 +36,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 10 | 5 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 35 | 47 | 9 |
+| Azure Native Source Onboarding | 35 | 48 | 9 |
 | Azure Logging Map | 3 | 2 | 1 |
 | Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 59% (58/99)
+### `AZR` Azure native source onboarding - 59% (59/100)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -60,12 +60,12 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F2` Azure Policy - diagnostic settings to Event Hub | Azure Native Source Onboarding | 0/2 | AZR-4, AZR-5 |
 | `AZR-F3` Direct ARM configuration - script, no policy | Azure Native Source Onboarding | 1/5 | AZR-13, AZR-3, AZR-26, AZR-27, AZR-28 |
 | `AZR-F4` Defender XDR export - guided portal | Azure Native Source Onboarding | 0/1 | AZR-6 |
-| `AZR-F5` Pull collectors - no push path exists | Azure Native Source Onboarding | 0/3 | AZR-S1, AZR-7, D-8 |
+| `AZR-F5` Pull collectors - no push path exists | Azure Native Source Onboarding | 1/4 | AZR-S1, AZR-7, AZR-110, D-8 |
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
 | `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 36/57 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
-| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 20/24 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-110* |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 20/24 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -1328,30 +1328,22 @@ Started. Anything here with an unfinished dependency is called out on its card.
   (LAB_RBAC_CONDITION) would then name that role instead of Contributor. FIX:
   pick the role, change foundation-phase's role definition id and the
   condition together, and re-pin the TTL grant analysis that looks for the
-  Contributor GUID. CODE DONE 2026-11-17, stays in progress until a live lab
-  run: the TTL identity is assigned Managed Application Contributor Role
-  (641177b8-a67a-45b9-a033-47bc880bb21e, Learn
-  built-in-roles/management-and-governance: read on everything plus
-  Microsoft.Resources/subscriptions/resourceGroups/*), not Contributor.
-  Evidence that the group delete action is enough: Learn
-  delete-resource-group, 'Required access and deletion failures': 'The only
-  permission required to delete a resource group is permission to the delete
-  action for deleting resource groups. You don't need permission to delete
-  individual resources within that resource group.' A custom role
-  (resourceGroups/read + delete) was NOT used: creating it needs
-  Microsoft.Authorization/roleDefinitions/write, which neither RBAC
-  Administrator nor Contributor holds, and granting it would let the app widen
-  the role its constrained grant may assign. Changed together: lab-foundation
-  TTL_ROLE_DEFINITION_ID and the request builder, LAB_RBAC_CONDITION
-  (role-plan, read from the registry's lab.ttl.resourceGroup.delete least role
-  and pinned equal to TTL_ROLE_NAME), the ABAC analysis (kinds renamed
-  conditional-allows-ttl-role / conditional-blocks-ttl-role; a condition
-  naming the Contributor GUID now reads as blocking), both remediation texts,
-  the manual az command, the run messages, the setup copy, the feature catalog
-  and the snapshots. NEEDS LIVE: one lab deploy plus a TTL expiry under the
-  new role; and every existing RBAC Administrator condition written for
-  Contributor must be re-authored before the next lab deploy, which the Labs
-  preflight now flags.
+  Contributor GUID. HELD 2026-11-17 (operator decision): code parked on branch
+  fix/azr-89-lab-ttl-role, held for a live lab deploy plus a TTL expiry run;
+  it is not in the AZR-85/86/88 PR. The parked change assigns the TTL identity
+  Managed Application Contributor Role (641177b8-a67a-45b9-a033-47bc880bb21e)
+  instead of Contributor and names it in LAB_RBAC_CONDITION and the ABAC
+  analysis. Evidence: Learn delete-resource-group, 'Required access and
+  deletion failures': the resource group delete action alone is required, with
+  no delete rights on the resources inside. A custom role was rejected because
+  creating one needs roleDefinitions/write, which no lab grant holds. Reviewer
+  notes to settle before it ships: (1) existing customers whose RBAC
+  Administrator condition names Contributor will be blocked at the foundation
+  phase (ttl-role-assignment) until the condition is re-authored, so the
+  release needs a migration note and a release note; (2) a redeploy over an
+  existing lab leaves the old Contributor assignment on the TTL identity in
+  place, so the excess is only removed for new labs unless the redeploy also
+  deletes it.
 
 - **MIG-33** Data Volume Inventory: licence counts on the card face and 30-day totals, billable versus allowance
   `MIG-F2` `story` `settled`
@@ -2445,7 +2437,7 @@ Settled and unblocked, sequenced behind now.
     [ ] `data-components` ATT&CK data components mapped to tables - A technique is covered when the data components ATT&CK lists for it map to a table that carries data. Shows what detection is POSSIBLE from the data, independent of rules; needs a maintained data-component-to-table mapping the repo does not have yet (source to be chosen).
     [x] `both` Both, as two layers - Colour by possible (data components), mark which of those have an active rule. Most useful for a reduction decision; largest build, and depends on the mapping above.
 
-- **AZR-110** Application.Read.All is asked but never probed, because the Graph refusal shape is unsettled; a refused parser DELETE is swallowed
+- **AZR-111** Application.Read.All is asked but never probed, because the Graph refusal shape is unsettled; a refused parser DELETE is swallowed
   `AZR-F10` `bug` `settled`
   Not now because: Part (1) cannot be fixed before a live Graph measurement:
   guessing the refusal shape would either claim a denial nobody measured or
@@ -2486,21 +2478,6 @@ Settled, gated on something above.
   mapping rule records only measurements), and the [[AZR-19]] route requires
   it.
 
-- **AZR-S1** Verify whether XDR streaming and the Sentinel incidents API are complementary or alternatives
-  `AZR-F5` `spike` `undecided`
-  Streaming carries alert-grain tables; path B returns the incident object
-  with triage state. Settle before building either AZR-6 or AZR-7 - presenting
-  A as a replacement loses triage state silently, presenting them as unrelated
-  builds two overlapping feeds without telling anyone. `backlog.md#6d`. NOT
-  SEEDABLE AS A CLICK (2026-08-28): the cited section instructs "verify
-  against the APIs rather than reasoning it out", and the outcome handling is
-  already pre-committed - if only alerts, the honest presentation is alerts
-  via A, incidents via B. A click would record an opinion where the card
-  demands a fact. Worth carrying into the spike: the repo's own catalog lists
-  the XDR streaming tables as alert-grain only (AlertInfo, AlertEvidence,
-  UrlClickEvents), so complementary is the likely answer - still unverified,
-  which is the point.
-
 - **AZR-8** Blob-only sources as visible unavailable rows
   `AZR-F6` `story` `settled`
   vNet and NSG Flow Logs have no Event Hub path; the blob path already exists
@@ -2528,19 +2505,51 @@ Settled, gated on something above.
   `backlog.md#6a`.
 
 - **AZR-6** Defender XDR guided worklist
-  `AZR-F4` `story` `settled` `blocked by AZR-S1, CAP-5`
+  `AZR-F4` `story` `settled` `blocked by CAP-5`
   Licence check then usage probe - a licence held is not a product in use. The
   checkboxes here are a worklist, not a deployment: Microsoft exposes no
   configuration API for XDR streaming, so the last step is a portal visit,
   forever. Tables absent from the Streaming API show greyed with the reason.
-  `backlog.md#6c`.
+  `backlog.md#6c`. AZR-S1 (2026-11-17): no streamed table is at incident grain
+  and AlertInfo carries no status, classification, owner or incident id - the
+  worklist must say streaming is detection telemetry and that triage state
+  comes from AZR-7, so nobody enables AlertInfo expecting case state. The
+  usage probe calls Graph `security/incidents`, whose documented
+  least-privileged application permission is SecurityIncident.Read.All, not
+  the SecurityEvents.Read.All that LOG-09 lists - request and measure that
+  one. `backlog.md#6c`.
 
-- **AZR-7** Sentinel incidents via a Cribl REST collector
-  `AZR-F5` `story` `settled` `blocked by AZR-S1, CAP-4`
+- **AZR-7** Incidents with triage state via a Cribl REST collector (Graph or Sentinel by tenant)
+  `AZR-F5` `story` `settled` `blocked by CAP-4, AZR-110`
   Filter on `lastModifiedTimeUtc`, not `createdTimeUtc` - filtering on
   creation misses every update to an open incident. Repeat deliveries are
   correct; dedupe downstream on incident GUID plus `lastModifiedTimeUtc`.
-  Build on `lab-cribl.ts:149`. `backlog.md#6d`.
+  Build on `lab-cribl.ts:149`. `backlog.md#6d`. AZR-S1 (2026-11-17) changes
+  what this builds. Path B is not secondary to XDR streaming but beside it: it
+  is the only source of incident triage state. The SOURCE depends on the
+  tenant: (a) Sentinel onboarded to the Defender portal - poll Graph `GET
+  /security/incidents?$filter=lastUpdateDateTime ge
+  {earliest}&$expand=alerts`, paging on @odata.nextLink, app permission
+  SecurityIncident.Read.All; it embeds alerts with their evidence, which
+  answers the entities question, and avoids the Sentinel copy's sync lag and
+  5-10 minute batching. Graph documents no $orderby, so the watermark must not
+  assume ordered pages. (b) Not onboarded - the existing Sentinel
+  SecurityInsights request is right and the only option; alerts and entities
+  are separate sub-resources there. Same rule in both: filter on
+  last-modified, expect repeats, dedupe downstream on id + last-modified.
+  Choosing (a) or (b) needs AZR-110. `backlog.md#6d`.
+
+- **AZR-110** Detect whether a Sentinel workspace is onboarded to the Defender portal
+  `AZR-F5` `spike` `undecided`
+  Filed by AZR-S1. AZR-7 must poll Graph `security/incidents` when the
+  workspace is onboarded to the Defender portal and the Sentinel
+  SecurityInsights incidents API when it is not, and Graph does not return
+  Sentinel incidents at all without onboarding. Find a readable signal for the
+  onboarding state with least privilege - candidates to test, none confirmed:
+  `providerName` of recent Sentinel incidents reading Microsoft XDR, or
+  `additionalData.providerIncidentUrl` being present; a Graph incident whose
+  alerts carry a Sentinel serviceSource. Until measured, the honest UI is to
+  ask the operator and say why. Needs a live tenant. `backlog.md#6d`.
 
 - **AZR-10** Dataflow diagrams, one per category
   `AZR-F8` `story` `settled`
@@ -3009,7 +3018,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (220)
+## Done (221)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -3038,6 +3047,44 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   "permissions: checked 4 days ago" with the (i) and Re-check permissions on
   Dataflow, Sentinel Integration, DCR Automation and Pack Maintenance; the (i)
   opens and explains the stored result. Re-check itself was not clicked.
+
+- **AZR-S1** Verify whether XDR streaming and the Sentinel incidents API are complementary or alternatives
+  `AZR-F5` `spike` `settled` `verified: none`
+  Streaming carries alert-grain tables; path B returns the incident object
+  with triage state. Settle before building either AZR-6 or AZR-7 - presenting
+  A as a replacement loses triage state silently, presenting them as unrelated
+  builds two overlapping feeds without telling anyone. `backlog.md#6d`. NOT
+  SEEDABLE AS A CLICK (2026-08-28): the cited section instructs "verify
+  against the APIs rather than reasoning it out", and the outcome handling is
+  already pre-committed - if only alerts, the honest presentation is alerts
+  via A, incidents via B. A click would record an opinion where the card
+  demands a fact. Worth carrying into the spike: the repo's own catalog lists
+  the XDR streaming tables as alert-grain only (AlertInfo, AlertEvidence,
+  UrlClickEvents), so complementary is the likely answer - still unverified,
+  which is the point. DONE 2026-11-17 (docs/azr-s1-spike): COMPLEMENTARY.
+  Answered from Microsoft Learn schemas and API references, not from a live
+  API - no tenant was queried, hence verified none. (1) The Streaming API
+  lists 23 GA tables (AlertInfo, AlertEvidence, CloudAppEvents, ten Device*,
+  four Email*, three Identity*, UrlClickEvents); none is at incident grain,
+  and BehaviorInfo/BehaviorEntities are not available. (2) AlertInfo has eight
+  columns - Timestamp, AlertId, Title, Category, Severity, ServiceSource,
+  DetectionSource, AttackTechniques - so a streamed alert carries no status,
+  classification, determination, owner, comments, last-modified time, or even
+  an incident id. Path A is detection telemetry with no triage state at any
+  grain; path B is the only source of triage state. (3) In a tenant whose
+  Sentinel workspace is onboarded to the Defender portal, Microsoft recommends
+  Graph `security/incidents` for incidents and alerts; the Sentinel
+  SecurityInsights incident there is a synced copy (up to 5 min lag, changes
+  within 5-10 min batched to the latest). Without onboarding, Graph does not
+  return Sentinel incidents and the Sentinel API is the only source. AZR-7
+  updated accordingly; AZR-110 filed for detecting the onboarding state. Graph
+  `alerts_v2` is alert grain WITH triage state but is redundant with
+  `security/incidents?$expand=alerts`. Also found: the 6c/LOG-09 Graph
+  permission list names SecurityEvents.Read.All, but listing
+  security/incidents documents SecurityIncident.Read.All - noted on AZR-6. Not
+  verified live: Graph $filter on lastUpdateDateTime with $expand=alerts, its
+  $top ceiling and throttling, the absent $orderby, and whether alert-level
+  triage bumps the incident lastUpdateDateTime. `backlog.md#6d`.
 
 - **AZR-13** SecurityOnly is offered but cannot be stored - it reverts to Standard
   `AZR-F3` `bug` `settled` `verified: pins`
@@ -8794,7 +8841,7 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   audit, and an unread subscription records nothing. (3) A 401/403 on the
   orphan contentPackages DELETE is no longer swallowed: the install stops and
   names contentPackages/delete instead of resurfacing the original 400. MOVED
-  TO [[AZR-110]]: settling the Graph refusal shape live (403 vs empty 200) and
+  TO [[AZR-111]]: settling the Graph refusal shape live (403 vs empty 200) and
   then probing Application.Read.All per tenant, which stays honestly unknown
   until then; and the swallowed 403 on the parser savedSearches DELETE. Live
   check outstanding for (2): a resource-group audit against a subscription
