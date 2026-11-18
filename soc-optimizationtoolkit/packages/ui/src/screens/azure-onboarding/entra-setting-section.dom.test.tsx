@@ -265,7 +265,7 @@ describe("Entra ID section - the app's record follows what Azure lists", () => {
     stored.push(setting("CriblEntraIDLogs", RULE_ID));
     await readSettings();
     await waitFor(() => expect(azure.calls.filter((c) => c.method === "GET" && c.path === LIST).length).toBe(5));
-    await waitFor(() => expect(within(block()).getByText(/CriblEntraIDLogs is already applied in this tenant, exactly as this app would write it/)).toBeTruthy(), { timeout: 5000 });
+    await waitFor(() => expect(within(block()).getByText(/CriblEntraIDLogs is already applied in this tenant, exactly as this app would write it/)).toBeTruthy());
     expect(within(teardown()).queryByRole("button", { name: "Remove Entra ID setting" })).toBeNull();
     expect(azure.writes().map((w) => w.method)).toEqual(["PUT"]);
   });
