@@ -70,7 +70,10 @@ import {
   namespaceListMessage,
   planSummary,
   ruleListMessage,
+  MANAGE_RULE_SOURCE_IDS,
+  createRuleLabel,
   ruleNote,
+  sourcesNeedingManageRule,
   sendableRules,
   withItem,
 } from "./azure-onboarding-state";
@@ -564,11 +567,54 @@ describe("Event Hub picker messages reuse the shared empty-inventory wording", (
   });
 
   it("notes a Manage rule and the built-in root rule, not a Send-only one", () => {
-    expect(ruleNote({ name: "RootManageSharedAccessKey", rights: ["Listen", "Manage", "Send"] })).toMatch(/safer/);
-    expect(ruleNote({ name: "ops", rights: ["Manage", "Send", "Listen"] })).toMatch(/safer/);
+    expect(ruleNote({ name: "RootManageSharedAccessKey", rights: ["Listen", "Manage", "Send"] })?.text).toMatch(/safer/);
+    expect(ruleNote({ name: "ops", rights: ["Manage", "Send", "Listen"] })?.text).toMatch(/safer/);
     expect(ruleNote({ name: "cribl-send", rights: ["Send"] })).toBeNull();
     // The built-in rule is noted by NAME even when its rights read back without Manage.
-    expect(ruleNote({ name: "RootManageSharedAccessKey", rights: ["Send"] })).toMatch(/safer/);
+    expect(ruleNote({ name: "RootManageSharedAccessKey", rights: ["Send"] })?.text).toMatch(/safer/);
+  });
+
+  // AZR-117: the note never recommends a rule a chosen source's deploy refuses.
+  describe("per source (AZR-117)", () => {
+    const SAFER = "This rule can also manage the namespace. A dedicated rule with only Send rights is safer.";
+    const WHY =
+      "a diagnostic setting streams to an Event Hub only through a rule with Manage, Send and Listen rights";
+
+    it("Defender only (no source needs Manage): today's text, and the Send-only create label", () => {
+      expect(sourcesNeedingManageRule([DEFENDER_EXPORT_ITEM_ID])).toEqual([]);
+      expect(ruleNote({ name: "ops", rights: ["Manage", "Send", "Listen"] }, [])).toEqual({ tone: "warning", text: SAFER });
+      expect(ruleNote({ name: "cribl-send", rights: ["Send"] }, [])).toBeNull();
+      expect(createRuleLabel([])).toBe("Create Send-only rule");
+    });
+
+    it("a Manage source with a Send-only rule: warns in the gate's terms, never 'safer'", () => {
+      const sources = sourcesNeedingManageRule([DEFENDER_EXPORT_ITEM_ID, "activityLog"]);
+      expect(sources).toEqual(["Azure Activity Log"]);
+      expect(ruleNote({ name: "cribl-send", rights: ["Send"] }, sources)).toEqual({
+        tone: "warning",
+        text:
+          `The rule cribl-send has Send. Azure Activity Log needs a rule with Manage rights, because ${WHY}. ` +
+          "Choose a rule with Manage rights.",
+      });
+      // The built-in rule's NAME no longer earns a "safer" note: its rights decide.
+      expect(ruleNote({ name: "RootManageSharedAccessKey", rights: ["Send"] }, sources)?.text).not.toMatch(/safer/);
+      expect(createRuleLabel(sources)).toBe("Create Manage rule");
+    });
+
+    it("a Manage source with a Manage rule: says it is what the source needs", () => {
+      const sources = sourcesNeedingManageRule(["entraId", "activityLog"]);
+      // MANAGE_RULE_SOURCE_IDS order, not the chosen order.
+      expect(sources).toEqual(["Azure Activity Log", "Entra ID diagnostics"]);
+      expect(ruleNote({ name: "ops", rights: ["Listen", "Manage", "Send"] }, sources)).toEqual({
+        tone: "info",
+        text: `Azure Activity Log and Entra ID diagnostics need a rule with Manage rights, as this one has, because ${WHY}.`,
+      });
+    });
+
+    it("names exactly the diagnostic-setting sources as needing Manage", () => {
+      expect(MANAGE_RULE_SOURCE_IDS).toEqual(["activityLog", "entraId"]);
+    });
+
   });
 });
 
@@ -688,7 +734,10 @@ describe("visible copy carries no project history", () => {
     add("state.note", defenderStateNote(state())?.text);
     add("rules.nosend", ruleListMessage(rulesRead([{ name: "l", id: "", rights: ["Listen"], canSend: false }]))?.text);
     add("hubs.truncated", hubListMessage({ ok: true, listing: toListing([{ name: "h" } as never]), truncated: true })?.text);
-    add("rule.note", ruleNote({ name: "r", rights: ["Manage"] }));
+    add("rule.note", ruleNote({ name: "r", rights: ["Manage"] })?.text);
+    add("rule.note.manage-source", ruleNote({ name: "r", rights: ["Send"] }, ["A", "B"])?.text);
+    add("rule.note.manage-source.ok", ruleNote({ name: "r", rights: ["Manage"] }, ["A"])?.text);
+    add("rule.create.label", createRuleLabel(["A"]));
     for (const o of OUTCOMES) add(`outcome.${o.kind}`, deployOutcomeMessage(o).text);
 
     // AZR-60: every banner, deploy caution and row label core's permission view
@@ -703,6 +752,10 @@ describe("visible copy carries no project history", () => {
       }
     }
     verdictSets.push({ "defender-plans.read": "denied", "defender-automation.read": "granted", "defender-automation.write": "granted" });
+    // CAP-10: the Activity Log's subscription diagnostic-settings verdicts.
+    for (const v of ["granted", "denied"] as const) {
+      verdictSets.push({ "subscription-diagnostics.read": "granted", "subscription-diagnostics.write": v, "subscription-diagnostics.delete": "denied" });
+    }
     for (const [id, permissions] of Object.entries(AUTOMATION_PERMISSIONS)) {
       add(`perm.${id}.source`, permissions.sourceTitle);
       add(`perm.${id}.scope`, permissions.measuredScope);

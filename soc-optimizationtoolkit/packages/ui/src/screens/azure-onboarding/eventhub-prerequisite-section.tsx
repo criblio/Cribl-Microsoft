@@ -13,8 +13,13 @@
  * RULES. Only a rule that can Send (Send or Manage) is offered: a Listen-only
  * rule lets the Defender export be created and read back while nothing is ever
  * delivered. Nothing is preselected - the namespace's built-in Manage rule is
- * allowed, but the operator picks it knowingly, and a note says a dedicated
- * Send-only rule is safer. Each option shows the rule's rights.
+ * allowed, but the operator picks it knowingly. Each option shows the rule's
+ * rights. The note beside the chosen rule is PER SOURCE (ruleNote): with the
+ * Defender export alone it says a dedicated Send-only rule is safer; once a
+ * chosen source streams through a diagnostic setting (Activity Log, Entra ID),
+ * which Azure documents as needing Manage, it says that source needs Manage
+ * instead, and warns about a rule without it - the same refusal that source's
+ * deploy gate makes. The disabled create-rule button names the same kind.
  *
  * A PASTED HUB MUST EXIST. A hub id pasted in is checked against the
  * namespace's hub listing once it lands. When that listing is COMPLETE (2xx,
@@ -56,6 +61,7 @@ import { usePorts } from "../../ports-context";
 import { NumberedSection } from "../../components/numbered-section";
 import { SearchableSelect } from "../../components/searchable-select";
 import {
+  createRuleLabel,
   hubListMessage,
   namespaceListMessage,
   ruleListMessage,
@@ -87,12 +93,21 @@ export interface EventHubPrerequisiteSectionProps {
   number: number;
   value: EventHubTarget;
   onChange: (next: EventHubTarget) => void;
+  /**
+   * The titles of the chosen sources whose diagnostic setting needs a Manage
+   * rule (sourcesNeedingManageRule). Drives the rule note and the create-rule
+   * label, so neither recommends a rule a chosen source's deploy refuses.
+   */
+  manageSources?: readonly string[];
 }
+
+const NO_SOURCES: readonly string[] = [];
 
 export function EventHubPrerequisiteSection({
   number,
   value,
   onChange,
+  manageSources = NO_SOURCES,
 }: EventHubPrerequisiteSectionProps) {
   const { ports, config } = usePorts();
   const subscriptionId = config.subscriptionId;
@@ -206,7 +221,7 @@ export function EventHubPrerequisiteSection({
     value.hubName !== "" && !hubRows.some((h) => h.name === value.hubName)
       ? [value.hubName, ...hubRows.map((h) => h.name)]
       : hubRows.map((h) => h.name);
-  const chosenRuleNote = value.rule === null ? null : ruleNote(value.rule);
+  const chosenRuleNote = value.rule === null ? null : ruleNote(value.rule, manageSources);
 
   return (
     <NumberedSection
@@ -338,9 +353,7 @@ export function EventHubPrerequisiteSection({
           {value.rule !== null && (
             <p className="field-hint">{`Rights: ${value.rule.rights.join(", ")}`}</p>
           )}
-          {chosenRuleNote !== null && (
-            <PickerLine message={{ tone: "warning", text: chosenRuleNote }} />
-          )}
+          {chosenRuleNote !== null && <PickerLine message={chosenRuleNote} />}
         </div>
 
         <div className="panel-controls">
@@ -351,7 +364,7 @@ export function EventHubPrerequisiteSection({
             Create Event Hub
           </button>
           <button type="button" className="run-button" disabled>
-            Create Send-only rule
+            {createRuleLabel(manageSources)}
           </button>
         </div>
         <p className="field-hint">{CREATE_NOT_AVAILABLE}</p>

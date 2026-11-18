@@ -48,6 +48,7 @@ import type {
 import { evaluateActionsAtScope, runPermissionPreflight } from "../permission-preflight";
 import { DEFENDER_SUBSCRIPTION_ACTIONS } from "../../domain/defender-export/defender-permissions";
 import { ENABLER_SUBSCRIPTION_ACTIONS } from "../../domain/capability-enablers";
+import { ACTIVITY_LOG_SUBSCRIPTION_ACTIONS } from "../../domain/activity-log-export/activity-log-permissions";
 import { evaluatePermissions } from "../../domain/azure-permissions";
 import type { RequiredAction } from "../../domain/azure-permissions";
 import type { GraphDirectory, GraphPermissionProbe } from "../../ports/graph-directory";
@@ -120,13 +121,15 @@ export interface CapabilityAuditResult {
 }
 
 /**
- * The actions a resource-group audit evaluates at the SUBSCRIPTION, in one
- * read: the Defender export's (AZR-86) and the capability enablers' (CAP-2,
- * CAP-3). Exported so the pin can name exactly what is measured there.
+ * The actions every audit evaluates at the SUBSCRIPTION, in one read: the
+ * Defender export's (AZR-86), the capability enablers' (CAP-2, CAP-3) and the
+ * Activity Log diagnostic setting's (CAP-10). Exported so the pin can name
+ * exactly what is measured there.
  */
 export const SUBSCRIPTION_AUDIT_ACTIONS: readonly RequiredAction[] = Object.freeze([
   ...DEFENDER_SUBSCRIPTION_ACTIONS,
   ...ENABLER_SUBSCRIPTION_ACTIONS,
+  ...ACTIVITY_LOG_SUBSCRIPTION_ACTIONS,
 ]);
 
 /**
@@ -144,6 +147,10 @@ export const SUBSCRIPTION_AUDIT_ACTIONS: readonly RequiredAction[] = Object.free
  * them (domain/capability-enablers says what the subscription read can and
  * cannot prove for each). They are in no setup path's required actions, so
  * every path evaluates them here.
+ *
+ * ACTIVITY LOG (CAP-10). The subscription diagnostic setting's read, write
+ * and delete. The setting is an extension resource on the subscription
+ * itself, so this read is their real scope and both answers are recorded.
  *
  * WHICH READ, PER SETUP PATH:
  *   - subscription scope (`existing-subscription`, `lab-new-rg-subscription`):

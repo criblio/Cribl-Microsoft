@@ -197,6 +197,7 @@ import {
   loadedSelection,
   measuredHubsOf,
   selectionUnknownCause,
+  sourcesNeedingManageRule,
 } from "./azure-onboarding-state";
 import type {
   OnboardingLoadState,
@@ -639,6 +640,8 @@ export function AzureOnboardingScreen({
     () => (progress === null ? [] : chosenSourceIds(progress, selection)),
     [progress, selection],
   );
+  // AZR-117: the rule note and create-rule label follow the chosen sources.
+  const manageSources = useMemo(() => sourcesNeedingManageRule(chosen), [chosen]);
   const subSelectionOf = useCallback(
     (id: OnboardingSourceId): readonly string[] => selection?.subSelections[id] ?? [],
     [selection],
@@ -1335,7 +1338,12 @@ export function AzureOnboardingScreen({
         onRead={() => void onReadInventory()}
       />
 
-      <EventHubPrerequisiteSection number={1} value={target} onChange={onTargetChange} />
+      <EventHubPrerequisiteSection
+        number={1}
+        value={target}
+        onChange={onTargetChange}
+        manageSources={manageSources}
+      />
 
       <NumberedSection
         number={CHOOSER_SECTION_NUMBER}
@@ -1386,6 +1394,10 @@ export function AzureOnboardingScreen({
                   onShowHowto={() => showHowto(ACTIVITY_LOG_ITEM_ID)}
                   removing={activityLogRemoving}
                   onRunningChange={setActivityLogDeploying}
+                  onRecheckPermissions={onRecheckPermissions}
+                  recheckingPermissions={recheckingPermissions}
+                  permissionsAuditKey={permissionsAuditKey}
+                  permissionsNow={permissionsNow}
                 />
               ))}
             {view.rows.some((r) => r.kind === "item" && r.id === ENTRA_ITEM_ID) &&

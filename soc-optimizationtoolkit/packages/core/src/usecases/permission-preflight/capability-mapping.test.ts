@@ -61,6 +61,7 @@ import {
 } from "../../domain/defender-export/defender-permissions";
 import type { PermissionSet, SetupPath } from "../../domain/azure-permissions";
 import { AUTOMATION_PERMISSIONS } from "../../domain/onboarding-sections";
+import { ACTIVITY_LOG_SUBSCRIPTION_ACTIONS } from "../../domain/activity-log-export/activity-log-permissions";
 import { FakeAzureManagement } from "../../testing/fake-azure-management";
 import { FakeCriblClient } from "../../testing/fake-cribl-client";
 import type { PortHttpResponse } from "../../ports/http";
@@ -977,5 +978,65 @@ describe("the Graph permission probes (CAP-5)", () => {
     expect(
       graphProbeVerdict({ status: 403, body: { error: { code: "UnknownError" } } }),
     ).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Activity Log diagnostic setting (CAP-10)
+// ---------------------------------------------------------------------------
+
+describe("the Activity Log diagnostic setting (CAP-10) is measured two-sided at the subscription", () => {
+  const verdictsFor = (sets: PermissionSet[]) =>
+    azureCheckVerdicts(true, evaluatePermissions({ value: sets }, [...ACTIVITY_LOG_SUBSCRIPTION_ACTIONS]));
+  const perm = (actions: string[], notActions: string[] = []): PermissionSet => ({
+    actions,
+    notActions,
+    dataActions: [],
+    notDataActions: [],
+  });
+
+  it("maps the registry's read, write and delete to their own capabilities", () => {
+    expect(ACTIVITY_LOG_SUBSCRIPTION_ACTIONS.map((a) => [a.action, AZURE_ACTION_CAPABILITIES[a.action]])).toEqual([
+      [LEAST_PRIVILEGE_OPERATIONS["activityLog.diagnosticSettings.read"].operation, "subscription-diagnostics.read"],
+      [LEAST_PRIVILEGE_OPERATIONS["activityLog.diagnosticSetting.write"].operation, "subscription-diagnostics.write"],
+      [LEAST_PRIVILEGE_OPERATIONS["activityLog.diagnosticSetting.delete"].operation, "subscription-diagnostics.delete"],
+    ]);
+  });
+
+  it("is NOT grant-only: the setting lives on the subscription itself, so a miss there is a denial", () => {
+    for (const a of ACTIVITY_LOG_SUBSCRIPTION_ACTIONS) {
+      expect(GRANT_ONLY_AZURE_ACTIONS.has(a.action), a.action).toBe(false);
+    }
+    expect(verdictsFor([perm(["Microsoft.Security/*"])])).toEqual({
+      "subscription-diagnostics.read": "denied",
+      "subscription-diagnostics.write": "denied",
+      "subscription-diagnostics.delete": "denied",
+    });
+  });
+
+  it("granted from Monitoring Contributor's actions; a reader is granted only the read", () => {
+    expect(verdictsFor([perm(["Microsoft.Insights/*"])])).toEqual({
+      "subscription-diagnostics.read": "granted",
+      "subscription-diagnostics.write": "granted",
+      "subscription-diagnostics.delete": "granted",
+    });
+    expect(verdictsFor([perm(["*/read"])])).toEqual({
+      "subscription-diagnostics.read": "granted",
+      "subscription-diagnostics.write": "denied",
+      "subscription-diagnostics.delete": "denied",
+    });
+  });
+
+  it("records nothing when the permissions were not read (unknown, never denied)", () => {
+    expect(
+      azureCheckVerdicts(false, evaluatePermissions({ value: [] }, [...ACTIVITY_LOG_SUBSCRIPTION_ACTIONS])),
+    ).toEqual({});
+  });
+
+  it("is never measured by a probe", () => {
+    const probed = Object.values(AZURE_PROBE_CAPABILITIES);
+    for (const c of ["subscription-diagnostics.read", "subscription-diagnostics.write", "subscription-diagnostics.delete"]) {
+      expect(probed, c).not.toContain(c);
+    }
   });
 });

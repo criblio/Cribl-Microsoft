@@ -65,8 +65,11 @@
  */
 
 import {
+  ACTIVITY_LOG_ITEM_ID,
   DEFAULT_NAMESPACE_RULE,
   DEFENDER_EXPORT_NAME,
+  ENTRA_ITEM_ID,
+  onboardingSource,
   ONBOARDING_SECTIONS,
   anyStandard,
   decodeSelection,
@@ -864,14 +867,88 @@ export function ruleListMessage(read: EventHubTargetRead<EventHubTargetRule>): P
 }
 
 /**
- * A note beside a chosen rule, or null. A rule with Manage rights (including
- * the namespace's built-in rule) works, but a dedicated Send-only rule is
- * safer. It is never preselected; the operator picks it knowingly.
+ * The sources whose Azure object is a DIAGNOSTIC SETTING streaming through the
+ * rule picked in the Event Hub section, so the rule must have Manage rights.
+ * Microsoft documents it for every diagnostic setting with an Event Hub
+ * destination: "Streaming to event hubs requires Manage, Send, and Listen
+ * permissions" (learn.microsoft.com/azure/azure-monitor/data-collection/
+ * diagnostic-settings, Destinations table). The Activity Log and Entra ID
+ * deploy gates refuse a rule without Manage for that reason
+ * (activity-log-state, entra-setting-state); the Defender export is a
+ * continuous export, not a diagnostic setting, and writes with Send.
  */
-export function ruleNote(rule: { readonly name: string; readonly rights: readonly string[] }): string | null {
+export const MANAGE_RULE_SOURCE_IDS: readonly OnboardingItemId[] = [ACTIVITY_LOG_ITEM_ID, ENTRA_ITEM_ID];
+
+/**
+ * The titles of the CHOSEN sources that need a Manage rule, in
+ * {@link MANAGE_RULE_SOURCE_IDS} order. Chosen in either mode: a How-to
+ * operator creates the same diagnostic setting by hand, and Azure asks the
+ * same of the rule.
+ */
+export function sourcesNeedingManageRule(chosen: readonly string[]): string[] {
+  return MANAGE_RULE_SOURCE_IDS.filter((id) => chosen.includes(id)).map(
+    (id) => onboardingSource(id)?.title ?? id,
+  );
+}
+
+/** "a", "a and b", "a, b and c". */
+function listed(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1] ?? ""}`;
+}
+
+const MANAGE_RULE_WHY =
+  "a diagnostic setting streams to an Event Hub only through a rule with Manage, Send and Listen rights";
+
+/**
+ * A note beside a chosen rule, or null. PER SOURCE, so it never recommends a
+ * rule a chosen source's own deploy refuses:
+ *
+ *   - a chosen source needs Manage (`manageSources` non-empty): a rule without
+ *     Manage is warned about in the same terms as that source's deploy gate,
+ *     and a rule with Manage is said to be what it needs - never "Send-only is
+ *     safer";
+ *   - otherwise (the Defender export alone, or nothing chosen yet): a rule
+ *     with Manage rights (including the namespace's built-in rule, noted by
+ *     name) works, but a dedicated Send-only rule is safer.
+ *
+ * Never preselected; the operator picks the rule knowingly.
+ */
+export function ruleNote(
+  rule: { readonly name: string; readonly rights: readonly string[] },
+  manageSources: readonly string[] = [],
+): PickerMessage | null {
   const manages = rule.rights.some((r) => r.toLowerCase() === "manage");
+  if (manageSources.length > 0) {
+    const who = listed(manageSources);
+    const verb = manageSources.length === 1 ? "needs" : "need";
+    if (!manages) {
+      const rights = rule.rights.length > 0 ? rule.rights.join(", ") : "no rights";
+      return {
+        tone: "warning",
+        text:
+          `The rule ${rule.name} has ${rights}. ${who} ${verb} a rule with Manage rights, because ${MANAGE_RULE_WHY}. ` +
+          "Choose a rule with Manage rights.",
+      };
+    }
+    return {
+      tone: "info",
+      text: `${who} ${verb} a rule with Manage rights, as this one has, because ${MANAGE_RULE_WHY}.`,
+    };
+  }
   if (!manages && rule.name !== DEFAULT_NAMESPACE_RULE) return null;
-  return "This rule can also manage the namespace. A dedicated rule with only Send rights is safer.";
+  return {
+    tone: "warning",
+    text: "This rule can also manage the namespace. A dedicated rule with only Send rights is safer.",
+  };
+}
+
+/**
+ * The label of the (not yet available) create-rule button: the kind of rule
+ * the chosen sources need, so it never offers what a chosen source refuses.
+ */
+export function createRuleLabel(manageSources: readonly string[]): string {
+  return manageSources.length > 0 ? "Create Manage rule" : "Create Send-only rule";
 }
 
 // ---------------------------------------------------------------------------

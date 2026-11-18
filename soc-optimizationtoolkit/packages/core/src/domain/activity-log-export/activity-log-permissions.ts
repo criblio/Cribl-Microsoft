@@ -1,14 +1,17 @@
 /**
  * The Azure actions the Activity Log export needs, per scope (AZR-98).
  *
- * NOTHING HERE IS MEASURED. The permission preflight measures capabilities
- * (`domain/capabilities`), and none covers Microsoft.Insights diagnostic
- * settings yet. So both lists render under
- * {@link ACTIVITY_LOG_ACTIONS_NOT_MEASURED}, and the section's banner says the
- * check does not measure them (automationPermissionView, for a declaration
- * with no measured capability). Azure's own refusal at the step is what the
- * operator sees. Adding capabilities for these is a follow-up, not a gap this
- * file papers over.
+ * THE SUBSCRIPTION ACTIONS ARE MEASURED (CAP-10). The capability audit
+ * evaluates the three Microsoft.Insights/diagnosticSettings actions at the
+ * subscription (capability-audit SUBSCRIPTION_AUDIT_ACTIONS) as the
+ * `subscription-diagnostics.*` capabilities, and the section shows what the
+ * cached check found for each. Two-sided: the setting lives on the
+ * subscription itself, so a miss there is a denial. The result is a banner and
+ * a caution beside Deploy, never a disabled button.
+ *
+ * THE NAMESPACE ACTION IS NOT. listKeys on the rule can be granted on the
+ * namespace itself, which a subscription read cannot see, so it renders under
+ * {@link ACTIVITY_LOG_ACTIONS_NOT_MEASURED} until CAP-9 evaluates it there.
  *
  * TWO SCOPES. The setting is written at the SUBSCRIPTION. Azure also checks,
  * at that write, that the caller may use the namespace rule the setting names
@@ -29,6 +32,13 @@ import type { OperationId } from "../least-privilege";
 function action(operationId: OperationId, label: string): RequiredAction {
   return { action: operationAction(operationId), label, necessity: "feature" };
 }
+
+/** List the subscription's diagnostic settings (and read ours by name). */
+export const ACTIVITY_LOG_SETTINGS_READ = operationAction("activityLog.diagnosticSettings.read");
+/** Create the setting. */
+export const ACTIVITY_LOG_SETTINGS_WRITE = operationAction("activityLog.diagnosticSetting.write");
+/** Remove the setting this app created. */
+export const ACTIVITY_LOG_SETTINGS_DELETE = operationAction("activityLog.diagnosticSetting.delete");
 
 /** Actions on the SUBSCRIPTION whose Activity Log is exported. */
 export const ACTIVITY_LOG_SUBSCRIPTION_ACTIONS: readonly RequiredAction[] = [

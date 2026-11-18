@@ -658,6 +658,8 @@ describe("CAP-2..CAP-5 - measured ahead of their features, asked for by no ticke
       "policy.remediate",
       "role.assign",
       "sentinel.enable",
+      // CAP-10: Remove's delete; its offer names no role.
+      "subscription-diagnostics.delete",
     ]);
     for (const [capability, fallback] of offers) {
       for (const role of registryRoles) {

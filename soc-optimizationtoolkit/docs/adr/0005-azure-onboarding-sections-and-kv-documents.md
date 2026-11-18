@@ -333,3 +333,32 @@ actions. It now holds only for the namespace `listKeys` (CAP-7b):
   while a new audit runs reads as not checked), and the banner and caution say
   how old the check is ("the permission check 3 days ago found ...") and offer
   Re-check permissions before How-to.
+
+## Addendum 2026-11-18: the rule note is per source (AZR-117), and the Activity Log's subscription actions are measured (CAP-10)
+
+Appended; nothing above is edited.
+
+- **Section 4's "a dedicated Send-only rule is safer" now holds only while no
+  chosen source streams through a diagnostic setting.** Microsoft documents,
+  for every diagnostic setting with an Event Hub destination, that
+  "Streaming to event hubs requires Manage, Send, and Listen permissions"
+  (learn.microsoft.com, Azure Monitor "Diagnostic settings", Destinations
+  table). The Activity Log and Entra ID deploys refuse a rule without Manage
+  for that reason. So once either is chosen (in either mode), the note beside
+  the chosen rule says that source needs a rule with Manage rights - a
+  warning in the gate's own terms for a rule without it, an info line for a
+  rule with it - and the disabled create-rule button reads "Create Manage
+  rule". With the Defender export alone, both are unchanged. The rule is
+  still one pick for every source; the note never recommends a rule a chosen
+  source's own deploy refuses. Not measured live: a Send-only PUT of a
+  diagnostic setting has not been tried (AZR-116).
+- **The Activity Log's subscription actions are measured.** The capability
+  audit evaluates Microsoft.Insights/diagnosticSettings read, write and delete
+  at the subscription, in the same single read as the Defender actions, as
+  `subscription-diagnostics.read`, `.write` and `.delete`. They are two-sided,
+  not grant-only: the setting is an extension resource on the subscription
+  itself, so no role below the subscription reaches it. The Activity Log
+  section lists each with what the cached check found; read and write are
+  core (a measured denial is the error banner plus a caution beside Deploy,
+  which stays clickable), delete is informational (Remove's). The rule's
+  listKeys stays listed as not measured until CAP-9.

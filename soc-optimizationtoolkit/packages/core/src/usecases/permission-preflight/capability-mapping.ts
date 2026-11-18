@@ -51,6 +51,11 @@ import {
   DEFENDER_PRICINGS_READ,
 } from "../../domain/defender-export/defender-permissions";
 import {
+  ACTIVITY_LOG_SETTINGS_DELETE,
+  ACTIVITY_LOG_SETTINGS_READ,
+  ACTIVITY_LOG_SETTINGS_WRITE,
+} from "../../domain/activity-log-export/activity-log-permissions";
+import {
   MANAGED_IDENTITY_WRITE,
   POLICY_ASSIGNMENTS_WRITE,
   POLICY_REMEDIATIONS_WRITE,
@@ -102,6 +107,13 @@ export const AZURE_ACTION_CAPABILITIES: Readonly<Record<string, AzureCapability>
     [POLICY_ASSIGNMENTS_WRITE]: "policy.assign",
     [POLICY_REMEDIATIONS_WRITE]: "policy.remediate",
     [MANAGED_IDENTITY_WRITE]: "identity.create",
+    // CAP-10. The Activity Log export's subscription diagnostic setting.
+    // Never in REQUIRED_ACTIONS: evaluated by the capability audit at the
+    // subscription, beside the Defender actions. NOT grant-only (see
+    // GRANT_ONLY_AZURE_ACTIONS): the setting lives on the subscription itself.
+    [ACTIVITY_LOG_SETTINGS_READ]: "subscription-diagnostics.read",
+    [ACTIVITY_LOG_SETTINGS_WRITE]: "subscription-diagnostics.write",
+    [ACTIVITY_LOG_SETTINGS_DELETE]: "subscription-diagnostics.delete",
   });
 
 /**
@@ -125,6 +137,12 @@ export const AZURE_ACTION_CAPABILITIES: Readonly<Record<string, AzureCapability>
  * (CAP-2) stay two-sided: a management group's grants are inherited and
  * visible at the subscription, so a miss there is a real denial at the
  * subscription and above it (domain/capability-enablers).
+ *
+ * The Activity Log diagnostic setting's read, write and delete (CAP-10) are
+ * deliberately NOT here. The setting is an extension resource on the
+ * subscription itself, so the subscription is its own scope: nothing granted
+ * below it can reach it, and a miss at the subscription is a real denial.
+ * The pin in capability-mapping.test.ts holds them out.
  */
 export const GRANT_ONLY_AZURE_ACTIONS: ReadonlySet<string> = new Set([
   DEFENDER_AUTOMATIONS_WRITE,

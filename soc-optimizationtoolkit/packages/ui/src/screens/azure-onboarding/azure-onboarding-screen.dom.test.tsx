@@ -837,14 +837,47 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
     expect(screen.getByText("Choose the namespace authorization rule the export sends with.")).toBeTruthy();
   });
 
+  /** A store whose saved selection is the Defender export alone: no source needs a Manage rule. */
+  function defenderOnlyStore(): FakeKvDocumentStore {
+    return new FakeKvDocumentStore({
+      [SELECTION_KEY]: { kind: COVERAGE_SELECTION_KIND, version: COVERAGE_SELECTION_VERSION, enabled: ["defenderExport"] },
+    });
+  }
+
   it("offers the built-in Manage rule without preselecting it, and notes a Send-only rule is safer", async () => {
-    mount();
+    // Defender only (AZR-117): the Send-only advice is for a source that writes with Send.
+    mount({ store: defenderOnlyStore() });
     await loaded();
+    expect(chooseBox(ACTIVITY_LOG_TITLE).checked).toBe(false);
     await chooseTarget();
     expect(shown("Authorization rule")).toBe("Choose a rule that can send");
     choose("Authorization rule", "RootManageSharedAccessKey");
     expect(screen.getByText(/A dedicated rule with only Send rights is safer/)).toBeTruthy();
     expect(screen.getByText("Rights: Listen, Manage, Send")).toBeTruthy();
+  });
+
+  // AZR-117: with the Activity Log chosen, the note and the create label stop
+  // recommending the Send-only rule its own deploy refuses.
+  it("with the Activity Log chosen, warns about a Send-only rule and offers a Manage rule instead", async () => {
+    mount({ store: defenderOnlyStore() });
+    await loaded();
+    expect(button("Create Send-only rule").disabled).toBe(true);
+    fireEvent.click(chooseBox(ACTIVITY_LOG_TITLE));
+    await chooseTarget("SendOnly");
+    const why = "a diagnostic setting streams to an Event Hub only through a rule with Manage, Send and Listen rights";
+    expect(
+      screen.getByText(
+        `The rule SendOnly has Send. Azure Activity Log needs a rule with Manage rights, because ${why}. Choose a rule with Manage rights.`,
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/A dedicated rule with only Send rights is safer/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create Send-only rule" })).toBeNull();
+    expect(button("Create Manage rule").disabled).toBe(true);
+    choose("Authorization rule", "RootManageSharedAccessKey");
+    expect(
+      screen.getByText(`Azure Activity Log needs a rule with Manage rights, as this one has, because ${why}.`),
+    ).toBeTruthy();
+    expect(screen.queryByText(/safer/)).toBeNull();
   });
 
   it("a pasted hub a complete listing does not contain is dropped, named, and cannot be deployed to", async () => {
@@ -876,7 +909,7 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
   });
 
   it("the controls this slice does not build are visible and disabled", async () => {
-    mount();
+    mount({ store: defenderOnlyStore() });
     await loaded();
     for (const name of ["Create namespace", "Create Event Hub", "Create Send-only rule", "Remove export"]) {
       expect({ name, disabled: button(name).disabled }).toEqual({ name, disabled: true });
@@ -1341,7 +1374,8 @@ describe("AzureOnboardingScreen - permissions to automate the Defender export (A
     expect(b?.getAttribute("data-kind")).toBe("not-measured");
     expect(b?.textContent).not.toMatch(DENIAL_WORDS);
     expect(b?.textContent).toMatch(/did not measure/);
-    fireEvent.click(button("Re-check permissions"));
+    // The Activity Log section offers its own (CAP-10); this pin is the Defender one.
+    fireEvent.click(within(defenderBlock()).getByRole("button", { name: "Re-check permissions" }));
     expect(onRecheckPermissions).toHaveBeenCalledTimes(1);
     // The re-check is the shell's; this screen spent nothing on it.
     expect(azure.calls).toEqual([]);

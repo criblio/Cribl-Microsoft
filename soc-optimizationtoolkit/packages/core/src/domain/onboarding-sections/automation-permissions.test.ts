@@ -283,38 +283,134 @@ describe("automationPermissionView", () => {
   });
 });
 
-describe("the Activity Log declaration (AZR-98): nothing is measured, and the view says so", () => {
+describe("the Activity Log declaration (CAP-10): the subscription actions are measured, two-sided", () => {
   function activityLog(): AutomationPermissions {
     const p = automationPermissionsFor("activityLog");
     if (p === null) throw new Error("activityLog has no declaration");
     return p;
   }
 
-  it("lists the subscription and rule actions from the registry, all unmeasured", () => {
+  /** An audited set with the three subscription-diagnostics verdicts as given. */
+  function diag(verdicts: { read?: CapabilityVerdict; write?: CapabilityVerdict; del?: CapabilityVerdict }): CapabilitySet {
+    return {
+      verdicts: {
+        ...(verdicts.read === undefined ? {} : { "subscription-diagnostics.read": verdicts.read }),
+        ...(verdicts.write === undefined ? {} : { "subscription-diagnostics.write": verdicts.write }),
+        ...(verdicts.del === undefined ? {} : { "subscription-diagnostics.delete": verdicts.del }),
+      },
+      auditedAt: "2026-11-03T10:00:00.000Z",
+      connectionId: "conn",
+    };
+  }
+
+  function alView(capabilities: CapabilitySet | undefined, context: CapabilityContext = CONNECTED) {
+    return automationPermissionView({ permissions: activityLog(), capabilities, context, howtoSection: HOWTO_SECTION });
+  }
+
+  const states = (v: ReturnType<typeof alView>) => v.rows.map((r) => `${r.need.capability}:${r.state}`);
+
+  it("measures the subscription's read, write and delete from the registry; only the rule's listKeys stays unmeasured", () => {
     const p = activityLog();
-    expect(p.measured).toEqual([]);
-    expect(p.notMeasured.map((g) => g.scope)).toEqual(["On the subscription", "On the Event Hub namespace rule"]);
+    expect(p.measured.map((n) => [n.capability, n.action, n.role, n.necessity, n.grantOnly])).toEqual([
+      ["subscription-diagnostics.read", LEAST_PRIVILEGE_OPERATIONS["activityLog.diagnosticSettings.read"].operation, "Monitoring Reader", "core", false],
+      ["subscription-diagnostics.write", LEAST_PRIVILEGE_OPERATIONS["activityLog.diagnosticSetting.write"].operation, "Monitoring Contributor", "core", false],
+      // Remove's, which the deploy does not need.
+      ["subscription-diagnostics.delete", LEAST_PRIVILEGE_OPERATIONS["activityLog.diagnosticSetting.delete"].operation, "Monitoring Contributor", "informational", false],
+    ]);
+    expect(p.notMeasured.map((g) => g.scope)).toEqual(["On the Event Hub namespace rule"]);
     expect(p.notMeasured.flatMap((g) => g.actions.map((a) => a.action))).toEqual([
-      LEAST_PRIVILEGE_OPERATIONS["activityLog.diagnosticSettings.read"].operation,
-      LEAST_PRIVILEGE_OPERATIONS["activityLog.diagnosticSetting.write"].operation,
-      // AZR-105: Remove deletes the setting the app created.
-      LEAST_PRIVILEGE_OPERATIONS["activityLog.diagnosticSetting.delete"].operation,
       LEAST_PRIVILEGE_OPERATIONS["eventhub.rule.listKeys"].operation,
     ]);
   });
 
-  it("shows a not-measured banner whatever the cached set says - never silence, never a denial, never a caution", () => {
-    const sets: (CapabilitySet | undefined)[] = [
-      undefined,
-      audited({ plans: "denied", read: "denied", write: "denied" }),
-    ];
-    for (const capabilities of sets) {
-      const v = automationPermissionView({ permissions: activityLog(), capabilities, context: CONNECTED, howtoSection: HOWTO_SECTION });
+  it("granted: every row granted, no banner, no caution", () => {
+    const v = alView(diag({ read: "granted", write: "granted", del: "granted" }));
+    expect(states(v)).toEqual([
+      "subscription-diagnostics.read:granted",
+      "subscription-diagnostics.write:granted",
+      "subscription-diagnostics.delete:granted",
+    ]);
+    expect(v.banner).toBeNull();
+    expect(v.deployCaution).toBeNull();
+  });
+
+  it("denied: a measured write denial is the DENIED banner and a caution - never grant-only, so it stays denied", () => {
+    const v = alView(diag({ read: "granted", write: "denied", del: "denied" }));
+    expect(states(v)).toEqual([
+      "subscription-diagnostics.read:granted",
+      "subscription-diagnostics.write:denied",
+      "subscription-diagnostics.delete:denied",
+    ]);
+    expect(v.rows.map((r) => r.stateLabel)).toEqual(["Granted", "Denied", "Denied"]);
+    expect(v.banner?.kind).toBe("denied");
+    expect(v.banner?.tone).toBe("error");
+    expect(v.banner?.text).toBe(
+      "The last permission check found your Azure identity cannot create the Activity Log diagnostic setting " +
+        "(Microsoft.Insights/diagnosticSettings/write), so Azure will likely refuse this section's deploy of Activity Log export. " +
+        "If the role was granted since, Re-check permissions. Otherwise switch Activity Log export to How-to in section 8 to see its " +
+        "steps, or ask an administrator for Monitoring Contributor on the subscription.",
+    );
+    expect(v.deployCaution).toBe(
+      "Azure will likely refuse this deploy: the last permission check found your Azure identity cannot create the Activity Log " +
+        "diagnostic setting (Microsoft.Insights/diagnosticSettings/write). Deploy stays available because Azure's answer decides. " +
+        "Re-check permissions if the role was granted since, or switch it to How-to in section 8.",
+    );
+  });
+
+  it("a denied delete alone only warns: Deploy does not need it, and the ask says what it is for", () => {
+    const v = alView(diag({ read: "granted", write: "granted", del: "denied" }));
+    expect(v.banner?.kind).toBe("partial");
+    expect(v.banner?.text).toBe(
+      "Your Azure identity cannot remove the Activity Log diagnostic setting this app created. Deploy does not need it " +
+        "and still works; ask an administrator for Monitoring Contributor to remove it from this app.",
+    );
+    expect(v.deployCaution).toBeNull();
+  });
+
+  it("unknown: an audit that did not measure them is a soft note, never a denial or a caution", () => {
+    // A set cached before these capabilities existed, or whose subscription read failed.
+    const v = alView(diag({}));
+    expect(states(v)).toEqual([
+      "subscription-diagnostics.read:unknown",
+      "subscription-diagnostics.write:unknown",
+      "subscription-diagnostics.delete:unknown",
+    ]);
+    expect(v.rows.map((r) => r.stateLabel)).toEqual([
+      "Not measured by the last permission check",
+      "Not measured by the last permission check",
+      "Not measured by the last permission check",
+    ]);
+    expect(v.banner?.kind).toBe("not-measured");
+    expect(v.banner?.text).toBe(
+      "The last permission check did not measure whether your Azure identity can list the subscription's diagnostic settings " +
+        "and create the Activity Log diagnostic setting, so whether it can set Activity Log export up is not known. " +
+        "Re-check permissions to measure it; Azure's own answer at each step is what decides.",
+    );
+    expect(v.banner?.text).not.toMatch(/\bdenied\b|\brefused\b/i);
+    expect(v.deployCaution).toBeNull();
+  });
+
+  it("never checked: no audit for this connection is its own note", () => {
+    for (const v of [alView(undefined), alView({ verdicts: {}, auditedAt: null, connectionId: null })]) {
+      expect(states(v)).toEqual([
+        "subscription-diagnostics.read:never-checked",
+        "subscription-diagnostics.write:never-checked",
+        "subscription-diagnostics.delete:never-checked",
+      ]);
       expect(v.banner?.kind).toBe("not-measured");
-      expect(v.banner?.text).toContain("does not measure");
-      expect(v.banner?.text).not.toMatch(DENIAL_WORDS);
+      expect(v.banner?.text).toMatch(/^Permissions have not been checked for this connection yet/);
       expect(v.deployCaution).toBeNull();
-      expect(v.rows).toEqual([]);
     }
+    expect(states(alView(undefined, NO_IDENTITY))).toEqual([
+      "subscription-diagnostics.read:unreachable",
+      "subscription-diagnostics.write:unreachable",
+      "subscription-diagnostics.delete:unreachable",
+    ]);
+  });
+
+  it("the Defender verdicts say nothing about it", () => {
+    const v = alView(audited({ plans: "denied", read: "denied", write: "denied" }));
+    expect(v.rows.every((r) => r.state === "unknown")).toBe(true);
+    expect(v.deployCaution).toBeNull();
   });
 });

@@ -31,6 +31,7 @@ const ALL_KINDS: CapabilityFallbackKind[] = [
   "app-registration-request",
   "cribl-pack",
   "defender-howto-steps",
+  "activity-log-howto-steps",
 ];
 
 describe("copy decisions", () => {

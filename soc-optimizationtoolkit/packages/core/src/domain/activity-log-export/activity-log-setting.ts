@@ -15,9 +15,14 @@
  *   listKeys is made and no secret exists anywhere in this flow.
  * - `eventHubName` is OMITTED. Azure then creates and writes to
  *   `insights-activity-logs` itself, which is the hub onboarding-howto/sources
- *   expects for this source. Because Azure creates the hub, the rule needs
- *   Manage rights as well as Send (the How-to step eh-rule-diagnostic says the
- *   same; inferred from Azure Monitor documentation, not measured live).
+ *   expects for this source. The rule needs Manage rights as well as Send:
+ *   Microsoft's diagnostic settings page says, for every Event Hub
+ *   destination, "Streaming to event hubs requires Manage, Send, and Listen
+ *   permissions" (learn.microsoft.com/azure/azure-monitor/data-collection/
+ *   diagnostic-settings, Destinations table, read 2026-11-18). The How-to
+ *   step eh-rule-diagnostic says the same, and the Event Hub section's rule
+ *   note follows it whenever this source is chosen. Documented, not measured
+ *   live (a Send-only PUT has not been tried).
  * - `logs` enables EVERY Activity Log category ({@link ACTIVITY_LOG_CATEGORIES}).
  *   No metrics: the Activity Log has none.
  *

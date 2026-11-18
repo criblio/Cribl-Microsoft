@@ -67,6 +67,18 @@
  * capability audit. GRANTED MEANS THE READ RETURNED A ROW: whether Graph
  * refuses with a 403 or an empty 200 is unsettled (AZR-111), so an empty
  * answer is left unmeasured, never denied.
+ *
+ * `subscription-diagnostics.read`, `.write` and `.delete` (CAP-10) are
+ * Microsoft.Insights/diagnosticSettings read, write and delete AT THE
+ * SUBSCRIPTION - the Activity Log export's list, create and Remove. Measured
+ * from the SUBSCRIPTION effective-action read the capability audit already
+ * makes, never a probe. TWO-SIDED, unlike the Defender automation write: the
+ * setting is an extension resource on the subscription itself
+ * (/subscriptions/<sub>/providers/Microsoft.Insights/diagnosticSettings/<name>),
+ * so no assignment below the subscription can grant it and a miss there is a
+ * real denial. They say nothing about the Event Hub rule the setting names
+ * (listKeys there stays unmeasured until CAP-9) or about the Entra ID
+ * setting, which is a tenant resource granted by a directory role.
  */
 export type AzureCapability =
   | "dcr.write"
@@ -86,7 +98,10 @@ export type AzureCapability =
   | "identity.create"
   | "sentinel-incidents.read"
   | "graph-licences.read"
-  | "graph-incidents.read";
+  | "graph-incidents.read"
+  | "subscription-diagnostics.read"
+  | "subscription-diagnostics.write"
+  | "subscription-diagnostics.delete";
 
 /** Cribl-side capabilities. */
 export type CriblCapability =
@@ -116,6 +131,9 @@ export const AZURE_CAPABILITIES: readonly AzureCapability[] = Object.freeze([
   "sentinel-incidents.read",
   "graph-licences.read",
   "graph-incidents.read",
+  "subscription-diagnostics.read",
+  "subscription-diagnostics.write",
+  "subscription-diagnostics.delete",
 ]);
 
 export const CRIBL_CAPABILITIES: readonly CriblCapability[] = Object.freeze([

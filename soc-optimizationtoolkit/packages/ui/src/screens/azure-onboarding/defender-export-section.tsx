@@ -60,8 +60,6 @@ import {
   readDefenderState,
 } from "@soc/core";
 import type {
-  AutomationPermissionView,
-  AutomationPermissions,
   AzureResourceGroup,
   DefenderDeployForValidation,
   DefenderDeployOutcome,
@@ -86,7 +84,7 @@ import {
 import type { PickerMessage, RowChoice } from "./azure-onboarding-state";
 import { PickerLine } from "./eventhub-prerequisite-section";
 import type { EventHubTarget } from "./eventhub-prerequisite-section";
-import { AutomationPermissionBanner } from "./automation-permission-banner";
+import { AutomationPermissionBanner, MeasuredActionList } from "./automation-permission-banner";
 
 /** The extra Defender sources, shown disabled: only alerts are exported for now. */
 const EXTRA_SOURCES: readonly string[] = [
@@ -536,29 +534,6 @@ export function DefenderExportSection({
         </button>
         <span className="field-hint">{REMOVE_NOT_AVAILABLE}</span>
       </div>
-    </div>
-  );
-}
-
-/** The subscription actions, each with what the cached check found for it. */
-function MeasuredActionList({
-  permissions,
-  view,
-}: {
-  permissions: AutomationPermissions;
-  view: AutomationPermissionView;
-}) {
-  return (
-    <div className="azure-onboarding-actions">
-      <span className="field-hint">{permissions.measuredScope}</span>
-      <ul className="perm-list">
-        {view.rows.map((row) => (
-          <li key={row.need.action} data-permission-action={row.need.action} data-state={row.state}>
-            <strong>{row.need.does}</strong>
-            {` - ${row.need.action}: ${row.stateLabel}`}
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

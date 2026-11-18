@@ -85,7 +85,9 @@ import {
 } from "../defender-export/defender-permissions";
 import {
   ACTIVITY_LOG_NAMESPACE_ACTIONS,
-  ACTIVITY_LOG_SUBSCRIPTION_ACTIONS,
+  ACTIVITY_LOG_SETTINGS_DELETE,
+  ACTIVITY_LOG_SETTINGS_READ,
+  ACTIVITY_LOG_SETTINGS_WRITE,
 } from "../activity-log-export/activity-log-permissions";
 import { ENTRA_NAMESPACE_ACTIONS, ENTRA_TENANT_ACTIONS } from "../entra-diagnostics/entra-permissions";
 import type { OnboardingItemId } from "../onboarding-selection";
@@ -114,6 +116,12 @@ export interface AutomationCapabilityNeed {
   readonly necessity: AutomationNecessity;
   /** Evaluated above its resource's scope: a miss is unknown, never denied. */
   readonly grantOnly: boolean;
+  /**
+   * For an `informational` need: what the role is for, completing "ask an
+   * administrator for <role> ...". Absent reads "to see it" (a read the
+   * section shows).
+   */
+  readonly grantFor?: string;
 }
 
 /** Actions the source needs that no capability measures yet, grouped by scope. */
@@ -171,18 +179,48 @@ const DEFENDER_EXPORT_PERMISSIONS: AutomationPermissions = {
 };
 
 /**
- * AZR-98. No capability measures Microsoft.Insights diagnostic settings, so
- * nothing is `measured` and both scopes are listed as not measured; the view
- * then says the check does not cover this source rather than staying silent.
+ * AZR-98, measured since CAP-10. The subscription diagnostic setting's read,
+ * write and delete are evaluated at the subscription by the capability audit
+ * (capability-mapping `subscription-diagnostics.*`). TWO-SIDED, so none is
+ * grantOnly: the setting is an extension resource on the subscription itself,
+ * and no role below it can grant it. The deploy lists the settings and then
+ * PUTs, so read and write are core; delete is Remove's, which the deploy does
+ * not need, so it is informational. The rule's listKeys stays not measured
+ * until CAP-9: it can be granted on the namespace, which a subscription read
+ * cannot see.
  */
 const ACTIVITY_LOG_PERMISSIONS: AutomationPermissions = {
   sourceTitle: "Activity Log export",
   measuredScope: "On the subscription",
-  measured: [],
-  notMeasured: [
-    { scope: "On the subscription", actions: ACTIVITY_LOG_SUBSCRIPTION_ACTIONS },
-    { scope: "On the Event Hub namespace rule", actions: ACTIVITY_LOG_NAMESPACE_ACTIONS },
+  measured: [
+    {
+      capability: "subscription-diagnostics.read",
+      action: ACTIVITY_LOG_SETTINGS_READ,
+      does: "list the subscription's diagnostic settings",
+      role: leastRoleFor("activityLog.diagnosticSettings.read"),
+      // The deploy re-lists and refuses a duplicate before it writes.
+      necessity: "core",
+      grantOnly: false,
+    },
+    {
+      capability: "subscription-diagnostics.write",
+      action: ACTIVITY_LOG_SETTINGS_WRITE,
+      does: "create the Activity Log diagnostic setting",
+      role: leastRoleFor("activityLog.diagnosticSetting.write"),
+      necessity: "core",
+      grantOnly: false,
+    },
+    {
+      capability: "subscription-diagnostics.delete",
+      action: ACTIVITY_LOG_SETTINGS_DELETE,
+      does: "remove the Activity Log diagnostic setting this app created",
+      role: leastRoleFor("activityLog.diagnosticSetting.delete"),
+      necessity: "informational",
+      grantOnly: false,
+      grantFor: "to remove it from this app",
+    },
   ],
+  notMeasured: [{ scope: "On the Event Hub namespace rule", actions: ACTIVITY_LOG_NAMESPACE_ACTIONS }],
 };
 
 /**
@@ -459,7 +497,8 @@ export function automationPermissionView(input: AutomationPermissionInput): Auto
         tone: "warning",
         text:
           `Your Azure identity cannot ${phrase(informational.map((n) => n.does))}. Deploy does not need it ` +
-          `and still works; ask an administrator for ${rolesOf(informational)} to see it.`,
+          `and still works; ask an administrator for ${rolesOf(informational)} ` +
+          `${phrase([...new Set(informational.map((n) => n.grantFor ?? "to see it"))])}.`,
         offerRecheck: true,
       },
       deployCaution: null,
