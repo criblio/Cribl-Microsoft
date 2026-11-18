@@ -68,10 +68,12 @@ function values(over: Partial<PlanValues> = {}): PlanValues {
 
 class RoutingAzure implements AzureManagement {
   readonly calls: AzureManagementRequest[] = [];
-  constructor(
-    private readonly existing: unknown[] = [],
-    private readonly putAnswer: PortHttpResponse | null = null,
-  ) {}
+  private readonly existing: unknown[];
+  private readonly putAnswer: PortHttpResponse | null;
+  constructor(existing: unknown[] = [], putAnswer: PortHttpResponse | null = null) {
+    this.existing = existing;
+    this.putAnswer = putAnswer;
+  }
   writes(): AzureManagementRequest[] {
     return this.calls.filter((c) => c.method !== "GET");
   }
