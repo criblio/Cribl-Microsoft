@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**104 in the backlog, 39 in progress, 224 done.**
+**103 in the backlog, 40 in progress, 224 done.**
 
 ## By menu item
 
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (39)
+## In progress (40)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1314,6 +1314,25 @@ Started. Anything here with an unfinished dependency is called out on its card.
   section and its gate say Manage); no permission-audit capability covers
   diagnostic settings yet (the section shows a not-measured banner).
 
+- **AZR-99** Automate the Entra ID source: create the tenant diagnostic setting (microsoft.aadiam) that streams the chosen sign-in and audit categories to the Event Hub
+  `AZR-F9` `story` `settled` `blocked by AZR-98`
+  FILED 2026-11-11 alongside [[AZR-98]]. entraId is How-to only and had no
+  card. PUT /providers/microsoft.aadiam/diagnosticSettings/{name} with the
+  categories of the chosen Entra profile (ENTRA_PROFILE_CATEGORIES), refusing
+  on ours-exists, ours-differs, and another setting already sending a category
+  to the same hub. After AZR-98 because it reuses that refusal and read-back
+  shape, and because it needs a TENANT-level role (Security Administrator or
+  Global Administrator for the write; the read is
+  entra.diagnosticSettings.read) that the lab's single-subscription principal
+  does not hold - the permission plan and its change request must name that,
+  and AZR-82 (reads at management-group and tenant scope with no change
+  request) is related. Category availability depends on Entra licensing (P1/P2
+  for some sign-in categories); an unlicensed category must be refused by
+  name, not silently dropped. AUDIT NOTE 2026-11-11: AZR-98 added
+  domain/activity-log-export/diagnostic-setting.ts beside the existing
+  domain/entra-diagnostics/entra-diagnostic-setting.ts; build the Entra deploy
+  on ONE diagnostic-setting body/compare module rather than a third copy.
+
 - **AZR-89** The lab TTL Logic App identity is granted Contributor on the lab resource group, where it only reads and deletes the group
   `AZR-F10` `bug` `settled`
   Not now because: Over-granting to an identity that lives only as long as the
@@ -1586,7 +1605,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (52)
+## Backlog - next (51)
 
 Settled and unblocked, sequenced behind now.
 
@@ -2264,25 +2283,6 @@ Settled and unblocked, sequenced behind now.
   apply cleanly to the 1.13.0 head (capture-panel-state.ts changed under
   DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture
   live.
-
-- **AZR-99** Automate the Entra ID source: create the tenant diagnostic setting (microsoft.aadiam) that streams the chosen sign-in and audit categories to the Event Hub
-  `AZR-F9` `story` `settled` `blocked by AZR-98`
-  FILED 2026-11-11 alongside [[AZR-98]]. entraId is How-to only and had no
-  card. PUT /providers/microsoft.aadiam/diagnosticSettings/{name} with the
-  categories of the chosen Entra profile (ENTRA_PROFILE_CATEGORIES), refusing
-  on ours-exists, ours-differs, and another setting already sending a category
-  to the same hub. After AZR-98 because it reuses that refusal and read-back
-  shape, and because it needs a TENANT-level role (Security Administrator or
-  Global Administrator for the write; the read is
-  entra.diagnosticSettings.read) that the lab's single-subscription principal
-  does not hold - the permission plan and its change request must name that,
-  and AZR-82 (reads at management-group and tenant scope with no change
-  request) is related. Category availability depends on Entra licensing (P1/P2
-  for some sign-in categories); an unlicensed category must be refused by
-  name, not silently dropped. AUDIT NOTE 2026-11-11: AZR-98 added
-  domain/activity-log-export/diagnostic-setting.ts beside the existing
-  domain/entra-diagnostics/entra-diagnostic-setting.ts; build the Entra deploy
-  on ONE diagnostic-setting body/compare module rather than a third copy.
 
 - **AZR-103** Grant the Cribl service principal 'Azure Event Hubs Data Receiver' on the hub or namespace from the app, behind a confirm
   `AZR-F9` `story` `settled` `blocked by AZR-59`

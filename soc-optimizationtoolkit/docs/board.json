@@ -4567,7 +4567,7 @@
       "epic": "AZR",
       "feature": "AZR-F9",
       "type": "story",
-      "status": "backlog",
+      "status": "in-progress",
       "priority": "next",
       "settled": "settled",
       "dependsOn": [
