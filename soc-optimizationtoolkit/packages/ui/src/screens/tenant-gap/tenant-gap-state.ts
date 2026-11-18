@@ -88,6 +88,48 @@ export function progressLine(p: ScanProgress): string {
   return `Reading ${which}${reads}...`;
 }
 
+/** A position in the grid of indicator tips: tenant row, and indicator column (two per source). */
+export interface GridPos {
+  readonly row: number;
+  readonly col: number;
+}
+
+/**
+ * Where a key moves the grid's single tab stop (AZR-91, a roving tabindex):
+ * arrows one step, clamped at the edges; Home / End to the row's first / last
+ * indicator; with Ctrl, Home / End to the grid's first / last. Null for a key
+ * the grid does not handle, so it keeps its ordinary meaning.
+ */
+export function moveGridFocus(
+  pos: GridPos,
+  key: string,
+  ctrl: boolean,
+  rows: number,
+  cols: number,
+): GridPos | null {
+  if (rows <= 0 || cols <= 0) return null;
+  const clamp = (row: number, col: number): GridPos => ({
+    row: Math.max(0, Math.min(rows - 1, row)),
+    col: Math.max(0, Math.min(cols - 1, col)),
+  });
+  switch (key) {
+    case "ArrowRight":
+      return clamp(pos.row, pos.col + 1);
+    case "ArrowLeft":
+      return clamp(pos.row, pos.col - 1);
+    case "ArrowDown":
+      return clamp(pos.row + 1, pos.col);
+    case "ArrowUp":
+      return clamp(pos.row - 1, pos.col);
+    case "Home":
+      return ctrl ? clamp(0, 0) : clamp(pos.row, 0);
+    case "End":
+      return ctrl ? clamp(rows - 1, cols - 1) : clamp(pos.row, cols - 1);
+    default:
+      return null;
+  }
+}
+
 /** Counts of each state across read rows, per side - never counting a row that was not read. */
 export function stateCounts(
   rows: readonly TenantGapRow[],

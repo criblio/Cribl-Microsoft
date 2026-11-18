@@ -423,7 +423,79 @@ describe("TenantGapScreen", () => {
     mount();
     const first = GAP_SOURCES[0]!;
     const tip = indicators("pa", "cribl")[0]!.querySelector('[role="button"]')!;
-    expect(tip.getAttribute("aria-label")).toBe(`Contoso, ${first.title}, Cribl: why`);
+    expect(tip.getAttribute("aria-label")).toBe(`Contoso, ${first.title}, Cribl: Unknown, why`);
+  });
+
+  describe("one tab stop with arrow keys between cells (AZR-91)", () => {
+    const COLS = GAP_SOURCES.length * 2;
+    const gridTips = () => [...document.querySelectorAll<HTMLElement>("tbody [data-col] [role='button']")];
+    const tipAt = (row: number, col: number) =>
+      document.querySelector<HTMLElement>(`tbody [data-row="${row}"][data-col="${col}"] [role="button"]`)!;
+    const stops = () => gridTips().filter((t) => t.tabIndex === 0);
+    const press = (key: string, init: { ctrlKey?: boolean } = {}) =>
+      fireEvent.keyDown(document.activeElement as HTMLElement, { key, ...init });
+
+    it("gives the whole grid of tips ONE tab stop, so each row's Read button is a stop away", () => {
+      mount();
+      expect(gridTips().length).toBe(PROFILES.length * COLS);
+      expect(stops()).toEqual([tipAt(0, 0)]);
+      // Everything tabbable in the body: one Read button per tenant plus the grid's one stop.
+      const tabbable = [...document.querySelectorAll<HTMLElement>("tbody button, tbody [tabindex]")].filter(
+        (el) => el.tabIndex >= 0 && !(el as HTMLButtonElement).disabled,
+      );
+      expect(tabbable.length).toBe(PROFILES.length + 1);
+    });
+
+    it("moves focus and the stop with the arrows, clamped at the edges", () => {
+      mount();
+      tipAt(0, 0).focus();
+      press("ArrowLeft");
+      expect(document.activeElement).toBe(tipAt(0, 0));
+      press("ArrowRight");
+      expect(document.activeElement).toBe(tipAt(0, 1));
+      press("ArrowDown");
+      expect(document.activeElement).toBe(tipAt(1, 1));
+      press("ArrowDown");
+      expect(document.activeElement).toBe(tipAt(1, 1));
+      press("ArrowUp");
+      expect(document.activeElement).toBe(tipAt(0, 1));
+      expect(stops()).toEqual([tipAt(0, 1)]);
+    });
+
+    it("Home and End go to the row's ends; with Ctrl, to the grid's", () => {
+      mount();
+      tipAt(1, 3).focus();
+      press("End");
+      expect(document.activeElement).toBe(tipAt(1, COLS - 1));
+      press("Home");
+      expect(document.activeElement).toBe(tipAt(1, 0));
+      press("End", { ctrlKey: true });
+      expect(document.activeElement).toBe(tipAt(PROFILES.length - 1, COLS - 1));
+      press("Home", { ctrlKey: true });
+      expect(document.activeElement).toBe(tipAt(0, 0));
+      expect(stops()).toEqual([tipAt(0, 0)]);
+    });
+
+    it("a tip focused by click takes the stop, and Enter still toggles its reason", () => {
+      mount();
+      const tip = tipAt(1, 2);
+      tip.focus();
+      // A browser fires focusin with focus(); happy-dom does not, so send it.
+      fireEvent.focusIn(tip);
+      expect(stops()).toEqual([tip]);
+      expect(tip.getAttribute("aria-expanded")).toBe("true");
+      fireEvent.keyDown(tip, { key: "Enter" });
+      expect(tip.getAttribute("aria-expanded")).toBe("false");
+      // Enter is the tip's own key: focus does not move.
+      expect(document.activeElement).toBe(tip);
+    });
+
+    it("every grid tip is described by the keyboard hint", () => {
+      mount();
+      const hint = document.getElementById("tgap-grid-keys")!;
+      expect(hint.textContent).toContain("Arrow keys move between indicators");
+      expect(gridTips().every((t) => t.getAttribute("aria-describedby") === "tgap-grid-keys")).toBe(true);
+    });
   });
 
   it("uses no native select", () => {

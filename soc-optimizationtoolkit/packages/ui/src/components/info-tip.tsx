@@ -39,13 +39,21 @@ export interface InfoTipProps {
    * keyboard or screen-reader user can tell one stop from the next.
    */
   label?: string;
+  /**
+   * The icon's tabIndex; 0 by default. A composite widget that manages focus
+   * itself (a roving tabindex over a grid of tips) passes -1 for every tip but
+   * the one that holds the widget's single tab stop.
+   */
+  tabIndex?: number;
+  /** Id of an element that describes the icon further (e.g. how to move between tips). */
+  describedBy?: string;
 }
 
 /** Gap between the icon and the tip, and the minimum margin to any edge. */
 const GAP = 6;
 const EDGE = 8;
 
-export function InfoTip({ text, label = "More information" }: InfoTipProps) {
+export function InfoTip({ text, label = "More information", tabIndex = 0, describedBy }: InfoTipProps) {
   // TWO reasons to be open (DBT-126, claude-kit standards/info-affordances.md):
   // hovered, or pinned by focus / click / keyboard. One shared flag let a
   // pointer press open the tip on focus and shut it on the click that followed
@@ -154,8 +162,9 @@ export function InfoTip({ text, label = "More information" }: InfoTipProps) {
         ref={iconRef}
         className="info-tip-icon"
         role="button"
-        tabIndex={0}
+        tabIndex={tabIndex}
         aria-label={label}
+        {...(describedBy !== undefined ? { "aria-describedby": describedBy } : {})}
         aria-expanded={open}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}

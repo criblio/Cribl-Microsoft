@@ -27,6 +27,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { FocusEvent, KeyboardEvent } from "react";
 import { GAP_SOURCES, NOT_READ_REASON, createRequestPacer, scanTenantGap } from "@soc/core";
 import type {
   BatchPacing,
@@ -42,7 +43,9 @@ import { VALIDATE_REQUESTS_PER_MINUTE } from "../azure-onboarding/validate/valid
 import {
   AZURE_WORD,
   CRIBL_WORD,
+  moveGridFocus,
   progressLine,
+  type GridPos,
   stateCounts,
   type ScanProgress,
   type TenantGapCache,
@@ -107,15 +110,43 @@ export const RESTORE_FAILED =
 
 const EARLIER_RUN ="An earlier read is still finishing. Reads can start again once it has.";
 
-function Indicator(props: { side: "azure" | "cribl"; indicator: GapIndicator; sourceId: string; where: string }) {
-  const { side, indicator, sourceId, where } = props;
+/** Id of the hidden line that tells a keyboard user how to move between the grid's tips. */
+const GRID_HINT_ID = "tgap-grid-keys";
+const GRID_HINT =
+  "Arrow keys move between indicators, Home and End to the first and last in the row, Control with Home or End to " +
+  "the first and last in the grid. Enter or Space shows or hides the reason.";
+
+function Indicator(props: {
+  side: "azure" | "cribl";
+  indicator: GapIndicator;
+  sourceId: string;
+  where: string;
+  pos: GridPos;
+  /** True for the one indicator holding the grid's tab stop. */
+  stop: boolean;
+}) {
+  const { side, indicator, sourceId, where, pos, stop } = props;
   const word = side === "azure" ? AZURE_WORD[indicator.state] : CRIBL_WORD[indicator.state];
   const label = side === "azure" ? "Azure" : "Cribl";
   return (
-    <span className={`tgap-ind tgap-${indicator.state}`} data-side={side} data-state={indicator.state} data-source={sourceId}>
+    <span
+      className={`tgap-ind tgap-${indicator.state}`}
+      data-side={side}
+      data-state={indicator.state}
+      data-source={sourceId}
+      data-row={pos.row}
+      data-col={pos.col}
+    >
       <span className="tgap-dot" aria-hidden="true" />
       <span className="tgap-word">{`${label}: ${word}`}</span>
-      <InfoTip text={indicator.reason} label={`${where}, ${label}: why`} />
+      {/* The tip is the cell's only focusable part, so its name carries the
+        * state word: arrowing onto it must say what the cell shows. */}
+      <InfoTip
+        text={indicator.reason}
+        label={`${where}, ${label}: ${word}, why`}
+        tabIndex={stop ? 0 : -1}
+        describedBy={GRID_HINT_ID}
+      />
     </span>
   );
 }
@@ -141,6 +172,38 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
   // A read started on an earlier visit and still running (seeded on mount).
   const [earlierRun, setEarlierRun] = useState<boolean>(() => cache.inFlight() !== null);
   const abort = useRef<AbortController | null>(null);
+  // The grid's ONE tab stop (AZR-91): a roving tabindex over the indicator
+  // tips, so a keyboard user does not pass two stops per cell to reach the
+  // next tenant's Read button.
+  const [stop, setStop] = useState<GridPos>({ row: 0, col: 0 });
+  const gridBody = useRef<HTMLTableSectionElement>(null);
+  const gridCols = GAP_SOURCES.length * 2;
+  const stopAt: GridPos = {
+    row: Math.min(stop.row, Math.max(0, profiles.length - 1)),
+    col: Math.min(stop.col, gridCols - 1),
+  };
+  const tipAt = (pos: GridPos): HTMLElement | null =>
+    gridBody.current?.querySelector<HTMLElement>(`[data-row="${pos.row}"][data-col="${pos.col}"] [role="button"]`) ?? null;
+  const posOf = (target: EventTarget): GridPos | null => {
+    if (!(target instanceof HTMLElement) || target.getAttribute("role") !== "button") return null;
+    const ind = target.closest<HTMLElement>("[data-col]");
+    if (ind === null) return null;
+    return { row: Number(ind.dataset.row), col: Number(ind.dataset.col) };
+  };
+  const onGridKeyDown = (event: KeyboardEvent<HTMLTableSectionElement>) => {
+    const from = posOf(event.target);
+    if (from === null) return;
+    const to = moveGridFocus(from, event.key, event.ctrlKey || event.metaKey, profiles.length, gridCols);
+    if (to === null) return;
+    event.preventDefault();
+    setStop(to);
+    tipAt(to)?.focus();
+  };
+  // A click or a programmatic focus on any tip moves the stop there too.
+  const onGridFocus = (event: FocusEvent<HTMLTableSectionElement>) => {
+    const at = posOf(event.target);
+    if (at !== null && (at.row !== stop.row || at.col !== stop.col)) setStop(at);
+  };
 
   useEffect(() => () => abort.current?.abort(), []);
 
@@ -312,6 +375,9 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
           <span className="tgap-tile-value">{readRows.length === 0 ? "No tenant read yet" : tile(criblCounts)}</span>
         </div>
       </div>
+      <p id={GRID_HINT_ID} hidden>
+        {GRID_HINT}
+      </p>
       <div className="tgap-scroll">
         <table className="tgap-grid">
           <thead>
@@ -332,8 +398,8 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
               ))}
             </tr>
           </thead>
-          <tbody>
-            {profiles.map((p) => {
+          <tbody ref={gridBody} onKeyDown={onGridKeyDown} onFocus={onGridFocus}>
+            {profiles.map((p, rowIndex) => {
               const entry = entries[p.id];
               const row = entry?.row;
               return (
@@ -360,12 +426,15 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
                       Read
                     </button>
                   </th>
-                  {GAP_SOURCES.map((s) => {
+                  {GAP_SOURCES.map((s, sourceIndex) => {
                     const cell = row?.cells.find((c) => c.sourceId === s.id);
+                    const where = `${p.name}, ${s.title}`;
+                    const pos = (side: 0 | 1): GridPos => ({ row: rowIndex, col: sourceIndex * 2 + side });
+                    const isStop = (side: 0 | 1) => stopAt.row === rowIndex && stopAt.col === sourceIndex * 2 + side;
                     return (
                       <td key={s.id} className="tgap-cell">
-                        <Indicator side="azure" sourceId={s.id} where={`${p.name}, ${s.title}`} indicator={cell?.azure ?? NOT_READ} />
-                        <Indicator side="cribl" sourceId={s.id} where={`${p.name}, ${s.title}`} indicator={cell?.cribl ?? NOT_READ} />
+                        <Indicator side="azure" sourceId={s.id} where={where} indicator={cell?.azure ?? NOT_READ} pos={pos(0)} stop={isStop(0)} />
+                        <Indicator side="cribl" sourceId={s.id} where={where} indicator={cell?.cribl ?? NOT_READ} pos={pos(1)} stop={isStop(1)} />
                       </td>
                     );
                   })}

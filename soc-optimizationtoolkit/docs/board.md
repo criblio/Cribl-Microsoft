@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**100 in the backlog, 42 in progress, 225 done.**
+**100 in the backlog, 41 in progress, 226 done.**
 
 ## By menu item
 
@@ -38,11 +38,11 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Event Hub Discovery | 0 | 1 | 0 |
 | Azure Native Source Onboarding | 32 | 51 | 8 |
 | Azure Logging Map | 3 | 2 | 1 |
-| Tenant Logging Gaps | 1 | 2 | 0 |
+| Tenant Logging Gaps | 0 | 3 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 142.
+Open work totals 141.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 63% (63/100)
+### `AZR` Azure native source onboarding - 64% (64/100)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -65,7 +65,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
 | `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 39/57 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
-| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 21/24 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 22/24 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (42)
+## In progress (41)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1330,15 +1330,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   still says a Send-only rule is safer, which is wrong for this deploy (the
   section and its gate say Manage); no permission-audit capability covers
   diagnostic settings yet (the section shows a not-measured banner).
-
-- **AZR-91** Tenant gap grid: one tab stop with arrow-key navigation between cells
-  `AZR-F10` `story` `settled`
-  AZR-63 review follow-up. Every indicator carries an (i), so a keyboard user
-  passes about 28 stops per tenant row to reach the next row's Read button.
-  AZR-63 named every tip (tenant, source, side) so a screen reader can tell
-  them apart; the remaining fix is a roving tabindex over the grid (arrow keys
-  between cells, Enter opens the reason) so the Read buttons are a few
-  keystrokes away. Reasoning in backlog.md section 6i.
 
 - **AZR-89** The lab TTL Logic App identity is granted Contributor on the lab resource group, where it only reads and deletes the group
   `AZR-F10` `bug` `settled`
@@ -2963,7 +2954,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (225)
+## Done (226)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -8656,6 +8647,25 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   mutation-checked: a per-tenant restore and a restore outside finally both
   fail them) and tenant-gap-screen.dom.test.tsx. NOT verified live: the Read
   all against real tenants in Live Preview.
+
+- **AZR-91** Tenant gap grid: one tab stop with arrow-key navigation between cells
+  `AZR-F10` `story` `settled` `verified: pins`
+  AZR-63 review follow-up. Every indicator carries an (i), so a keyboard user
+  passes about 28 stops per tenant row to reach the next row's Read button.
+  AZR-63 named every tip (tenant, source, side) so a screen reader can tell
+  them apart; the remaining fix is a roving tabindex over the grid (arrow keys
+  between cells, Enter opens the reason) so the Read buttons are a few
+  keystrokes away. Reasoning in backlog.md section 6i. DONE 2026-11-17: roving
+  tabindex over the tenant gap grid's indicator tips - one tab stop for the
+  whole grid, arrow keys between indicators (clamped), Home/End to the row's
+  ends, Ctrl+Home/End to the grid's, Enter/Space still toggles the reason; a
+  click or focus moves the stop. InfoTip gained tabIndex and describedBy
+  props; each grid tip's name now includes the state word and is described by
+  a hidden keyboard hint. The tenant column (status tip, Read button) stays in
+  normal tab order. Pinned in tenant-gap-screen.dom.test.tsx (5 pins;
+  mutation-checked: every tip tabbable, and a wrong ArrowDown, both fail
+  them). NOT verified live: real browser focus and a screen reader in Live
+  Preview.
 
 - **AZR-92** While one tab reads a tenant through the shared credential slot, other tabs' ordinary Azure reads go out as that tenant
   `AZR-F10` `bug` `settled` `verified: pins`

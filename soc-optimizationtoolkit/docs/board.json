@@ -4702,7 +4702,7 @@
     {
       "epic": "AZR",
       "feature": "AZR-F10",
-      "status": "in-progress",
+      "status": "done",
       "settled": "settled",
       "dependsOn": [
         "AZR-63"
@@ -4712,7 +4712,8 @@
       "priority": "later",
       "menu": "tenant-gaps",
       "title": "Tenant gap grid: one tab stop with arrow-key navigation between cells",
-      "detail": "AZR-63 review follow-up. Every indicator carries an (i), so a keyboard user passes about 28 stops per tenant row to reach the next row's Read button. AZR-63 named every tip (tenant, source, side) so a screen reader can tell them apart; the remaining fix is a roving tabindex over the grid (arrow keys between cells, Enter opens the reason) so the Read buttons are a few keystrokes away. Reasoning in backlog.md section 6i."
+      "detail": "AZR-63 review follow-up. Every indicator carries an (i), so a keyboard user passes about 28 stops per tenant row to reach the next row's Read button. AZR-63 named every tip (tenant, source, side) so a screen reader can tell them apart; the remaining fix is a roving tabindex over the grid (arrow keys between cells, Enter opens the reason) so the Read buttons are a few keystrokes away. Reasoning in backlog.md section 6i. DONE 2026-11-17: roving tabindex over the tenant gap grid's indicator tips - one tab stop for the whole grid, arrow keys between indicators (clamped), Home/End to the row's ends, Ctrl+Home/End to the grid's, Enter/Space still toggles the reason; a click or focus moves the stop. InfoTip gained tabIndex and describedBy props; each grid tip's name now includes the state word and is described by a hidden keyboard hint. The tenant column (status tip, Read button) stays in normal tab order. Pinned in tenant-gap-screen.dom.test.tsx (5 pins; mutation-checked: every tip tabbable, and a wrong ArrowDown, both fail them). NOT verified live: real browser focus and a screen reader in Live Preview.",
+      "verified": "pins"
     },
     {
       "epic": "AZR",

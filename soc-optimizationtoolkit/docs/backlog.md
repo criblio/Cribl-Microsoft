@@ -1460,6 +1460,15 @@ cancel, or the batch body throwing still puts the active credential back
 (pinned in `run-tenant-session.test.ts`). A single-tenant Read is the batch of
 one and keeps its old sequence exactly.
 
+AZR-91 DONE 2026-11-17: the grid's indicator tips are ONE tab stop (a roving
+tabindex). Arrow keys move between indicators (clamped at the edges), Home and
+End to the row's ends, Ctrl with Home or End to the grid's; Enter or Space
+still toggles a tip's reason. Each tip's name now carries the state word as
+well as tenant, source and side, and every tip is described by a hidden line
+saying how to move. The tenant column (status tip, Read button) stays in the
+ordinary tab order, so the tab stops in the table body are one Read button per
+tenant, its status tip once read, and one for the whole grid.
+
 ## 7. Verification gaps
 
 **First-run wizard as a genuine first run. VERIFIED 2026-08-06, twice.** Walked
