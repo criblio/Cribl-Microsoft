@@ -3411,7 +3411,9 @@ commit markers are a guess, and a wrong guess refuses rather than commits),
 whether the `/products/stream/groups` routes answer through the app proxy, the
 metrics label form for the new input, and whether Cribl accepts the
 `queueName` expression. ADR 0007's live-verification list is the full set;
-AZR-30 to AZR-34 close only after it.
+AZR-30 to AZR-34 close only after it. (Amended 2026-11-17: AZR-32 and AZR-34
+closed on pins; the unobserved items are AZR-112 to AZR-115, per ADR 0007's
+closing amendment.)
 
 ## 25. DBT-223: Rule Coverage scopes a column to log types, not to the whole solution - 2026-10-30
 
