@@ -168,3 +168,7 @@ export function accessRemoveMessage(outcome: ListenAccessRemoveOutcome): PickerM
       return { tone: "error", text: outcome.message };
   }
 }
+
+/** Shown when the hubs, names, choices or a newer read changed while the check ran. */
+export const STALE_CHECK_TEXT =
+  "What the check would create changed while it ran (a hub, a name, a choice, or a newer read). Nothing was written; check again.";

@@ -5888,7 +5888,12 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   consumer group's Remove row now names its hub. UNVERIFIED LIVE: that Azure
   returns systemData.createdAt on an Event Hubs authorization rule GET at
   2021-11-01 - if it does not, every app-created rule is not-proven and has to
-  be removed in the portal (safe direction).
+  be removed in the portal (safe direction). REVIEW ROUND 2: a check whose
+  inputs changed while its GETs were in flight (a hub resolving, a newer read)
+  used to land carrying the old arm key, so the confirm quoted the old target
+  and its button did nothing. The panel now drops such a result with a message
+  to check again, and arms only a plan whose key matches the inputs on screen;
+  DOM-pinned and mutation-checked.
 
 - **AZR-37** Persist when each onboarding source was last seen flowing, beyond the metrics lookback
   `AZR-F9` `story` `settled` `verified: pins`

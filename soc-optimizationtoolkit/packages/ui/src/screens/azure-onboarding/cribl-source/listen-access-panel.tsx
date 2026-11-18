@@ -22,7 +22,7 @@
  * prove them the app's.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { applyListenAccess, planListenAccess, plannedWrites } from "@soc/core";
 import type { ListenAccessApplyResult, ListenAccessPlan, ListenAccessTarget, NamespaceRef } from "@soc/core";
 import { InfoTip } from "../../../components/info-tip";
@@ -35,6 +35,7 @@ import {
   listenAccessPermissionMessage,
   nothingToCreateText,
   planItemLine,
+  STALE_CHECK_TEXT,
 } from "./listen-access-state";
 
 export interface ListenAccessPanelProps {
@@ -85,6 +86,10 @@ export function ListenAccessPanel({ namespace, hubs, consumerGroup, ruleName, re
     createGroups,
   };
   const key = listenAccessArmKey(target, readSeq);
+  // The key as of the latest render, so a check that lands after the inputs
+  // changed under it (hubs resolving, a newer read) is dropped, not armed.
+  const latestKey = useRef(key);
+  latestKey.current = key;
   // A change to anything the confirm names drops the plan outright: reverting
   // the change does not bring the old confirm back.
   useEffect(() => {
@@ -93,14 +98,21 @@ export function ListenAccessPanel({ namespace, hubs, consumerGroup, ruleName, re
 
   const busy = phase.kind === "planning" || phase.kind === "applying";
   const plan = phase.kind === "planned" ? phase.plan : null;
-  const armed = plan !== null && plannedWrites(plan).length > 0;
+  // Armed only for the plan made from the inputs on screen now.
+  const armed = phase.kind === "planned" && phase.key === key && plan !== null && plannedWrites(plan).length > 0;
 
   async function onCheck(): Promise<void> {
     setWiringError("");
     setPhase({ kind: "planning" });
+    const checkedKey = key;
     try {
       const next = await planListenAccess(ports.azure, target, ports.logger);
-      setPhase({ kind: "planned", key, plan: next });
+      if (latestKey.current !== checkedKey) {
+        setWiringError(STALE_CHECK_TEXT);
+        setPhase({ kind: "idle" });
+        return;
+      }
+      setPhase({ kind: "planned", key: checkedKey, plan: next });
     } catch (error) {
       setWiringError(`The check did not finish: ${errorText(error)}`);
       setPhase({ kind: "idle" });

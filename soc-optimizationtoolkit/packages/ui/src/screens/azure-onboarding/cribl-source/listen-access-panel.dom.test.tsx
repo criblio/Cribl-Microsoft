@@ -18,6 +18,7 @@ import { PortsProvider } from "../../../ports-context";
 import type { UiPorts } from "../../../ports-context";
 import { ListenAccessPanel } from "./listen-access-panel";
 import { ListenAccessRemovePanel } from "./listen-access-remove-panel";
+import { STALE_CHECK_TEXT } from "./listen-access-state";
 
 afterEach(cleanup);
 
@@ -101,6 +102,64 @@ describe("ListenAccessPanel", () => {
     rerender(1);
     expect(screen.queryByRole("button", { name: "Confirm: create in Azure" })).toBeNull();
     expect(azure.calls.filter((c) => c.method !== "GET")).toEqual([]);
+  });
+
+  /** GETs wait until release() so props can change while the check is in flight. */
+  class HeldAzure extends NamespaceAzure {
+    readonly waiting: Array<() => void> = [];
+    override async request(r: AzureManagementRequest): Promise<PortHttpResponse> {
+      if (r.method === "GET") await new Promise<void>((resolve) => this.waiting.push(resolve));
+      return super.request(r);
+    }
+    release(): void {
+      for (const resolve of this.waiting.splice(0)) resolve();
+    }
+  }
+
+  function mountHeld(azure: HeldAzure) {
+    const ports = { azure, logger: new FakeLogger(() => "t") } as unknown as UiPorts;
+    const view = (hubs: string[], seq: number) => (
+      <PortsProvider ports={ports} config={CONFIG}>
+        <ListenAccessPanel namespace={NS} hubs={hubs} consumerGroup="cribl" ruleName="cribl-listen" readSeq={seq} onCreated={vi.fn()} />
+      </PortsProvider>
+    );
+    const r = render(view(["hub-a"], 1));
+    return (hubs: string[], seq: number) => r.rerender(view(hubs, seq));
+  }
+
+  it("a hub that arrives while the check runs drops the result: no confirm, no write", async () => {
+    const azure = new HeldAzure();
+    const rerender = mountHeld(azure);
+    fireEvent.click(screen.getByRole("button", { name: "Check what to create" }));
+    await waitFor(() => expect(azure.waiting.length).toBe(1));
+    rerender(["hub-a", "hub-b"], 1);
+    azure.release();
+    await screen.findByText(STALE_CHECK_TEXT);
+    expect(screen.queryByRole("group", { name: "Confirm the Azure creates" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Confirm: create in Azure" })).toBeNull();
+    expect(azure.calls.map((c) => `${c.method} ${c.path}`)).toEqual([`GET ${CG}`]);
+  });
+
+  it("a newer read while the check runs drops the result: no confirm, no write", async () => {
+    const azure = new HeldAzure();
+    const rerender = mountHeld(azure);
+    fireEvent.click(screen.getByRole("button", { name: "Check what to create" }));
+    await waitFor(() => expect(azure.waiting.length).toBe(1));
+    rerender(["hub-a"], 2);
+    azure.release();
+    await screen.findByText(STALE_CHECK_TEXT);
+    expect(screen.queryByRole("group", { name: "Confirm the Azure creates" })).toBeNull();
+    expect(azure.calls.map((c) => c.method)).toEqual(["GET"]);
+  });
+
+  it("a check whose inputs did not change still arms (the stale guard is not always on)", async () => {
+    const azure = new HeldAzure();
+    mountHeld(azure);
+    fireEvent.click(screen.getByRole("button", { name: "Check what to create" }));
+    await waitFor(() => expect(azure.waiting.length).toBe(1));
+    azure.release();
+    await screen.findByRole("group", { name: "Confirm the Azure creates" });
+    expect(screen.queryByText(STALE_CHECK_TEXT)).toBeNull();
   });
 
   it("an existing consumer group is reused: no confirm, no write", async () => {
