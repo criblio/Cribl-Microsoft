@@ -765,6 +765,55 @@ describe("runTenantSessionBatch - tenant to tenant, one restore", () => {
     expect((await leaseIn(store))?.holder).toBe("tab-2");
   });
 
+  // Review round 3: one slow tenant let the lease expire, and every tenant
+  // after it was refused as "another tab" although no other tab existed.
+  it("re-takes its own expired lease before the next tenant and still reads it", async () => {
+    // now(): take at 1000; B's after-check at 2000; the renewal before C at
+    // 999_999, long past the 60 s TTL; C's after-check; the restore.
+    const { log, slot, store, deps } = batchSetup({ clock: [1000, 2000, 999_999, 1_000_500, 1_000_600] });
+    slot.azure.respondWith(...provenTwice(B), ...provenTwice(C));
+    const out = await runTenantSessionBatch(deps, async (session) => [
+      await session.runForTenant(TARGET, work(log, "pb")),
+      await session.runForTenant(THIRD, work(log, "pc")),
+    ]);
+    expect(out.value).toEqual([
+      { kind: "done", tenantId: B, value: "pb", restore: { kind: "deferred" } },
+      { kind: "done", tenantId: C, value: "pc", restore: { kind: "deferred" } },
+    ]);
+    expect(out.restore).toEqual({ kind: "restored" });
+    expect(log.slice(log.indexOf("work:pb") + 1)).toEqual([
+      "lease:take", // re-taken at 999_999
+      "owner:switching",
+      "install:pc",
+      `mint:${C}`,
+      "owner:pc",
+      `ports:${C}`,
+      "work:pc",
+      ...RESTORE_TAIL,
+    ]);
+    expect(await leaseIn(store)).toBeNull();
+  });
+
+  it("refuses the next tenant, naming the other tab, when another tab took the expired lease", async () => {
+    const { log, slot, store, deps } = batchSetup({ clock: [1000, 2000, 999_999] });
+    slot.azure.respondWith(...provenTwice(B));
+    const out = await runTenantSessionBatch(deps, async (session) => {
+      await session.runForTenant(TARGET, async () => 1);
+      await store.save(CREDENTIAL_LEASE_KEY, takenLease("tab-2", 990_000, 60_000));
+      return session.runForTenant(THIRD, async () => 1);
+    });
+    expect(out.value).toEqual({
+      kind: "unknown",
+      tenantId: C,
+      stage: "lease",
+      reason:
+        "Another tab of this app took the credential lease before Woodgrove was read, so it may be using the shared credential; it was not read.",
+      restore: { kind: "deferred" },
+    });
+    expect(log).not.toContain("install:pc");
+    expect((await leaseIn(store))?.holder).toBe("tab-2");
+  });
+
   it("leaves another tab's lease standing when it is taken after the last tenant, before the restore", async () => {
     const { log, slot, store, deps } = batchSetup();
     slot.azure.respondWith(...provenTwice(B));

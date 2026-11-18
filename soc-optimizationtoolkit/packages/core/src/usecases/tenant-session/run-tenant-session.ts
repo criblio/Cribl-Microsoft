@@ -330,22 +330,22 @@ export async function runTenantSessionBatch<R>(
   }
 
   /**
-   * Before every tenant after the first: the lease must still be this
-   * holder's and unexpired, and is renewed for the next tenant's scan. Null
-   * when renewed; otherwise why this tenant is not read.
+   * Before every tenant after the first: the lease is re-read and renewed for
+   * the next tenant's scan. Only another holder's unexpired lease stops the
+   * tenant. A lease that merely EXPIRED (a slow tenant before this one) and
+   * that nobody else took is taken again, the way restoreAtEnd does - this
+   * run's own proofs still guard its reads (review round 3). Null when
+   * renewed; otherwise why this tenant is not read.
    */
   async function renewLease(profile: TenantProfile): Promise<string | null> {
     const at = deps.now();
-    const lost = `The credential lease was no longer this tab's before ${label(profile)} was read, so another tab may be using the shared credential; it was not read.`;
-    if (at >= expiresAt) return lost;
-    const read = await documents.load(CREDENTIAL_LEASE_KEY);
-    if (read.kind === "unknown") {
-      return `The credential lease could not be re-read before ${label(profile)} was read (${read.reason}), so it was not read.`;
+    const verdict = leaseHeldByOther(await documents.load(CREDENTIAL_LEASE_KEY), deps.holderId, at);
+    if (verdict.held === "unknown") {
+      return `The credential lease could not be re-read before ${label(profile)} was read (${verdict.reason}), so it was not read.`;
     }
-    const lease = read.kind === "value" ? decodeLease(read.value) : null;
-    if (lease === null || lease.holder !== deps.holderId) {
-      if (lease !== null) leaseLost = true;
-      return lost;
+    if (verdict.held) {
+      leaseLost = true;
+      return `Another tab of this app took the credential lease before ${label(profile)} was read, so it may be using the shared credential; it was not read.`;
     }
     try {
       await documents.save(CREDENTIAL_LEASE_KEY, takenLease(deps.holderId, at, ttl));

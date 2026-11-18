@@ -411,7 +411,12 @@ describe("TenantGapScreen", () => {
     const second = mount({ cache, azure });
     const readAll = screen.getByRole("button", { name: "Read all tenants" }) as HTMLButtonElement;
     expect(readAll.disabled).toBe(true);
-    expect(screen.getByText(/earlier read is still finishing/i)).toBeTruthy();
+    expect(screen.getByText(/earlier read is still finishing/i).textContent).toBe(
+      "An earlier read is still finishing: leaving this screen cancelled it, and it stops once its current request " +
+        "returns and the active connection's credential is back. Reads can start again once it has.",
+    );
+    // Leaving cancelled it: no Cancel is offered for a run this visit does not own.
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     gate.resolve();
     await waitFor(() => expect(readAll.disabled).toBe(false));
     expect(first.session?.runs).toEqual(["pa"]);
@@ -529,6 +534,15 @@ describe("TenantReadInFlightNotice", () => {
       cache.track(new Promise<void>((r) => (finish = r)));
     });
     expect(screen.getByRole("status").textContent).toBe(TENANT_READ_IN_FLIGHT);
+    // Review round 3: off Tenant Logging Gaps the run is already cancelled, so
+    // the notice says leaving cancels it rather than sending the operator back
+    // to a Cancel button the screen no longer shows.
+    expect(TENANT_READ_IN_FLIGHT).toBe(
+      "A tenant gap read is running or finishing. From the first tenant it reads through Azure until it ends, it holds " +
+        "the app's Azure credential slot, and Azure reads on every screen of this tab wait. Cancel on Tenant Logging " +
+        "Gaps stops it, and leaving that screen cancels it too; the slot frees once its current request returns and " +
+        "the active connection's credential is back.",
+    );
     await act(async () => {
       finish();
     });

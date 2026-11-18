@@ -1488,6 +1488,16 @@ overlap turns them unknown, not wrong, and their own restore follows. The
 shell notice now says the slot is held from the first tenant read through
 Azure, not from the click.
 
+AZR-90 review round 3 (2026-11-18): the renewal before each tenant no longer
+refuses on the local expiry alone. It re-reads the lease and refuses only when
+ANOTHER tab holds it unexpired (the reason now says so); a lease that merely
+expired after a slow tenant, and that nobody took, is taken again and the next
+tenant is read, as the pre-restore check already did. Before this, one tenant
+running past the TTL turned every later tenant unknown with a false "another
+tab" reason. The shell notice and the "earlier read" line now say that leaving
+Tenant Logging Gaps cancels the read (the screen aborts it on unmount), instead
+of sending the operator back to a Cancel button that is no longer there.
+
 AZR-91 DONE 2026-11-17: the grid's indicator tips are ONE tab stop (a roving
 tabindex). Arrow keys move between indicators (clamped at the edges), Home and
 End to the row's ends, Ctrl with Home or End to the grid's; Enter or Space
@@ -1496,6 +1506,10 @@ well as tenant, source and side, and every tip is described by a hidden line
 saying how to move. The tenant column (status tip, Read button) stays in the
 ordinary tab order, so the tab stops in the table body are one Read button per
 tenant, its status tip once read, and one for the whole grid.
+
+The hidden keyboard hint describes the focus-mode model; screen readers in
+browse mode keep the arrow keys, because the table is not a composite widget.
+Unverified with a screen reader; AZR-126 carries it.
 
 ## 7. Verification gaps
 

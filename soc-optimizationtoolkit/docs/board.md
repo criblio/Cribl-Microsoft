@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**100 in the backlog, 39 in progress, 228 done.**
+**102 in the backlog, 39 in progress, 228 done.**
 
 ## By menu item
 
@@ -38,11 +38,11 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Event Hub Discovery | 0 | 1 | 0 |
 | Azure Native Source Onboarding | 30 | 53 | 8 |
 | Azure Logging Map | 3 | 2 | 1 |
-| Tenant Logging Gaps | 0 | 3 | 0 |
+| Tenant Logging Gaps | 1 | 3 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 17 | 18 | 6 |
+| Cross-cutting | 18 | 18 | 6 |
 
-Open work totals 139.
+Open work totals 141.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 66% (66/100)
+### `AZR` Azure native source onboarding - 65% (66/102)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -65,7 +65,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
 | `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 40/57 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
-| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 22/24 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 22/26 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-125*, AZR-126*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -2417,7 +2417,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (36)
+## Backlog - later (38)
 
 Settled, gated on something above.
 
@@ -2921,6 +2921,49 @@ Settled, gated on something above.
   being retired by Microsoft in favour of VNet flow logs - decide whether NSG
   gets automation at all. Later because the permission bugs [[AZR-81]] (Event
   Grid provider registration, NetworkWatcherRG) block it.
+
+- **AZR-125** The least-privilege KV audit lists omit azure-onboarding-flow-last-seen, azure-credential-lease and azure-credential-owner
+  `AZR-F10` `bug` `settled`
+  Not now because: No permission is wrong or missing: the grant is the app's
+  own KV namespace, which the platform gives every App user and which cannot
+  be narrowed per key, so the omission misleads a reader of the inventory but
+  asks for nothing extra and refuses nothing. The fix also needs a decision on
+  amending a dated audit, which should not be made inside a review round.
+  Found in the AZR-37/AZR-90 review round 3 (2026-11-18). The cribl.kv.read
+  and cribl.kv.write operations in
+  packages/core/src/domain/least-privilege/operations.ts name the app KV keys
+  read and written, but not azure-onboarding-flow-last-seen (AZR-37 loads it
+  and PUTs it from the background flow poll) nor azure-credential-lease and
+  azure-credential-owner (the tenant session's; that gap predates AZR-37).
+  Those audit strings are not free text: operations.test.ts matches each
+  against a 'method path' row of
+  docs/audit/2026-11-03-least-privilege-audit.json, so adding a key means
+  amending that dated audit record or adding a later audit row, a decision
+  about how the audit is kept rather than a one-line edit. FIX: add the three
+  keys through whichever route is chosen (a dated addendum row is the honest
+  one) and pin the KV key constants (FLOW_LAST_SEEN_KEY, CREDENTIAL_LEASE_KEY,
+  CREDENTIAL_OWNER_KEY) against both lists so a new key cannot be missed
+  again.
+
+- **AZR-126** Tenant gap grid: the keyboard hint promises arrow keys a screen reader in browse mode keeps
+  `AZR-F10` `bug` `settled`
+  Not now because: Nothing becomes unreachable: in browse mode a screen reader
+  user can still walk the table with the virtual cursor and activate every
+  tip, and each tip's name carries tenant, source, side and state. The cost is
+  one misleading sentence, and the right fix depends on a screen-reader
+  measurement this environment cannot make; guessing the roles risks a worse
+  model than the table semantics there now.
+  Found in the AZR-91 review round 3 (2026-11-18). Every grid tip is described
+  (aria-describedby tgap-grid-keys, tenant-gap-screen.tsx GRID_HINT) by 'Arrow
+  keys move between indicators...'. The table is not a composite widget (no
+  role=grid or toolbar), so NVDA or JAWS in browse mode is expected to keep
+  the arrow keys for the virtual cursor and the roving handler never sees
+  them; the hint is then wrong for exactly the users it is written for. Not
+  measured: nobody has run a screen reader over it. FIX: run NVDA (browse and
+  focus mode) over the grid first; then either give the indicator region
+  composite semantics (role=grid, rows, gridcells) so screen readers switch to
+  focus mode, or word the hint so it holds in both modes. Pin the chosen roles
+  or wording.
 
 - **DBT-305** feature-catalog.md: rows after the Setup-path gating paragraph render outside their table, and the paragraph still says byo is RG-scoped Contributor only
   `DBT-F1` `bug` `settled`
@@ -8695,7 +8738,13 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   never renewed or released (the restore still runs, deliberately: a slot left
   on a tenant no tab is reading would serve it to the next ordinary batch,
   while the other tab's proven runs only turn unknown). Pinned with mutation
-  checks; not verified live.
+  checks; not verified live. Review round 3 (2026-11-18): the renewal before
+  each tenant re-reads the lease instead of refusing on the local expiry, so a
+  lease that only expired after a slow tenant (nobody else took it) is taken
+  again and the next tenant is still read; only another tab's unexpired lease
+  refuses, with a reason that says so. The shell notice and the earlier-read
+  line now say leaving Tenant Logging Gaps cancels the read. Pinned (two batch
+  pins, one screen text pin) and mutation-checked; not verified live.
 
 - **AZR-91** Tenant gap grid: one tab stop with arrow-key navigation between cells
   `AZR-F10` `story` `settled` `verified: pins`
@@ -8714,7 +8763,9 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   normal tab order. Pinned in tenant-gap-screen.dom.test.tsx (5 pins;
   mutation-checked: every tip tabbable, and a wrong ArrowDown, both fail
   them). NOT verified live: real browser focus and a screen reader in Live
-  Preview.
+  Preview. Review round 3 (2026-11-18): the hidden hint's arrow-key model may
+  not hold for screen readers in browse mode (the table is not a composite
+  widget); carried by AZR-126, unverified.
 
 - **AZR-92** While one tab reads a tenant through the shared credential slot, other tabs' ordinary Azure reads go out as that tenant
   `AZR-F10` `bug` `settled` `verified: pins`

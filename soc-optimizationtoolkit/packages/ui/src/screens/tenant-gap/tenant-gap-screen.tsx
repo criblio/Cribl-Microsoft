@@ -109,11 +109,17 @@ function stamp(ms: number): string {
 export const RESTORE_FAILED =
   "The active connection's credential could not be put back after reading. Save and connect on Setup before using other screens.";
 
-/** The shell-wide notice while a Read all holds the Azure slot (AZR-90). */
+/**
+ * The shell-wide notice while a Read all holds the Azure slot (AZR-90). It
+ * shows on other screens only after the operator left Tenant Logging Gaps,
+ * and leaving already cancelled the run (the unmount abort), so it must not
+ * send them back to a Cancel button that is no longer there (review round 3).
+ */
 export const TENANT_READ_IN_FLIGHT =
-  "A tenant gap read is running. From the first tenant it reads through Azure until it ends, it holds the app's " +
-  "Azure credential slot, and Azure reads on this and other screens of this tab wait; cancel it on Tenant Logging " +
-  "Gaps to free the slot sooner.";
+  "A tenant gap read is running or finishing. From the first tenant it reads through Azure until it ends, it holds " +
+  "the app's Azure credential slot, and Azure reads on every screen of this tab wait. Cancel on Tenant Logging Gaps " +
+  "stops it, and leaving that screen cancels it too; the slot frees once its current request returns and the active " +
+  "connection's credential is back.";
 
 /**
  * The shell's notice while a Read all is in flight, on whatever screen is
@@ -129,7 +135,9 @@ export function TenantReadInFlightNotice({ cache }: { readonly cache: TenantGapC
   ) : null;
 }
 
-const EARLIER_RUN ="An earlier read is still finishing. Reads can start again once it has.";
+const EARLIER_RUN =
+  "An earlier read is still finishing: leaving this screen cancelled it, and it stops once its current request " +
+  "returns and the active connection's credential is back. Reads can start again once it has.";
 
 /** Id of the hidden line that tells a keyboard user how to move between the grid's tips. */
 const GRID_HINT_ID = "tgap-grid-keys";
