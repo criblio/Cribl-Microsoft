@@ -2598,13 +2598,14 @@
       "feature": "AZR-F9",
       "title": "Persist when each onboarding source was last seen flowing, beyond the metrics lookback",
       "type": "story",
-      "status": "in-progress",
+      "status": "done",
       "priority": "later",
       "settled": "settled",
       "dependsOn": [
         "AZR-33"
       ],
-      "detail": "FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-33 reads Cribl's own metrics for each lane: a 300s window for 'flowing' / 'idle' and a cumulative -24h lookback for 'never seen in the last 24 hours'. Anything older than the lookback is invisible, so a source that last delivered three days ago reads 'never seen in 24h', true but less useful than 'last seen 3 days ago'. This card persists a lastSeen per input (KV, written only from a MEASURED non-zero row, never from an unknown) and shows it beside the lookback verdict, labelled as remembered rather than measured."
+      "detail": "FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-33 reads Cribl's own metrics for each lane: a 300s window for 'flowing' / 'idle' and a cumulative -24h lookback for 'never seen in the last 24 hours'. Anything older than the lookback is invisible, so a source that last delivered three days ago reads 'never seen in 24h', true but less useful than 'last seen 3 days ago'. This card persists a lastSeen per input (KV, written only from a MEASURED non-zero row, never from an unknown) and shows it beside the lookback verdict, labelled as remembered rather than measured. DONE 2026-11-17: core domain/onboarding-flow/last-seen.ts (decode/encode/merge/record/describe) plus useLiveFlow persistence into its own app KV document azure-onboarding-flow-last-seen, keyed by input - not the progress document, which the screen saves whole and a poll write would race. Written only from a measured non-zero window row (never the lookback, a zero row or an error), read-merge-write keeping the later time per input, at most once per input per 10 minutes, never over an unreadable document; read only when Watch turns on (mount loads unchanged). The hop and section (i) show 'Last seen flowing <time> (remembered ..., not measured now)', 'Never seen flowing by this app', or unknown with the reason. Pinned in last-seen.test.ts, use-live-flow.dom.test.tsx and onboarding-dataflow.dom.test.tsx; mutation-checked (lookback writing, and unknown read as never, both fail pins). NOT verified live: the KV write and the popover in Live Preview.",
+      "verified": "pins"
     },
     {
       "id": "AZR-38",

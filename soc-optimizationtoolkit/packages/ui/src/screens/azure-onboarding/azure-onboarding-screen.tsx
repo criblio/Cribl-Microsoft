@@ -272,7 +272,7 @@ const HOWTO_SECTION_TITLES = {
 } as const;
 
 const DATAFLOW_TIP =
-  "One lane per chosen source, from the Azure log emitter through the Event Hub or storage account to the Cribl source, route and destination. Read it from the Azure side, the Cribl side or end to end. A hop animates only when Cribl's metrics measured events arriving.";
+  "One lane per chosen source, from the Azure log emitter through the Event Hub or storage account to the Cribl source, route and destination. Read it from the Azure side, the Cribl side or end to end. A hop animates only when Cribl's metrics measured events arriving. While you watch for data, each hop's (i) also says when this app last saw that source flowing, remembered from its earlier readings.";
 const HOWTO_TIP =
   "For each source chosen in How-to mode: enter your names and ids, then follow each step's instructions and tick it when done. Ticks are saved as you make them.";
 const VALIDATE_TIP =
@@ -1156,6 +1156,8 @@ export function AzureOnboardingScreen({
     groupId: effectiveGroup === "" ? null : effectiveGroup,
     lanes: liveLanes,
     watching,
+    ...(store !== undefined ? { store } : {}),
+    ...(ports.logger !== undefined ? { logger: ports.logger } : {}),
   });
   const watchBlockedReason =
     groupChoice.blockedReason !== null

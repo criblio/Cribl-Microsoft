@@ -3402,6 +3402,21 @@ records unrolled - the route is only read today), AZR-36 (create a Listen rule
 and a dedicated consumer group), AZR-37 (a persisted last-seen beyond the
 24-hour lookback) and AZR-38 (one definition of the Defender item id).
 
+AZR-37 DONE 2026-11-17. The time a source was last seen flowing is remembered
+in its own app KV document, `azure-onboarding-flow-last-seen`, keyed by Cribl
+input (`type:id`) - NOT on the progress document the card's plan suggested: the
+screen saves that document whole, so a write from the flow poll would race the
+operator's own saves and could undo one. Only a measured non-zero WINDOW row
+writes (the lookback is cumulative and carries no time; zero, refused and
+unreadable answers never write); the time is the UI clock when that answer
+arrived. Writes are read-merge-write (per input, the later time), at most once
+per input per ten minutes, and never over a document that could not be read.
+The document is read only when Watch for data turns on, so mounting the screen
+still makes its three loads. Each hop's (i) and section (i) shows "Last seen
+flowing <time> (remembered ... not measured now)", "Never seen flowing by this
+app", or unknown with the reason; an unreadable document is never shown as
+never seen. Not verified live.
+
 **What is still open from earlier decisions.** AZR-S2 (section 6h) asked for an
 export fallback when no Cribl is connected and a `source.manage` gate; neither
 was built. AZR-24, persisting the Event Hub picker's choice, stays open: the

@@ -29,6 +29,21 @@ export {
   unmatchedInputLabels,
   windowSawInput,
 } from "./flow-state";
+// AZR-37: when each input was last seen flowing, remembered past the lookback.
+export {
+  EMPTY_FLOW_LAST_SEEN,
+  FLOW_LAST_SEEN_KEY,
+  FLOW_LAST_SEEN_MIN_WRITE_INTERVAL_MS,
+  describeLastSeen,
+  encodeFlowLastSeen,
+  flowInputKey,
+  lastSeenFor,
+  mergeFlowLastSeen,
+  readFlowLastSeen,
+  recordFlowSeen,
+} from "./last-seen";
+export type { FlowLastSeen, FlowLastSeenRead, LastSeenView } from "./last-seen";
+
 export type {
   ClassifyLaneFlowInput,
   FlowAnswer,

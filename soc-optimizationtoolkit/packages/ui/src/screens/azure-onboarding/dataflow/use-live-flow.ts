@@ -26,24 +26,43 @@
  * A lane whose source was created in another worker group than the one being
  * watched is "not measured: waiting", with the reason in its detail: the one
  * query only covers the watched group.
+ *
+ * LAST SEEN, REMEMBERED (AZR-37). With a `store`, turning Watch on reads ONE
+ * app KV document (FLOW_LAST_SEEN_KEY) - never on mount - and a window answer
+ * that MEASURED an input above zero records the time it arrived. A write is
+ * due at most once per input per FLOW_LAST_SEEN_MIN_WRITE_INTERVAL_MS, and is
+ * a read-merge-write (per input, the later time) so another tab's times are
+ * kept. A document that could not be read is never written over and never
+ * shown as "never seen": its lanes say unknown.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  FLOW_LAST_SEEN_KEY,
   FLOW_LOOKBACK,
   FLOW_WINDOW_SECONDS,
   classifyLaneFlow,
   describeFlowRequest,
+  encodeFlowLastSeen,
+  lastSeenFor,
+  mergeFlowLastSeen,
   nextFlowQuery,
+  readFlowLastSeen,
   readSourceFlow,
+  recordFlowSeen,
   unmatchedInputLabels,
   windowSawInput,
   type CriblClient,
   type FlowAnswer,
   type FlowInput,
+  type FlowLastSeen,
+  type FlowLastSeenRead,
   type FlowQueryKind,
+  type KvDocumentStore,
   type LaneFlowState,
+  type LastSeenView,
+  type Logger,
   type LookbackStatus,
   type OnboardingProgress,
   type OnboardingSourceId,
@@ -86,6 +105,9 @@ export interface UseLiveFlowOptions {
   readonly watching: boolean;
   /** Clock override for tests; defaults to Date.now. */
   readonly now?: () => number;
+  /** The app KV store, for the remembered last-seen times. Without it, every lane's last seen is unknown. */
+  readonly store?: KvDocumentStore;
+  readonly logger?: Logger;
 }
 
 export interface LiveFlowRequest {
@@ -110,6 +132,8 @@ export interface LiveFlow {
   readonly requests: { readonly window: LiveFlowRequest | null; readonly lookback: LiveFlowRequest | null };
   /** Input labels in the last answer that matched no lane (shown in the (i)). */
   readonly unmatchedLabels: readonly string[];
+  /** When each lane was last seen flowing, as remembered (AZR-37); null while not watching. */
+  readonly lastSeen: Readonly<Partial<Record<OnboardingSourceId, LastSeenView>>> | null;
 }
 
 interface Readings {
@@ -145,10 +169,65 @@ export function formatAsOf(ms: number): string {
   return new Date(ms).toLocaleTimeString();
 }
 
-export function useLiveFlow({ cribl, groupId, lanes, watching, now = Date.now }: UseLiveFlowOptions): LiveFlow {
+/** A remembered last-seen time: date and time, since it may be days old. */
+export function formatLastSeen(ms: number): string {
+  const d = new Date(ms);
+  return `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+}
+
+export function useLiveFlow({ cribl, groupId, lanes, watching, now = Date.now, store, logger }: UseLiveFlowOptions): LiveFlow {
   const visible = useDocumentVisible();
   const group = groupId ?? "";
   const [readings, setReadings] = useState<Readings>(NO_READINGS);
+
+  // AZR-37: the remembered last-seen times. Null until Watch is first on.
+  const [lastSeenRead, setLastSeenRead] = useState<FlowLastSeenRead | null>(null);
+  const lastSeenRef = useRef<FlowLastSeenRead | null>(null);
+  const lastSeenLoad = useRef<Promise<void> | null>(null);
+  /** What the store held at the last read or write: the write throttle's reference. */
+  const persistedRef = useRef<FlowLastSeen | null>(null);
+  const setLastSeen = useCallback((next: FlowLastSeenRead) => {
+    lastSeenRef.current = next;
+    setLastSeenRead(next);
+  }, []);
+  useEffect(() => {
+    if (!watching || store === undefined || lastSeenLoad.current !== null) return;
+    lastSeenLoad.current = store
+      .load(FLOW_LAST_SEEN_KEY)
+      .then((load) => readFlowLastSeen(load))
+      .catch((err: unknown): FlowLastSeenRead => ({ kind: "unknown", reason: err instanceof Error ? err.message : String(err) }))
+      .then((read) => {
+        if (!mounted.current) return;
+        if (read.kind === "read") persistedRef.current = read.doc;
+        // Times recorded while the load was in flight are kept.
+        const held = lastSeenRef.current;
+        setLastSeen(read.kind === "read" && held?.kind === "read" ? { kind: "read", doc: mergeFlowLastSeen(read.doc, held.doc) } : read);
+      });
+  }, [watching, store, setLastSeen]);
+
+  /** Read-merge-write, so another tab's later times survive; never over an unreadable document. */
+  const persistLastSeen = useCallback(
+    async (doc: FlowLastSeen) => {
+      if (store === undefined) return;
+      try {
+        const fresh = readFlowLastSeen(await store.load(FLOW_LAST_SEEN_KEY));
+        if (fresh.kind === "unknown") {
+          logger?.warn("live-flow: last-seen document unreadable; not written", { reason: fresh.reason });
+          return;
+        }
+        const merged = mergeFlowLastSeen(fresh.doc, doc);
+        await store.save(FLOW_LAST_SEEN_KEY, encodeFlowLastSeen(merged));
+        persistedRef.current = merged;
+        const held = lastSeenRef.current;
+        if (mounted.current && held?.kind === "read") setLastSeen({ kind: "read", doc: mergeFlowLastSeen(held.doc, merged) });
+      } catch (err) {
+        logger?.warn("live-flow: last-seen time not saved", { error: err instanceof Error ? err.message : String(err) });
+      }
+    },
+    [store, logger, setLastSeen],
+  );
+  const persistRef = useRef(persistLastSeen);
+  persistRef.current = persistLastSeen;
 
   // The run reads the latest values through refs, so the registry keeps one
   // stable registration while props change.
@@ -207,8 +286,21 @@ export function useLiveFlow({ cribl, groupId, lanes, watching, now = Date.now }:
         : { ...prev, lookbackAnswer: answer, lookbackStatus: "failed", lastQuery: kind, asOf: at };
     } else {
       const seen = new Set(prev.seen);
-      for (const lane of current) if (windowSawInput(answer, lane.input)) seen.add(inputKey(lane.input));
+      const flowing: FlowInput[] = [];
+      for (const lane of current) {
+        if (!windowSawInput(answer, lane.input)) continue;
+        seen.add(inputKey(lane.input));
+        flowing.push(lane.input);
+      }
       next = { ...prev, windowAnswer: answer, seen, lastQuery: kind, asOf: at };
+      // AZR-37: only a measured, non-zero window row is remembered, and only
+      // into a document that was read (an unknown one is never overwritten).
+      const held = lastSeenRef.current;
+      if (flowing.length > 0 && held?.kind === "read") {
+        const recorded = recordFlowSeen(held.doc, flowing, at, persistedRef.current ?? held.doc);
+        setLastSeen({ kind: "read", doc: recorded.doc });
+        if (recorded.due) void persistRef.current(recorded.doc);
+      }
     }
     readingsRef.current = next;
     setReadings(next);
@@ -248,6 +340,18 @@ export function useLiveFlow({ cribl, groupId, lanes, watching, now = Date.now }:
     [group],
   );
 
+  const lastSeen = useMemo(() => {
+    if (!watching) return null;
+    const out: Partial<Record<OnboardingSourceId, LastSeenView>> = {};
+    for (const lane of lanes) {
+      out[lane.sourceId] =
+        store === undefined
+          ? { kind: "unknown", reason: "this build has no app storage to remember it in" }
+          : lastSeenFor(lastSeenRead, lane.input);
+    }
+    return out;
+  }, [watching, lanes, store, lastSeenRead]);
+
   const unmatchedLabels = useMemo(() => {
     const last = readings.lastQuery === "lookback" ? readings.lookbackAnswer : readings.windowAnswer;
     return last === null ? [] : unmatchedInputLabels(last, lanes.map((l) => l.input));
@@ -263,5 +367,6 @@ export function useLiveFlow({ cribl, groupId, lanes, watching, now = Date.now }:
     lookback: FLOW_LOOKBACK,
     requests,
     unmatchedLabels,
+    lastSeen,
   };
 }

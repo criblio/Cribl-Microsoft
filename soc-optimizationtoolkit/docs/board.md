@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**100 in the backlog, 40 in progress, 227 done.**
+**100 in the backlog, 39 in progress, 228 done.**
 
 ## By menu item
 
@@ -36,13 +36,13 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 10 | 5 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 31 | 52 | 8 |
+| Azure Native Source Onboarding | 30 | 53 | 8 |
 | Azure Logging Map | 3 | 2 | 1 |
 | Tenant Logging Gaps | 0 | 3 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 140.
+Open work totals 139.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 65% (65/100)
+### `AZR` Azure native source onboarding - 66% (66/100)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 1/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 39/57 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 40/57 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 22/24 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (40)
+## In progress (39)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1164,17 +1164,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   source. Datasets use server defaults (no retention or format set); no
   Pause/Remove exists yet for the three objects (they are recorded in progress
   so a remove can prove ownership).
-
-- **AZR-37** Persist when each onboarding source was last seen flowing, beyond the metrics lookback
-  `AZR-F9` `story` `settled`
-  FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-33 reads Cribl's
-  own metrics for each lane: a 300s window for 'flowing' / 'idle' and a
-  cumulative -24h lookback for 'never seen in the last 24 hours'. Anything
-  older than the lookback is invisible, so a source that last delivered three
-  days ago reads 'never seen in 24h', true but less useful than 'last seen 3
-  days ago'. This card persists a lastSeen per input (KV, written only from a
-  MEASURED non-zero row, never from an unknown) and shows it beside the
-  lookback verdict, labelled as remembered rather than measured.
 
 - **AZR-39** Validate the How-to steps that have no check kind yet
   `AZR-F9` `story` `settled` `blocked by AZR-32`
@@ -2948,7 +2937,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (227)
+## Done (228)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5434,6 +5423,31 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   unit; each broke a pin. Live check outstanding: None. The task forbids live
   Azure or Cribl calls. The change is pure wording, built from verdicts, and
   is covered by pins; it was not confirmed in Cribl Live Preview.
+
+- **AZR-37** Persist when each onboarding source was last seen flowing, beyond the metrics lookback
+  `AZR-F9` `story` `settled` `verified: pins`
+  FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-33 reads Cribl's
+  own metrics for each lane: a 300s window for 'flowing' / 'idle' and a
+  cumulative -24h lookback for 'never seen in the last 24 hours'. Anything
+  older than the lookback is invisible, so a source that last delivered three
+  days ago reads 'never seen in 24h', true but less useful than 'last seen 3
+  days ago'. This card persists a lastSeen per input (KV, written only from a
+  MEASURED non-zero row, never from an unknown) and shows it beside the
+  lookback verdict, labelled as remembered rather than measured. DONE
+  2026-11-17: core domain/onboarding-flow/last-seen.ts
+  (decode/encode/merge/record/describe) plus useLiveFlow persistence into its
+  own app KV document azure-onboarding-flow-last-seen, keyed by input - not
+  the progress document, which the screen saves whole and a poll write would
+  race. Written only from a measured non-zero window row (never the lookback,
+  a zero row or an error), read-merge-write keeping the later time per input,
+  at most once per input per 10 minutes, never over an unreadable document;
+  read only when Watch turns on (mount loads unchanged). The hop and section
+  (i) show 'Last seen flowing <time> (remembered ..., not measured now)',
+  'Never seen flowing by this app', or unknown with the reason. Pinned in
+  last-seen.test.ts, use-live-flow.dom.test.tsx and
+  onboarding-dataflow.dom.test.tsx; mutation-checked (lookback writing, and
+  unknown read as never, both fail pins). NOT verified live: the KV write and
+  the popover in Live Preview.
 
 - **AZR-38** One definition of the Defender coverage item id
   `AZR-F9` `story` `settled` `verified: pins`

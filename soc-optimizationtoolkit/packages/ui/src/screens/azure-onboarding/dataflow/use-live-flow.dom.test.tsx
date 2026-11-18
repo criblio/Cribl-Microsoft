@@ -12,6 +12,9 @@ import { act, cleanup, render } from "@testing-library/react";
 import { useEffect } from "react";
 
 import {
+  FLOW_LAST_SEEN_KEY,
+  FLOW_LAST_SEEN_MIN_WRITE_INTERVAL_MS,
+  FakeKvDocumentStore,
   emptyProgress,
   withCriblSource,
   type CriblClient,
@@ -303,6 +306,123 @@ describe("useLiveFlow - runs", () => {
     await pending;
     expect(cap.live).toBe(last);
     expect(err).not.toHaveBeenCalled();
+  });
+});
+
+// AZR-37: the remembered last-seen time is written only from a measured,
+// non-zero window row, never over a document that could not be read, and an
+// unreadable document is unknown - never "never seen".
+describe("useLiveFlow - last seen, remembered", () => {
+  const KEY = "eventhub:azure_onb_eh_ns_hub";
+
+  function setupWithStore(client: CriblClient, store: FakeKvDocumentStore, clock: { t: number }) {
+    const cap: Captured = { polls: [], live: null };
+    function WithStore({ watching }: { watching: boolean }) {
+      const live = useLiveFlow({ cribl: client, groupId: "g1", lanes: LANES, watching, now: () => clock.t, store });
+      cap.live = live;
+      return null;
+    }
+    const tree = (w: boolean) => (
+      <PollRegistryProvider duplicates="throw">
+        <Probe cap={cap} />
+        <WithStore watching={w} />
+      </PollRegistryProvider>
+    );
+    const view = render(tree(false));
+    const watch = async () => {
+      await act(async () => {
+        view.rerender(tree(true));
+      });
+    };
+    return { cap, watch };
+  }
+  const lastSeenSaves = (store: FakeKvDocumentStore) => store.saves.filter((s) => s.key === FLOW_LAST_SEEN_KEY);
+  const savedTimes = (store: FakeKvDocumentStore) =>
+    (store.peek(FLOW_LAST_SEEN_KEY) as { byInput?: Record<string, number> } | undefined)?.byInput;
+
+  it("reads nothing until Watch is on, then reads the document once", async () => {
+    const store = new FakeKvDocumentStore();
+    const { client } = fakeCribl(() => rows(0));
+    const { cap, watch } = setupWithStore(client, store, { t: 1_000 });
+    expect(store.loads).toEqual([]);
+    expect(cap.live?.lastSeen).toBeNull();
+    await watch();
+    await runOnce(cap);
+    expect(store.loads.filter((k) => k === FLOW_LAST_SEEN_KEY)).toEqual([FLOW_LAST_SEEN_KEY]);
+    expect(cap.live?.lastSeen).toEqual({ entraId: { kind: "never" } });
+  });
+
+  it("writes the time only from a measured non-zero WINDOW row - never from the lookback or a zero row", async () => {
+    const store = new FakeKvDocumentStore();
+    let n = 7;
+    const { client } = fakeCribl(() => rows(n));
+    const clock = { t: 5_000 };
+    const { cap, watch } = setupWithStore(client, store, clock);
+    await watch();
+    await runOnce(cap); // the lookback: 7 events in 24h, but no time
+    expect(lastSeenSaves(store)).toEqual([]);
+    n = 0;
+    await runOnce(cap); // a window with a zero row
+    expect(lastSeenSaves(store)).toEqual([]);
+    expect(cap.live?.lastSeen).toEqual({ entraId: { kind: "never" } });
+    n = 3;
+    clock.t = 9_000;
+    await runOnce(cap); // a window that measured events
+    await act(async () => {});
+    expect(lastSeenSaves(store)).toHaveLength(1);
+    expect(savedTimes(store)).toEqual({ [KEY]: 9_000 });
+    expect(cap.live?.lastSeen).toEqual({ entraId: { kind: "seen", at: 9_000 } });
+  });
+
+  it("writes at most once per input per interval, while still showing the newest time", async () => {
+    const store = new FakeKvDocumentStore();
+    const { client } = fakeCribl(() => rows(2));
+    const clock = { t: 1_000 };
+    const { cap, watch } = setupWithStore(client, store, clock);
+    await watch();
+    await runOnce(cap); // lookback
+    await runOnce(cap); // window at 1s
+    await act(async () => {});
+    clock.t = 61_000;
+    await runOnce(cap); // a minute later: shown, not written
+    await act(async () => {});
+    expect(lastSeenSaves(store)).toHaveLength(1);
+    expect(cap.live?.lastSeen).toEqual({ entraId: { kind: "seen", at: 61_000 } });
+    clock.t = 1_000 + FLOW_LAST_SEEN_MIN_WRITE_INTERVAL_MS;
+    await runOnce(cap);
+    await act(async () => {});
+    expect(lastSeenSaves(store)).toHaveLength(2);
+    expect(savedTimes(store)).toEqual({ [KEY]: 1_000 + FLOW_LAST_SEEN_MIN_WRITE_INTERVAL_MS });
+  });
+
+  it("keeps another tab's later time and other inputs when it writes", async () => {
+    const store = new FakeKvDocumentStore({
+      [FLOW_LAST_SEEN_KEY]: { kind: "soc.flow-last-seen", version: 1, byInput: { "eventhub:other": 50 } },
+    });
+    const { client } = fakeCribl(() => rows(2));
+    const { cap, watch } = setupWithStore(client, store, { t: 4_000 });
+    await watch();
+    await runOnce(cap);
+    // Another tab records a LATER time for this input before this one writes.
+    await store.save(FLOW_LAST_SEEN_KEY, { kind: "soc.flow-last-seen", version: 1, byInput: { "eventhub:other": 50, [KEY]: 8_000 } });
+    await runOnce(cap);
+    await act(async () => {});
+    expect(savedTimes(store)).toEqual({ "eventhub:other": 50, [KEY]: 8_000 });
+  });
+
+  it("an unreadable document is unknown, never 'never seen', and is never written over", async () => {
+    const store = new FakeKvDocumentStore();
+    store.scriptLoad(FLOW_LAST_SEEN_KEY, { kind: "unknown", reason: "HTTP 503", status: 503 });
+    const { client } = fakeCribl(() => rows(4));
+    const { cap, watch } = setupWithStore(client, store, { t: 2_000 });
+    await watch();
+    await runOnce(cap);
+    await runOnce(cap);
+    await act(async () => {});
+    expect(lastSeenSaves(store)).toEqual([]);
+    expect(cap.live?.lastSeen).toEqual({
+      entraId: { kind: "unknown", reason: "the remembered times could not be read (HTTP 503)" },
+    });
   });
 });
 
