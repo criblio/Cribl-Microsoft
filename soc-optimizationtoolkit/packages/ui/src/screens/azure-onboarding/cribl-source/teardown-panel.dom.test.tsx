@@ -44,6 +44,7 @@ function readyRemove(removeDataset: boolean): ReadyTeardown {
     routeWrite: { tableId: "default", routes: [], diff: [] },
     scope: { alreadyDirty: [], elsewhere: [], unplaced: [], unknown: false },
     markers: [],
+    watchMarkers: [],
     commitFiles: ["groups/g1/local/cribl/pipelines/route.yml", "groups/g1/local/cribl/inputs.yml"],
   };
 }
@@ -118,22 +119,6 @@ describe("TeardownPanel", () => {
     await waitFor(() => expect(within(r).getByText(`4. After the deploy, delete Cribl Lake dataset ${LAKE.datasetId} and every event it holds. This cannot be undone. Checked every route and Cribl Lake destination in every worker group this app can read: none sends to it.`)).toBeTruthy());
     expect(h.onPlanRemove).toHaveBeenLastCalledWith("activityLog", true);
     expect(h.onApplyRemove).not.toHaveBeenCalled();
-  });
-
-  it("review finding 1: removals still pending from an earlier run are named, and nothing-to-remove that is not live keeps the records", async () => {
-    const pendingOnly: ReadyTeardown = {
-      ...readyRemove(false),
-      steps: readyRemove(false).steps.map((st) => (st.kind === "dataset" ? st : { ...st, verdict: { kind: "already-gone" as const } })),
-      scope: { alreadyDirty: ["groups/g1/local/cribl/inputs.yml"], elsewhere: [], unplaced: [], unknown: false },
-    };
-    const h = hooks({ onPlanRemove: vi.fn(async (): Promise<PlanTeardownResult> => ({ kind: "ready", ready: pendingOnly })) });
-    render(<TeardownPanel hooks={h} />);
-    const r = row();
-    fireEvent.click(within(r).getByRole("button", { name: "Remove what this app created" }));
-    await waitFor(() => expect(within(r).getByRole("button", { name: "Confirm: remove these objects" })).toBeTruthy());
-    const text = within(r).getByRole("alert").textContent ?? "";
-    expect(text).toContain("Nothing is left to delete, but this source's earlier removals are still uncommitted in worker group g1. Commit and deploy them");
-    expect(text).toContain("These files already have uncommitted changes (an earlier removal by this app, or someone else's work), which the commit will carry too: groups/g1/local/cribl/inputs.yml.");
   });
 
   it("Pause is its own two clicks, quoting the source and the hub retention caveat", async () => {

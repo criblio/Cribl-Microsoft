@@ -290,30 +290,92 @@ describe("applySourceTeardown", () => {
     expect(outcome.records).toEqual({ criblSource: SOURCE, lakeRoute: LAKE });
   });
 
-  it("review finding 1: a rerun after a refused commit commits the earlier pending removals BEFORE deleting the dataset", async () => {
+  it("re-review 1: a rerun after a refused commit never commits files it cannot attribute; the dataset and the records stay", async () => {
     const leader = new TeardownLeader();
     const first = ready(await planSourceTeardown({ cribl: leader }, input({ removeDataset: false })));
-    leader.hooks.unshift((req) => (req.method === "POST" && req.path === "/version/commit" && leader.log.filter((l) => l.startsWith("POST")).length === 1 ? { status: 500, body: {} } : undefined));
+    leader.hooks.unshift((req) => (req.method === "POST" && req.path === "/version/commit" ? { status: 500, body: {} } : undefined));
     const run1 = await applySourceTeardown({ cribl: leader }, first);
     expect(run1.commit.kind).toBe("commit-failed");
     expect(run1.records).toEqual({ criblSource: SOURCE, lakeRoute: LAKE });
-    expect(leader.pending.sort()).toEqual([INPUTS_FILE, PIPE_FILE, ROUTE_FILE, SECRETS_FILE].sort());
+    leader.hooks.shift();
 
-    // Run 2, with the dataset: every group object reads as gone in the working
-    // config, but its removal is pending. The confirm names those files, and the
-    // apply commits and deploys them before the dataset goes.
+    // Run 2, with the dataset: every group object reads as gone, and their
+    // files are pending - possibly the app's earlier removal, possibly not.
     const second = ready(await planSourceTeardown({ cribl: leader }, input()));
-    expect(second.steps.filter((s) => s.kind !== "dataset").every((s) => s.verdict.kind === "already-gone")).toBe(true);
-    expect([...second.scope.alreadyDirty].sort()).toEqual([INPUTS_FILE, PIPE_FILE, ROUTE_FILE, SECRETS_FILE].sort());
+    expect(second.markers).toEqual([]);
     const writesBefore = leader.writes().length;
     const run2 = await applySourceTeardown({ cribl: leader }, second);
-    expect(leader.writes().slice(writesBefore)).toEqual([
-      `POST /m/${G}/version/commit`,
-      `PATCH /products/stream/groups/${G}/deploy`,
-      `DELETE ${DATASETS}/${DATASET_ID}`,
-    ]);
-    expect(run2.kind).toBe("removed");
-    expect(run2.records).toEqual({ criblSource: null, lakeRoute: null });
+    expect(leader.writes().slice(writesBefore)).toEqual([]);
+    expect(run2.commit.kind).toBe("unsettled");
+    expect(run2.commit.kind === "unsettled" && run2.commit.detail).toContain("They may be an earlier removal by this app or someone else's work");
+    expect(run2.steps.find((s) => s.kind === "dataset")?.result).toBe("not-reached");
+    expect(run2.records).toEqual({ criblSource: SOURCE, lakeRoute: LAKE });
+  });
+
+  it("re-review 1: everything gone and committed, but an operator's half-done source dirties inputs.yml - nothing is committed, the records stay", async () => {
+    const leader = new TeardownLeader();
+    leader.inputs = [{ id: "in_new_half_done", type: "syslog" }];
+    leader.secrets = [];
+    leader.pipelines = [];
+    (leader.table["routes"] as unknown[]).shift();
+    leader.pending = [INPUTS_FILE];
+    const r = await planSourceTeardown({ cribl: leader }, input({ removeDataset: false }));
+    expect(r.kind).toBe("nothing-to-remove");
+    expect(r.kind === "nothing-to-remove" && r.unsettled).toBe(
+      `Worker group ${G} has uncommitted changes in ${INPUTS_FILE}. They may be an earlier removal by this app or someone else's work, and the app does not commit changes it did not make in this run. Commit or discard them in Cribl, then check again.`,
+    );
+    expect(r.kind === "nothing-to-remove" && r.records.criblSource).toEqual(SOURCE);
+    expect(leader.writes()).toEqual([]);
+  });
+
+  it("re-review 1: a pipeline KEPT because in use never puts its directory in the commit", async () => {
+    const leader = new TeardownLeader();
+    (leader.table["routes"] as unknown[]).push({ id: "admin_route", filter: "true", pipeline: UNROLL_PIPELINE_ID, output: "devnull" });
+    leader.pending = [PIPE_FILE]; // an operator is editing the pipeline
+    const r = ready(await planSourceTeardown({ cribl: leader }, input({ removeDataset: false })));
+    expect(r.steps.find((s) => s.kind === "pipeline")?.verdict.kind).toBe("keep");
+    expect(r.commitFiles.some((f) => f.includes("/pipelines/azure_onb_unroll_records/"))).toBe(false);
+    const outcome = await applySourceTeardown({ cribl: leader }, r);
+    const commit = leader.requests.find((q) => q.method === "POST" && q.path === "/version/commit")!;
+    expect((commit.body as { files: string[] }).files.sort()).toEqual([INPUTS_FILE, ROUTE_FILE, SECRETS_FILE].sort());
+    expect(leader.pending).toEqual([PIPE_FILE]);
+    expect(outcome.kind).toBe("removed");
+    expect(outcome.records).toEqual({
+      criblSource: null,
+      lakeRoute: { groupId: G, datasetId: DATASET_ID, pipelineId: UNROLL_PIPELINE_ID, routeId: null, datasetCreated: true },
+    });
+  });
+
+  it("re-review 2: a run that removed something but finds nothing to commit is unsettled: records and dataset stay", async () => {
+    const leader = new TeardownLeader();
+    const r = ready(await planSourceTeardown({ cribl: leader }, input()));
+    // DELETEs and the routes write that dirty files the markers do not cover.
+    leader.hooks.unshift((req) => {
+      if (req.method === "DELETE" && req.groupId === G) {
+        const list = req.path.startsWith("/pipelines/") ? leader.pipelines : req.path.startsWith("/system/inputs/") ? leader.inputs : leader.secrets;
+        const id = decodeURIComponent(req.path.split("/").pop() ?? "");
+        const at = list.findIndex((x) => x["id"] === id);
+        if (at >= 0) list.splice(at, 1);
+        leader.pending.push(`groups/${G}/local/cribl/elsewhere-${id}.yml`);
+        return { status: 200, body: {} };
+      }
+      return undefined;
+    });
+    leader.hooks.unshift((req) => {
+      if (req.method === "PATCH" && req.path === "/routes/default") {
+        leader.table = structuredClone(req.body as Record<string, unknown>);
+        return { status: 200, body: { items: [leader.table], count: 1 } };
+      }
+      return undefined;
+    });
+    const outcome = await applySourceTeardown({ cribl: leader }, r);
+    expect(outcome.commit).toEqual({
+      kind: "unsettled",
+      detail: `The removals were made, but Cribl reported none of their files as pending under the paths this app expects, so nothing was committed and they are not live. Check worker group ${G}'s pending changes in Cribl.`,
+    });
+    expect(leader.writes().some((w) => w.startsWith("DELETE /products"))).toBe(false);
+    expect(outcome.records).toEqual({ criblSource: SOURCE, lakeRoute: LAKE });
+    expect(outcome.kind).toBe("stopped");
   });
 
   it("review finding 1: a rerun after a failed deploy keeps the dataset and the records (the deployed route still sends there)", async () => {

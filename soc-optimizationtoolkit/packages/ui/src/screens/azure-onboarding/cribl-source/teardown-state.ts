@@ -134,12 +134,8 @@ export function teardownConfirmText(ready: ReadyTeardown): string[] {
   const { groupId } = ready;
   const lines: string[] = [];
   const goes = ready.steps.filter((s) => s.verdict.kind === "delete");
-  if (goes.length > 0) {
-    lines.push(`Remove, in this order, only what this app can prove it created:`);
-    goes.forEach((s, i) => lines.push(`${i + 1}. ${deleteLine(s, groupId, ready)}`));
-  } else {
-    lines.push(`Nothing is left to delete, but this source's earlier removals are still uncommitted in worker group ${groupId}. Commit and deploy them, so they are live and the app can forget these objects.`);
-  }
+  lines.push(`Remove, in this order, only what this app can prove it created:`);
+  goes.forEach((s, i) => lines.push(`${i + 1}. ${deleteLine(s, groupId, ready)}`));
   for (const s of ready.steps) {
     if (s.verdict.kind === "keep") lines.push(`Kept: ${describeTeardownObject(s, groupId)}. ${s.verdict.detail}`);
     if (s.verdict.kind === "already-gone") lines.push(`Already gone: ${describeTeardownObject(s, groupId)}.`);
@@ -148,7 +144,7 @@ export function teardownConfirmText(ready: ReadyTeardown): string[] {
     lines.push(`The commit can include at most these files, and only those still uncommitted after the removals: ${ready.commitFiles.join(", ")}.`);
     if (ready.scope.alreadyDirty.length > 0) {
       lines.push(
-        `These files already have uncommitted changes (an earlier removal by this app, or someone else's work), which the commit will carry too: ${ready.scope.alreadyDirty.join(", ")}.`,
+        `These files already have uncommitted changes this removal did not make, which the commit will carry too: ${ready.scope.alreadyDirty.join(", ")}.`,
       );
     }
     if (ready.scope.elsewhere.length > 0) lines.push(`Other uncommitted changes in Cribl are left alone: ${ready.scope.elsewhere.join(", ")}.`);
@@ -163,7 +159,7 @@ export function teardownPlanView(result: Exclude<PlanTeardownResult, { kind: "re
     if (result.unsettled !== undefined) {
       return {
         tone: "warning",
-        headline: "Nothing to delete, but the removals are not live yet, so the app keeps its records.",
+        headline: "Nothing to delete, but the app cannot confirm the removals are live, so it keeps its records.",
         detail: result.unsettled,
         inCribl: null,
       };

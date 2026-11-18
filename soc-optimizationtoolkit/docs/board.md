@@ -8530,7 +8530,16 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   :name segments only, no prefix glob, and '*' is refused by the coverage gate
   (DBT-153) - the app narrows by proof in code instead; (7) the create panel
   shows an app-owned input whose only difference is disabled:true as Paused,
-  not as a fault.
+  not as a fault. RE-REVIEW FIXES 2026-11-18, PINS ONLY: the commit carries
+  only the files of objects the run removed (never a kept object's, never a
+  pending file the app cannot attribute: those files are shared, and a dirty
+  one may be another admin's half-done work); an unattributable pending file
+  in the files of anything the source claims gone makes the run unsettled
+  (records kept, dataset kept, reason given: commit or discard it in Cribl,
+  then check again); a run that removed something but finds nothing pending
+  under its markers is unsettled. ALSO UNVERIFIED LIVE: whether /m/<g>/version
+  history is per group or leader-wide (if leader-wide, another group's later
+  commit makes the settled check never pass - the safe direction).
 
 - **AZR-107** Tenant inventory heat map, phase 1: read-only cards for Entra ID, Activity Log and Defender for Cloud at the top of Azure Native Source Onboarding
   `AZR-F9` `story` `settled` `verified: both`

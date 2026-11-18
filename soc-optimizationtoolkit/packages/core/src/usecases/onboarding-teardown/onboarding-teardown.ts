@@ -37,15 +37,19 @@
  *                 until then): re-read routes, datasets; DELETE
  *                 /products/lake/lakes/default/datasets/<id> (leader)
  *
- * REVIEW FIXES (before merge). Plan step 8 covers the markers of EVERY group
- * object this source has, not only those that go this run, and also reads
- * destinations (/system/outputs) and collectors (/jobs) for the in-use checks
- * and, for the dataset, every other worker group's routes and destinations.
- * "Already gone" is gone only when the group is SETTLED: nothing of this
- * source pending, and the workers run HEAD (groupSettled). So step 5 commits
- * and deploys any removal an earlier run left pending (the confirm names those
- * files), step 6 waits on settled, and a plan with nothing to send and an
- * unsettled group keeps the records and says why.
+ * REVIEW FIXES (before merge). The plan also reads destinations
+ * (/system/outputs) and collectors (/jobs) for the in-use checks and, for the
+ * dataset, every other worker group's routes and destinations. "Gone" (records
+ * cleared, the dataset deleted) needs the group SETTLED (settledCheck):
+ * nothing pending in the files of any object this source claims gone, and the
+ * workers on HEAD. The commit carries ONLY the files of objects this run
+ * removed - never a kept object's, and never a pending file the app cannot
+ * attribute: those files are shared (inputs.yml, route.yml, the secrets file,
+ * a pipeline directory), and a dirty one may be another admin's half-done
+ * work. An unattributable pending file makes the run unsettled with an honest
+ * reason (commit or discard it in Cribl, then check again); it is never
+ * committed. A run that removed something and then found nothing to commit is
+ * unsettled too (its files escaped the unmeasured markers).
  *
  * A DELETE answered 404 is already gone (success). A 401/403 stops and says
  * it was refused for permission (`denied`). Every kit outcome is kept by name.
@@ -89,6 +93,7 @@ import {
   deployedVersion,
   observeCommitDeploy,
   pendingFiles,
+  placePending,
   sameCommit,
   type CommitDeployOutcome,
   type CommitScope,
@@ -260,6 +265,10 @@ async function readAll(
  * configVersion matches HEAD). Called once nothing of this source is pending.
  * A removal that was committed but never deployed is still live on the
  * workers, so its object is not yet gone.
+ *
+ * UNMEASURED: whether /m/<g>/version history is per group or leader-wide. If
+ * it is leader-wide, another group's later commit makes HEAD differ from this
+ * group's configVersion and the check never settles - the safe direction.
  */
 async function groupSettled(request: Request, groupId: string): Promise<{ readonly settled: boolean; readonly detail: string }> {
   const head = await safeCall(request, "GET", "/version?offset=0&limit=1");
@@ -286,6 +295,36 @@ async function groupSettled(request: Request, groupId: string): Promise<{ readon
   return { settled: true, detail: `Worker group ${groupId} runs its newest commit ${hash}.` };
 }
 
+/**
+ * Settled = nothing pending in the files of the objects this source claims
+ * gone (`watch`), and the workers run HEAD. A pending file there is NOT
+ * assumed to be this app's: it may be another admin's work in the same shared
+ * file, so it is named and left alone.
+ */
+async function settledCheck(request: Request, groupId: string, watch: readonly string[]): Promise<{ readonly settled: boolean; readonly detail: string }> {
+  if (watch.length === 0) return { settled: true, detail: "" };
+  let pending: string[] | null;
+  try {
+    pending = await pendingFiles(request);
+  } catch {
+    pending = null;
+  }
+  if (pending === null) {
+    return { settled: false, detail: `Cribl's pending-change status for worker group ${groupId} could not be read, so whether the removals are live is unknown.` };
+  }
+  const placed = placePending(pending, groupId, watch);
+  const dirty = [...placed.mine, ...placed.unplaced];
+  if (dirty.length > 0) {
+    return {
+      settled: false,
+      detail:
+        `Worker group ${groupId} has uncommitted changes in ${dirty.join(", ")}. They may be an earlier removal by this app or someone else's work, ` +
+        "and the app does not commit changes it did not make in this run. Commit or discard them in Cribl, then check again.",
+    };
+  }
+  return groupSettled(request, groupId);
+}
+
 /** The group-relative commit markers of the objects that go. */
 export function teardownCommitMarkers(kinds: readonly TeardownObjectKind[], pipelineId: string | null): string[] {
   const out: string[] = [];
@@ -310,7 +349,14 @@ export interface ReadyTeardown {
   /** The routing-table write, when the route goes: the whole array to send and the diff approved. */
   readonly routeWrite: { readonly tableId: string; readonly routes: readonly unknown[]; readonly diff: readonly DiffRow[] } | null;
   readonly scope: CommitScope;
+  /** The markers of the objects this run deletes: the only files its commit can carry. */
   readonly markers: readonly string[];
+  /**
+   * The markers of every object this source claims gone (deleted now, or
+   * already gone). Read after the commit: anything still pending there makes
+   * the run unsettled. Never committed unless it is also in `markers`.
+   */
+  readonly watchMarkers: readonly string[];
   /** Every file the commit can carry, in the group's tree (an upper bound). */
   readonly commitFiles: readonly string[];
 }
@@ -390,11 +436,14 @@ export async function planSourceTeardown(ports: TeardownPorts, input: PlanTeardo
 
   const goes = deletes(plan.steps);
   const pipelineId = input.lakeRoute?.pipelineId ?? null;
-  // Every group object this source has (whatever its verdict): an earlier
-  // run's removal of any of them may still be pending, and this run must
-  // commit it before calling it gone.
-  const candidates = plan.steps.map((s) => s.kind).filter((k) => k !== "dataset");
-  const markers = teardownCommitMarkers(candidates, pipelineId);
+  // The commit carries only the files of what this run deletes; a kept
+  // object's files are never in it.
+  const markers = teardownCommitMarkers(goes.filter((k) => k !== "dataset"), pipelineId);
+  // What must be clean (and live) before anything this source claims gone is.
+  const watchMarkers = teardownCommitMarkers(
+    plan.steps.filter((s) => s.kind !== "dataset" && s.verdict.kind !== "keep").map((s) => s.kind),
+    pipelineId,
+  );
   let scope: CommitScope = { alreadyDirty: [], elsewhere: [], unplaced: [], unknown: false };
   if (markers.length > 0) {
     const read = await scopeFor(request, groupId, markers);
@@ -402,10 +451,11 @@ export async function planSourceTeardown(ports: TeardownPorts, input: PlanTeardo
     scope = read.scope;
   }
 
-  if (goes.length === 0 && scope.alreadyDirty.length === 0) {
-    // Nothing to send and nothing pending. Gone counts only when the workers
-    // run the newest commit too (an earlier removal committed, not deployed).
-    const settled = markers.length === 0 ? { settled: true, detail: "" } : await groupSettled(request, groupId);
+  if (goes.length === 0) {
+    // Nothing to send. Gone counts only when nothing is pending in those
+    // objects' files and the workers run HEAD; a pending file is never
+    // committed here, because the app cannot tell whose it is.
+    const settled = await settledCheck(request, groupId, watchMarkers);
     ports.logger?.info(`${TEARDOWN_LOG_PREFIX} nothing to remove`, { groupId, sourceId: input.sourceId, settled: settled.settled });
     return {
       kind: "nothing-to-remove",
@@ -452,6 +502,7 @@ export async function planSourceTeardown(ports: TeardownPorts, input: PlanTeardo
       routeWrite,
       scope,
       markers,
+      watchMarkers,
       commitFiles: markers.map((m) => `groups/${groupId}/${m}`),
     },
   };
@@ -575,7 +626,7 @@ export async function applySourceTeardown(ports: TeardownPorts, ready: ReadyTear
   };
   let commit: TeardownCommitResult = { kind: "not-needed" };
   // True only once the group is known to run a commit without this source's pending changes.
-  let settled = ready.markers.length === 0;
+  let settled = false;
   const finish = (kind: ApplyTeardownOutcome["kind"], why: string): ApplyTeardownOutcome => {
     const steps = ready.steps.map((s) => outcomes.get(s.kind) as TeardownStepOutcome);
     const results: Partial<Record<TeardownObjectKind, TeardownStepResult>> = {};
@@ -716,26 +767,27 @@ export async function applySourceTeardown(ports: TeardownPorts, ready: ReadyTear
 
   if (voided && removedGroup.length === 0) return finish("void", stopped ?? "Changed since the confirm; nothing was removed.");
 
-  // 5. Commit and deploy (also after a stop): what this run removed, and any
-  // removal of this source an earlier run left pending. Gone counts only once
-  // the workers run a commit without them.
-  if (ready.markers.length > 0) {
-    const what = removedGroup.length > 0 ? removedGroup.map((k) => `${k} ${outcomes.get(k)?.id ?? ""}`).join(", ") : "pending removals";
+  // 5. Commit and deploy (also after a stop) ONLY the files of what this run
+  // removed. Then settled: nothing pending in the files of anything this
+  // source claims gone, and the workers on HEAD.
+  let commitOk = true;
+  if (removedGroup.length > 0) {
+    commitOk = false;
+    const markers = teardownCommitMarkers(removedGroup, input.lakeRoute?.pipelineId ?? null);
+    const what = removedGroup.map((k) => `${k} ${outcomes.get(k)?.id ?? ""}`).join(", ");
     try {
-      const outcome = await commitAndDeploy(request, {
-        group: groupId,
-        markers: ready.markers,
-        message: `${TEARDOWN_LOG_PREFIX}: remove ${what} (${input.sourceId})`,
-      });
+      const outcome = await commitAndDeploy(request, { group: groupId, markers, message: `${TEARDOWN_LOG_PREFIX}: remove ${what} (${input.sourceId})` });
       if (outcome.kind === "deployed") {
-        settled = true;
+        commitOk = true;
         commit = { ...outcome, detail: teardownCommitDetail(outcome, groupId) };
       } else if (outcome.kind === "nothing-to-commit") {
-        const check = await groupSettled(request, groupId);
-        settled = check.settled;
-        commit = check.settled
-          ? { ...outcome, detail: removedGroup.length > 0 ? teardownCommitDetail(outcome, groupId) : `Nothing of this source was pending. ${check.detail}` }
-          : { kind: "unsettled", detail: check.detail };
+        // This run deleted something, yet none of its files is pending: they
+        // escaped the (unmeasured) markers, so the removals are not committed
+        // and the workers still run the old config.
+        commit = {
+          kind: "unsettled",
+          detail: `The removals were made, but Cribl reported none of their files as pending under the paths this app expects, so nothing was committed and they are not live. Check worker group ${groupId}'s pending changes in Cribl.`,
+        };
       } else {
         commit = { ...outcome, detail: teardownCommitDetail(outcome, groupId) };
       }
@@ -744,6 +796,13 @@ export async function applySourceTeardown(ports: TeardownPorts, ready: ReadyTear
         kind: "commit-sequence-failed",
         detail: `A call in the commit and deploy sequence got no answer (${errorText(error)}); check the group's pending changes in Cribl.`,
       };
+    }
+  }
+  if (commitOk) {
+    const check = await settledCheck(request, groupId, ready.watchMarkers);
+    settled = check.settled;
+    if (!check.settled) {
+      commit = commit.kind === "deployed" ? { ...commit, detail: `${commit.detail} ${check.detail}` } : { kind: "unsettled", detail: check.detail };
     }
   }
   const groupDeployed = settled;

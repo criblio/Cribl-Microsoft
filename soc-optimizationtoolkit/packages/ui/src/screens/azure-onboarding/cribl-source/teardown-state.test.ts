@@ -62,7 +62,7 @@ describe("teardownPlanView", () => {
     });
     expect(v).toEqual({
       tone: "warning",
-      headline: "Nothing to delete, but the removals are not live yet, so the app keeps its records.",
+      headline: "Nothing to delete, but the app cannot confirm the removals are live, so it keeps its records.",
       detail: "Worker group g1 runs a, not its newest commit b.",
       inCribl: null,
     });
