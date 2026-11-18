@@ -22,9 +22,15 @@
  *                        diagnostic settings
  *
  * A list that comes back EMPTY does not refuse: it is the normal answer for a
- * subscription with no settings. A list the identity could not read (403, no
- * answer, a 2xx that is not a listing, or more pages than a subscription can
- * hold) refuses with the step named.
+ * subscription with no settings. But it is not a measured "none" either - an
+ * identity that cannot see the subscription's settings gets the same 200 with
+ * no rows - so before writing on an empty list deploy GETs ours by name
+ * ({@link confirmEmptyListing}, shared with the Entra ID deploy, AZR-122): only
+ * a 404 lets the PUT go ahead, a setting found there is judged exactly as a
+ * listed one, and an unreadable answer stops at `setting-read` with nothing
+ * written. A list the identity could not read (403, no answer, a 2xx that is
+ * not a listing, or more pages than a subscription can hold) refuses with the
+ * step named.
  *
  * THEN, in this order and nothing else: PUT the setting, GET it back by name.
  * A read-back whose fields match is `written-and-read-back` - which names
@@ -57,6 +63,7 @@ import type {
 } from "../../domain/activity-log-export/activity-log-setting";
 import {
   ACTIVITY_LOG_ITEM_ID,
+  ACTIVITY_LOG_SETTING_NAME,
   MAX_SUBSCRIPTION_DIAGNOSTIC_SETTINGS,
   activityLogSettingDiffs,
   activityLogSettingPath,
@@ -98,7 +105,7 @@ export interface ActivityLogState {
 export type ActivityLogDeployInput = ActivityLogSettingInput;
 
 /** The deploy steps, named in denied / unregistered / failed outcomes. */
-export type ActivityLogDeployStep = "setting-list" | "setting-put";
+export type ActivityLogDeployStep = "setting-list" | "setting-read" | "setting-put";
 
 /** Every way {@link deployActivityLogExport} can end. */
 export type ActivityLogDeployOutcome =
@@ -199,6 +206,57 @@ export async function listDiagnosticSettings(
   return { kind: "listed", listing: parseDiagnosticSettings(value) };
 }
 
+/** What {@link confirmEmptyListing} answers. */
+export type ConfirmedListing =
+  | { readonly kind: "listed"; readonly listing: Listing<DiagnosticSettingRead> }
+  | { readonly kind: "unread"; readonly failure: ArmReadFailure };
+
+/**
+ * Make an EMPTY diagnostic-settings listing safe to write on (AZR-99 review
+ * round 3, shared with the Activity Log deploy by AZR-122).
+ *
+ * An empty raw ARM list is unverified, not a measured none: an identity that
+ * cannot see a scope's settings gets the same 200 with no rows. A diagnostic
+ * setting PUT replaces whatever sits at its name, so before a deploy writes on
+ * an empty list it GETs its own setting by name:
+ *
+ *   404                    the listing stands (still empty): go on
+ *   2xx with a setting     a one-row listing of that setting, so the caller
+ *                          judges it exactly as a listed one
+ *   2xx without a setting  unread (`failed`), nothing written
+ *   anything else          unread, classified (denied / unregistered / failed)
+ *
+ * A listing that is not empty is returned unchanged with no call made. Never
+ * throws. The caller names the step (`setting-read`) in the outcome.
+ */
+export async function confirmEmptyListing(
+  azure: AzureManagement,
+  listing: Listing<DiagnosticSettingRead>,
+  getOurs: AzureManagementRequest,
+  settingName: string,
+): Promise<ConfirmedListing> {
+  if (listing.kind !== "empty") return { kind: "listed", listing };
+  const what = `Read ${settingName} by name`;
+  const byName = await attemptArm(() => azure.request(getOurs));
+  if (byName.ok && byName.response.status === 404) return { kind: "listed", listing };
+  if (!byName.ok || !is2xx(byName.response.status)) {
+    return { kind: "unread", failure: classifyArmFailure(byName, what) };
+  }
+  const found = readDiagnosticSetting(byName.response.body);
+  if (found.name === "" && found.id === "") {
+    return {
+      kind: "unread",
+      failure: {
+        kind: "failed",
+        status: byName.response.status,
+        code: "",
+        message: `${what}: HTTP ${byName.response.status}, but the answer was not a diagnostic setting. Nothing was written.`,
+      },
+    };
+  }
+  return { kind: "listed", listing: { kind: "rows", rows: [found] } };
+}
+
 /**
  * Read the subscription's Activity Log state: one list of its diagnostic
  * settings. Ours is classified without an expected rule - the operator may not
@@ -238,8 +296,9 @@ function stepFailure(step: ActivityLogDeployStep, failure: ArmReadFailure): Acti
  * Create the cribl-activity-log diagnostic setting: the chosen namespace rule,
  * no hub name (Azure creates insights-activity-logs), every category on.
  *
- * Order, exactly: re-list the subscription's settings (refuse on
- * already-exists / present-differs / possible-duplicate / limit-reached), PUT,
+ * Order, exactly: re-list the subscription's settings; when the list is empty
+ * (unverified), GET ours by name and go on only on a 404 (refuse
+ * already-exists / present-differs / possible-duplicate / limit-reached); PUT;
  * GET by name. Never throws, never DELETEs, never re-PUTs. The caller has
  * already had the operator confirm.
  */
@@ -269,8 +328,18 @@ export async function deployActivityLogExport(
   if (settings.kind === "unread") {
     return done(stepFailure("setting-list", settings.failure));
   }
+  // An EMPTY list is not a measured "none" (AZR-122): GET ours by name before
+  // a PUT that would replace whatever sits at that name.
+  const confirmed = await confirmEmptyListing(
+    azure,
+    settings.listing,
+    buildActivityLogSettingGetRequest(input.subscriptionId),
+    ACTIVITY_LOG_SETTING_NAME,
+  );
+  if (confirmed.kind === "unread") return done(stepFailure("setting-read", confirmed.failure));
+  const listing = confirmed.listing;
   const expected = expectedActivityLogSetting(input);
-  const ours = classifyOursSetting(settings.listing, expected);
+  const ours = classifyOursSetting(listing, expected);
   if (ours.kind === "present-matching") {
     return done({ kind: "already-exists", settingId: ours.setting.id || activityLogSettingPath(input.subscriptionId) });
   }
@@ -281,15 +350,15 @@ export async function deployActivityLogExport(
       diffs: ours.diffs,
     });
   }
-  const sameNamespace = findSameNamespaceSettings(settings.listing, input.namespace);
+  const sameNamespace = findSameNamespaceSettings(listing, input.namespace);
   if (sameNamespace.length > 0) {
     return done({ kind: "possible-duplicate", names: sameNamespace.map((s) => s.name) });
   }
-  if (subscriptionSettingsFull(settings.listing)) {
+  if (subscriptionSettingsFull(listing)) {
     return done({
       kind: "limit-reached",
       limit: MAX_SUBSCRIPTION_DIAGNOSTIC_SETTINGS,
-      names: settings.listing.kind === "rows" ? settings.listing.rows.map((s) => s.name) : [],
+      names: listing.kind === "rows" ? listing.rows.map((s) => s.name) : [],
     });
   }
 

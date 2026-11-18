@@ -18,11 +18,13 @@
  * the IO (core planSourceTeardown / applySourceTeardown, planInputPause /
  * applyInputPause) and updates the records.
  *
- * The Activity Log's Azure diagnostic setting is removed from its own
- * section; the Defender export's removal is not built here. The Entra ID
- * tenant setting (AZR-99) is removed HERE, by whatever the screen passes as
- * `azure` (entra-remove-panel.tsx), so its Remove stays offered after Entra
- * ID is unchosen - its own record, its own two-step confirm.
+ * The Defender export's removal is not built here. The Azure diagnostic
+ * settings the app wrote - the subscription Activity Log setting (AZR-105,
+ * moved here by AZR-121, activity-log-remove-panel.tsx) and the Entra ID
+ * tenant setting (AZR-99, entra-remove-panel.tsx) - are removed HERE, by
+ * whatever the screen passes as `azure`, so each Remove stays offered after
+ * its source is unchosen or switched to How-to - its own record, its own
+ * two-step confirm.
  */
 
 import { useEffect, useReducer, useState } from "react";

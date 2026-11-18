@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**109 in the backlog, 33 in progress, 239 done.**
+**107 in the backlog, 33 in progress, 241 done.**
 
 ## By menu item
 
@@ -36,13 +36,13 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 9 | 10 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 32 | 59 | 6 |
+| Azure Native Source Onboarding | 30 | 61 | 4 |
 | Azure Logging Map | 3 | 2 | 1 |
 | Tenant Logging Gaps | 1 | 3 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 18 | 18 | 6 |
 
-Open work totals 142.
+Open work totals 140.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 65% (72/110)
+### `AZR` Azure native source onboarding - 67% (74/110)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 1/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 46/65 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 48/65 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 22/26 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-125*, AZR-126*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -1013,7 +1013,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (15)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1237,40 +1237,6 @@ Next to pick up. Nothing blocks these.
   config-json warning when an imported connectivity value is coerced to full;
   Batch's template-only export is gated on the identity fields, so
   Disconnected cannot reach it from Batch (fallback routing).
-
-- **AZR-121** The Activity Log setting's Remove disappears once the Activity Log is switched to How-to, so a setting the app created can no longer be removed from the app
-  `AZR-F9` `bug` `settled`
-  FOUND 2026-11-17 while building [[AZR-99]]. AZR-105 put the Activity Log
-  diagnostic setting's Remove inside ActivityLogSection, and the screen
-  renders that section only while deployBlockView answers `deploy`: once the
-  Activity Log is chosen in How-to mode the section is replaced by the How-to
-  note (and when unchosen in How-to mode by nothing), so the Remove of a
-  setting the app recorded writing (progress.activityLogSettings) is no longer
-  offered anywhere, although the record and the setting remain. AZR-99 avoided
-  this for Entra ID by putting its Remove in the teardown panel
-  (TeardownPanel's `azure` slot, shown from the record whatever the choice).
-  FIX DIRECTION: move the Activity Log Remove into the same slot (an
-  ActivityLogRemovePanel beside EntraRemovePanel), keyed on the record for the
-  configured subscription, and pin that it is offered with the Activity Log in
-  How-to mode.
-
-- **AZR-122** Activity Log Deploy treats an empty, unverified subscription settings list as ours-absent and PUTs, so a setting of our name the list could not show would be replaced
-  `AZR-F9` `bug` `settled`
-  FOUND 2026-11-18 in review of [[AZR-99]]. deployActivityLogExport
-  (packages/core/src/usecases/activity-log-export/activity-log-export.ts, step
-  1) classifies ours with classifyOursSetting(settings.listing) and goes
-  straight to the PUT when ours is absent, including when the listing kind is
-  `empty` (a raw ARM list with no rows, which under RBAC is not a measured
-  none). A diagnostic-setting PUT replaces whatever sits at the name, so an
-  identity whose list returns 200 with value: [] while a setting of our name
-  exists would overwrite it, and the app would then record it as its own, so
-  Remove would later delete it. AZR-99 closed the same gap for Entra ID in
-  review round 3 (deployEntraSetting: on an empty list GET ours by name, go on
-  only on a 404, judge a found setting as a listed one, stop at a
-  `setting-read` step otherwise). FIX DIRECTION: the same by-name GET in
-  deployActivityLogExport (buildActivityLogSettingGetRequest exists), with
-  pins for 404 then PUT, found matching -> already-exists, found differing ->
-  present-differs, denied -> stops with nothing written, and a mutation check.
 
 - **AZR-117** The Event Hub rule note recommends a Send-only rule while the Activity Log deploy refuses one
   `AZR-F9` `bug` `settled`
@@ -2897,7 +2863,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (239)
+## Done (241)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -9090,6 +9056,92 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   category in another case is written enabled under Azure's name instead of
   passing the guard and being written disabled. Pins mutation-checked; nothing
   live.
+
+- **AZR-121** The Activity Log setting's Remove disappears once the Activity Log is switched to How-to, so a setting the app created can no longer be removed from the app
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND 2026-11-17 while building [[AZR-99]]. AZR-105 put the Activity Log
+  diagnostic setting's Remove inside ActivityLogSection, and the screen
+  renders that section only while deployBlockView answers `deploy`: once the
+  Activity Log is chosen in How-to mode the section is replaced by the How-to
+  note (and when unchosen in How-to mode by nothing), so the Remove of a
+  setting the app recorded writing (progress.activityLogSettings) is no longer
+  offered anywhere, although the record and the setting remain. AZR-99 avoided
+  this for Entra ID by putting its Remove in the teardown panel
+  (TeardownPanel's `azure` slot, shown from the record whatever the choice).
+  FIX DIRECTION: move the Activity Log Remove into the same slot (an
+  ActivityLogRemovePanel beside EntraRemovePanel), keyed on the record for the
+  configured subscription, and pin that it is offered with the Activity Log in
+  How-to mode. DONE 2026-11-18 (pins only; nothing sent to Azure). The Remove
+  moved out of ActivityLogSection into ActivityLogRemovePanel
+  (activity-log-remove-panel.tsx), rendered in the teardown panel's azure slot
+  beside EntraRemovePanel and keyed on progress.activityLogSettings for the
+  configured subscription, so it is offered whatever the Activity Log's choice
+  or mode; with no record it renders nothing. Same ownership proof (core
+  removeActivityLogExport: name + this subscription's record + the recorded
+  rule) and the same two-step confirm text. Because the section can no longer
+  re-read after its own Remove, the screen re-reads the subscription after any
+  removal that reached Azure (removed, removed-not-confirmed, already-gone),
+  and the section drops a Deploy confirm whenever its state is replaced. Pins
+  (activity-log-section.dom.test.tsx): no record -> no Remove anywhere;
+  Automate -> exact confirm, one DELETE, re-read offers Deploy again; How-to
+  -> section gone, Remove offered and works; unchosen in How-to -> same; a
+  re-read after an already-gone Remove disarms an armed Deploy.
+  Mutation-checked (gating the panel on the deploy block kind fails the two
+  How-to pins; dropping the re-read fails two; dropping the disarm fails one).
+  NOT VERIFIED LIVE: the removal itself (AZR-105's live caveats stand). REVIEW
+  ROUND 1: moving Remove out of the section had dropped main's mutual
+  exclusion (Remove was disabled while the section's Deploy ran). The screen
+  now holds both running flags: Remove is off while a Deploy runs and Deploy
+  is off while a Remove runs (new gate reason "A removal of cribl-activity-log
+  is running. Deploy is off until it finishes."), and each drops the other's
+  armed confirm instead of masking it, so an arm made before does not come
+  back after. Pins: a held Deploy PUT disables Remove and drops its arm; a
+  held Remove GET disables Deploy with the exact reason; a Remove denied 403
+  (no re-read) does not leave Deploy re-armed; the gate's priority order.
+  Mutation-checked: six mutations, each failed at least one pin. Also: the
+  section's reset-the-arm-on-every-new-state effect raced a click made just
+  after a read (the deferred reset swallowed the arm; seen once as a flake in
+  the full test run). The arm now records the state it was made against and
+  staleness is derived, so the screen's re-read still disarms it (mutation:
+  ignoring the recorded state fails 5 pins).
+
+- **AZR-122** Activity Log Deploy treats an empty, unverified subscription settings list as ours-absent and PUTs, so a setting of our name the list could not show would be replaced
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND 2026-11-18 in review of [[AZR-99]]. deployActivityLogExport
+  (packages/core/src/usecases/activity-log-export/activity-log-export.ts, step
+  1) classifies ours with classifyOursSetting(settings.listing) and goes
+  straight to the PUT when ours is absent, including when the listing kind is
+  `empty` (a raw ARM list with no rows, which under RBAC is not a measured
+  none). A diagnostic-setting PUT replaces whatever sits at the name, so an
+  identity whose list returns 200 with value: [] while a setting of our name
+  exists would overwrite it, and the app would then record it as its own, so
+  Remove would later delete it. AZR-99 closed the same gap for Entra ID in
+  review round 3 (deployEntraSetting: on an empty list GET ours by name, go on
+  only on a 404, judge a found setting as a listed one, stop at a
+  `setting-read` step otherwise). FIX DIRECTION: the same by-name GET in
+  deployActivityLogExport (buildActivityLogSettingGetRequest exists), with
+  pins for 404 then PUT, found matching -> already-exists, found differing ->
+  present-differs, denied -> stops with nothing written, and a mutation check.
+  DONE 2026-11-18 (pins only; nothing sent to Azure). deployActivityLogExport
+  now passes the re-listed settings through confirmEmptyListing
+  (usecases/activity-log-export), the by-name read AZR-99 wrote inline for
+  Entra ID, extracted and now shared by both deploys: on an EMPTY list it GETs
+  cribl-activity-log by name; a 404 lets the PUT go ahead, a setting found
+  there becomes a one-row listing judged as a listed one (already-exists /
+  present-differs), and a denied, failed or non-setting answer stops at the
+  new setting-read step (screen label: reading cribl-activity-log by name)
+  with nothing written. A non-empty list makes no extra call. Pins
+  (activity-log-export.test.ts): 404 then PUT (exact call sequence), found
+  matching -> already-exists, found differing -> present-differs with the
+  diff, 403 -> denied at setting-read, non-setting 200 -> failed at
+  setting-read, transport rejection -> failed with null status, non-empty list
+  -> no by-name read; each asserts exactly two GETs and no write. Entra pins
+  unchanged and passing. Mutation-checked (deploy ignoring the confirmation
+  fails 2; letting any non-2xx through as absent fails 3 incl. Entra; skipping
+  the by-name read entirely fails 18; the generic step label fails the UI
+  pin). NOT VERIFIED LIVE: that an identity unable to see subscription
+  settings gets 200 with an empty value array rather than 403, and what the
+  by-name GET answers it.
 
 - **AZR-100** Two source-selection controls on the onboarding screen contradict each other: the Automate sections and the How-to chooser each keep their own choice
   `AZR-F9` `bug` `settled` `verified: pins`

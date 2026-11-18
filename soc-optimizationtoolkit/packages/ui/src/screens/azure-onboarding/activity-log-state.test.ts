@@ -44,6 +44,7 @@ function listed(...items: unknown[]): ActivityLogState {
 
 const READY: ActivityLogDeployGate = {
   running: false,
+  removing: false,
   choice: { kind: "chosen", mode: "automate" },
   state: listed(),
   subscriptionId: SUB,
@@ -58,6 +59,15 @@ describe("activityLogDeployDisabledReason", () => {
 
   it("names one reason, in priority order", () => {
     expect(activityLogDeployDisabledReason({ ...READY, running: true })).toBe("A deploy is already running.");
+    expect(activityLogDeployDisabledReason({ ...READY, running: true, removing: true })).toBe(
+      "A deploy is already running.",
+    );
+    expect(activityLogDeployDisabledReason({ ...READY, removing: true })).toBe(
+      "A removal of cribl-activity-log is running. Deploy is off until it finishes.",
+    );
+    expect(activityLogDeployDisabledReason({ ...READY, removing: true, subscriptionId: "" })).toBe(
+      "A removal of cribl-activity-log is running. Deploy is off until it finishes.",
+    );
     expect(activityLogDeployDisabledReason({ ...READY, subscriptionId: "" })).toMatch(/No Azure subscription/);
     expect(
       activityLogDeployDisabledReason({ ...READY, choice: { kind: "unknown", doc: "selection", cause: "loading" } }),
@@ -161,6 +171,19 @@ describe("activityLogOutcomeMessage", () => {
       text: "Deploy stopped at listing the subscription's diagnostic settings. List: HTTP 403 - no",
     });
     expect(message("failed").text).toBe("Deploy stopped at creating the diagnostic setting. Create: dns");
+    // AZR-122: the by-name read on an empty list is its own named step.
+    expect(
+      activityLogOutcomeMessage({
+        kind: "denied",
+        step: "setting-read",
+        status: 403,
+        code: "AuthorizationFailed",
+        message: "Read cribl-activity-log by name: HTTP 403 - no",
+      }),
+    ).toEqual({
+      tone: "error",
+      text: "Deploy stopped at reading cribl-activity-log by name. Read cribl-activity-log by name: HTTP 403 - no",
+    });
   });
 
   it("carries no project history", () => {

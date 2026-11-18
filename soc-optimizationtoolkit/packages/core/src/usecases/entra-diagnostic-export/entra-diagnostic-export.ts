@@ -68,7 +68,7 @@ import {
 import { classifyEntraSettingRemoval } from "../../domain/onboarding-teardown/teardown-plan";
 import type { ActivityLogSettingLookup } from "../../domain/onboarding-teardown/teardown-plan";
 import type { EntraSettingRecord } from "../../domain/onboarding-howto/progress-document";
-import { listDiagnosticSettings } from "../activity-log-export/activity-log-export";
+import { confirmEmptyListing, listDiagnosticSettings } from "../activity-log-export/activity-log-export";
 import type { ActivityLogSettingsState } from "../activity-log-export/activity-log-export";
 
 export { ENTRA_ITEM_ID };
@@ -190,26 +190,14 @@ export async function deployEntraSetting(
   // whatever sits at our name, so before writing on an unverified empty list
   // GET ours by name - a 404 is the only answer that lets the PUT go ahead,
   // and a setting found there is judged exactly as a listed one would be.
-  let listing = settings.listing;
-  if (listing.kind === "empty") {
-    const byName = await attemptArm(() => azure.request(buildEntraSettingGetRequest(ENTRA_SETTING_NAME)));
-    if (!(byName.ok && byName.response.status === 404)) {
-      if (!byName.ok || !is2xx(byName.response.status)) {
-        return done(stepFailure("setting-read", classifyArmFailure(byName, `Read ${ENTRA_SETTING_NAME} by name`)));
-      }
-      const found = readDiagnosticSetting(byName.response.body);
-      if (found.name === "" && found.id === "") {
-        return done({
-          kind: "failed",
-          step: "setting-read",
-          status: byName.response.status,
-          code: "",
-          message: `Read ${ENTRA_SETTING_NAME} by name: HTTP ${byName.response.status}, but the answer was not a diagnostic setting. Nothing was written.`,
-        });
-      }
-      listing = { kind: "rows", rows: [found] };
-    }
-  }
+  const confirmed = await confirmEmptyListing(
+    azure,
+    settings.listing,
+    buildEntraSettingGetRequest(ENTRA_SETTING_NAME),
+    ENTRA_SETTING_NAME,
+  );
+  if (confirmed.kind === "unread") return done(stepFailure("setting-read", confirmed.failure));
+  const listing = confirmed.listing;
   const ours = classifyOursEntraSetting(listing, expected);
   if (ours.kind === "present-matching") return done({ kind: "already-exists", settingId: ours.setting.id || settingId });
   if (ours.kind === "present-differs") {

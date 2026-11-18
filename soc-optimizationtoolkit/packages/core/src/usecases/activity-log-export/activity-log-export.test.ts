@@ -29,6 +29,7 @@ const OTHER_NS_RULE = `/subscriptions/${SUB}/resourceGroups/x/providers/Microsof
 const list = (...items: unknown[]) => ({ status: 200, body: { value: items } });
 const ok = (body: unknown) => ({ status: 200, body });
 const forbidden = { status: 403, body: { error: { code: "AuthorizationFailed", message: "no" } } };
+const notFound = { status: 404, body: { error: { code: "ResourceNotFound", message: "not found" } } };
 const unregistered = {
   status: 409,
   body: { error: { code: "MissingSubscriptionRegistration", message: "register microsoft.insights" } },
@@ -110,15 +111,21 @@ describe("deployActivityLogExport - the write", () => {
     expect(azure.calls.some((c) => c.path.toLowerCase().includes("listkeys"))).toBe(false);
   });
 
-  it("an empty list does not refuse: it is the normal answer for a fresh subscription", async () => {
+  it("an empty list does not refuse, but GETs ours by name first: a 404 lets the PUT go ahead", async () => {
     const azure = new FakeAzureManagement();
-    azure.respondWith(list(), ok({}), ok(setting({ name: "cribl-activity-log" })));
-    expect((await deployActivityLogExport(azure, INPUT)).kind).toBe("written-and-read-back");
+    azure.respondWith(list(), notFound, ok({}), ok(setting({ name: "cribl-activity-log" })));
+    expect(await deployActivityLogExport(azure, INPUT)).toEqual({ kind: "written-and-read-back", settingId: OUR_ID });
+    expect(azure.calls.map((c) => [c.method, c.path, c.apiVersion])).toEqual([
+      ["GET", SETTINGS_PATH, "2021-05-01-preview"],
+      ["GET", OUR_ID, "2021-05-01-preview"],
+      ["PUT", OUR_ID, "2021-05-01-preview"],
+      ["GET", OUR_ID, "2021-05-01-preview"],
+    ]);
   });
 
   it("a read-back that differs is accepted-not-verified, naming the fields", async () => {
     const azure = new FakeAzureManagement();
-    azure.respondWith(list(), ok({}), ok(setting({ name: "cribl-activity-log", categories: ["Administrative"] })));
+    azure.respondWith(list(), notFound, ok({}), ok(setting({ name: "cribl-activity-log", categories: ["Administrative"] })));
     const outcome = await deployActivityLogExport(azure, INPUT);
     expect(outcome.kind).toBe("accepted-not-verified");
     if (outcome.kind === "accepted-not-verified") {
@@ -130,14 +137,14 @@ describe("deployActivityLogExport - the write", () => {
 
   it("a read-back that fails, or holds no setting, is accepted-not-verified - never a failure", async () => {
     const failed = new FakeAzureManagement();
-    failed.respondWith(list(), ok({}), { status: 404, body: { error: { message: "gone" } } });
+    failed.respondWith(list(), notFound, ok({}), { status: 404, body: { error: { message: "gone" } } });
     expect(await deployActivityLogExport(failed, INPUT)).toEqual({
       kind: "accepted-not-verified",
       settingId: OUR_ID,
       reasons: ["Read the setting back: HTTP 404 - gone"],
     });
     const blank = new FakeAzureManagement();
-    blank.respondWith(list(), ok({}), ok(null));
+    blank.respondWith(list(), notFound, ok({}), ok(null));
     const outcome = await deployActivityLogExport(blank, INPUT);
     expect(outcome).toEqual({
       kind: "accepted-not-verified",
@@ -148,7 +155,7 @@ describe("deployActivityLogExport - the write", () => {
 
   it("a refused PUT is denied at setting-put, with no read-back", async () => {
     const azure = new FakeAzureManagement();
-    azure.respondWith(list(), forbidden);
+    azure.respondWith(list(), notFound, forbidden);
     const outcome = await deployActivityLogExport(azure, INPUT);
     expect(outcome).toEqual({
       kind: "denied",
@@ -157,7 +164,7 @@ describe("deployActivityLogExport - the write", () => {
       code: "AuthorizationFailed",
       message: "Create the Activity Log setting: HTTP 403 - no",
     });
-    expect(methods(azure)).toEqual(["GET", "PUT"]);
+    expect(methods(azure)).toEqual(["GET", "GET", "PUT"]);
   });
 
   it("a PUT that rejects in transport is failed at setting-put, and nothing throws", async () => {
@@ -166,10 +173,91 @@ describe("deployActivityLogExport - the write", () => {
     azure.request = (opts) => {
       azure.calls.push(opts);
       n += 1;
-      return n === 1 ? Promise.resolve(list()) : Promise.reject(new Error("reset"));
+      if (n === 1) return Promise.resolve(list());
+      if (n === 2) return Promise.resolve(notFound);
+      return Promise.reject(new Error("reset"));
     };
     const outcome = await deployActivityLogExport(azure, INPUT);
     expect(outcome).toMatchObject({ kind: "failed", step: "setting-put", status: null });
+  });
+});
+
+describe("deployActivityLogExport - an EMPTY list is confirmed by name before any PUT (AZR-122)", () => {
+  async function onEmpty(byName: { status: number; body: unknown }) {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(list(), byName);
+    const outcome = await deployActivityLogExport(azure, INPUT);
+    // Exactly the list and the by-name read: nothing is written.
+    expect(azure.calls).toEqual([
+      { method: "GET", path: SETTINGS_PATH, apiVersion: "2021-05-01-preview" },
+      { method: "GET", path: OUR_ID, apiVersion: "2021-05-01-preview" },
+    ]);
+    return outcome;
+  }
+
+  it("ours found by name and matching is already-exists: nothing is written", async () => {
+    expect(await onEmpty(ok(setting({ name: "cribl-activity-log" })))).toEqual({
+      kind: "already-exists",
+      settingId: OUR_ID,
+    });
+  });
+
+  it("ours found by name and differing is present-differs, naming the field: never overwritten", async () => {
+    const other = `${NS_PATH}/authorizationRules/RootManageSharedAccessKey`;
+    expect(await onEmpty(ok(setting({ name: "cribl-activity-log", ruleId: other })))).toEqual({
+      kind: "present-differs",
+      settingId: OUR_ID,
+      diffs: [{ field: "eventHubAuthorizationRuleId", expected: RULE_ID, actual: other }],
+    });
+  });
+
+  it("a denied by-name read stops at setting-read: nothing is written", async () => {
+    expect(await onEmpty(forbidden)).toEqual({
+      kind: "denied",
+      step: "setting-read",
+      status: 403,
+      code: "AuthorizationFailed",
+      message: "Read cribl-activity-log by name: HTTP 403 - no",
+    });
+  });
+
+  it("a by-name read that is not a setting stops at setting-read: nothing is written", async () => {
+    expect(await onEmpty(ok(null))).toEqual({
+      kind: "failed",
+      step: "setting-read",
+      status: 200,
+      code: "",
+      message: "Read cribl-activity-log by name: HTTP 200, but the answer was not a diagnostic setting. Nothing was written.",
+    });
+  });
+
+  it("a by-name read that rejects in transport stops at setting-read with a null status", async () => {
+    const azure = new FakeAzureManagement();
+    let n = 0;
+    azure.request = (opts) => {
+      azure.calls.push(opts);
+      n += 1;
+      return n === 1 ? Promise.resolve(list()) : Promise.reject(new Error("reset"));
+    };
+    expect(await deployActivityLogExport(azure, INPUT)).toEqual({
+      kind: "failed",
+      step: "setting-read",
+      status: null,
+      code: "",
+      message: "Read cribl-activity-log by name: reset",
+    });
+    expect(methods(azure)).toEqual(["GET", "GET"]);
+  });
+
+  it("a NON-empty list that lacks ours needs no by-name read", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(list(setting({ name: "to-elsewhere", ruleId: OTHER_NS_RULE })), ok({}), ok(setting({ name: "cribl-activity-log" })));
+    await deployActivityLogExport(azure, INPUT);
+    expect(azure.calls.map((c) => [c.method, c.path])).toEqual([
+      ["GET", SETTINGS_PATH],
+      ["PUT", OUR_ID],
+      ["GET", OUR_ID],
+    ]);
   });
 });
 
