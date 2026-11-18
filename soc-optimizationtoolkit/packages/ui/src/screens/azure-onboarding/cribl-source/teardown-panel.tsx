@@ -19,10 +19,14 @@
  * applyInputPause) and updates the records.
  *
  * The Activity Log's Azure diagnostic setting is removed from its own
- * section; the Defender export's removal is not built here.
+ * section; the Defender export's removal is not built here. The Entra ID
+ * tenant setting (AZR-99) is removed HERE, by whatever the screen passes as
+ * `azure` (entra-remove-panel.tsx), so its Remove stays offered after Entra
+ * ID is unchosen - its own record, its own two-step confirm.
  */
 
 import { useEffect, useReducer, useState } from "react";
+import type { ReactNode } from "react";
 import { onboardingSource } from "@soc/core";
 import type {
   ApplyPauseOutcome,
@@ -87,7 +91,7 @@ function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-export function TeardownPanel({ hooks }: { readonly hooks: TeardownHooks }) {
+export function TeardownPanel({ hooks, azure }: { readonly hooks: TeardownHooks; readonly azure?: ReactNode }) {
   const rows = teardownRows(hooks.criblSources, hooks.lakeRoutes);
   return (
     <section className="azo-teardown" aria-label="Remove or pause what this app created">
@@ -99,6 +103,7 @@ export function TeardownPanel({ hooks }: { readonly hooks: TeardownHooks }) {
       ) : (
         rows.map((row) => <TeardownRowView key={row.sourceId} row={row} hooks={hooks} />)
       )}
+      {azure}
     </section>
   );
 }

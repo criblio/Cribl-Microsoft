@@ -182,8 +182,8 @@ describe("chooser rows (D2)", () => {
     }
   });
 
-  it("the Entra row is locked to How-to with its reason", () => {
-    const entra = chooserRows(emptyProgress(), SELECTION).find((r) => r.id === "entraId")!;
+  it("the XDR row is locked to How-to with its reason", () => {
+    const entra = chooserRows(emptyProgress(), SELECTION).find((r) => r.id === "xdrStreaming")!;
     expect(entra.modeLocked).toBe(true);
     expect(entra.mode).toBe("manual");
     expect(entra.modeLockedReason).toBe(AUTOMATE_LOCKED_REASON);
@@ -210,7 +210,7 @@ describe("chooser rows (D2)", () => {
 
   it("setMode refuses automate on a non-automatable source and carries chosen into How-to", () => {
     const s = ready(emptyProgress());
-    expect(setMode(s, SELECTION, "entraId", "automate")).toBeNull();
+    expect(setMode(s, SELECTION, "xdrStreaming", "automate")).toBeNull();
     const withDefender: CoverageSelection = { ...SELECTION, enabled: ["defenderExport"] };
     const p = setMode(s, withDefender, "defenderExport", "manual")!;
     expect(p.progress.sources.defenderExport).toEqual({ chosen: true, mode: "manual" });
@@ -477,7 +477,7 @@ describe("rowChoices - the method sections read the chooser's answer, never the 
   });
 
   it("an unusable document makes the choice unknown, naming the document and why", () => {
-    expect(rowChoices({ status: "loading" }, SELECTION, "not-read").get("entraId")).toEqual({
+    expect(rowChoices({ status: "loading" }, SELECTION, "not-read").get("xdrStreaming")).toEqual({
       kind: "unknown",
       doc: "progress",
       cause: "loading",
@@ -487,7 +487,7 @@ describe("rowChoices - the method sections read the chooser's answer, never the 
     const foreign = rowChoices({ status: "doc-foreign", kind: "x" }, SELECTION, "not-read");
     expect(foreign.get("defenderExport")).toEqual({ kind: "unknown", doc: "progress", cause: "not-ours" });
     // No store at all is no storage, not a failed read.
-    expect(rowChoices({ status: "read-unknown", reason: "r" }, null, "no-storage", false).get("entraId")).toEqual({
+    expect(rowChoices({ status: "read-unknown", reason: "r" }, null, "no-storage", false).get("xdrStreaming")).toEqual({
       kind: "unknown",
       doc: "progress",
       cause: "no-storage",
@@ -495,7 +495,7 @@ describe("rowChoices - the method sections read the chooser's answer, never the 
     // Progress loaded but the selection did not: only Automated sources are unknown, with the selection's cause.
     const noSel = rowChoices(ready(emptyProgress()), null, "loading");
     expect(noSel.get("defenderExport")).toEqual({ kind: "unknown", doc: "selection", cause: "loading" });
-    expect(noSel.get("entraId")).toEqual({ kind: "not-chosen" });
+    expect(noSel.get("xdrStreaming")).toEqual({ kind: "not-chosen" });
     expect(rowChoices(ready(emptyProgress()), null, "not-ours").get("defenderExport")).toEqual({
       kind: "unknown",
       doc: "selection",

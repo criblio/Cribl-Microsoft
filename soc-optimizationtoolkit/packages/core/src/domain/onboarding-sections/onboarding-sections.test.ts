@@ -98,7 +98,7 @@ describe("ITEM_AVAILABILITY", () => {
     const available = Object.entries(ITEM_AVAILABILITY)
       .filter(([, a]) => a.status === "available")
       .map(([id]) => id);
-    expect(available).toEqual(["activityLog", "defenderExport"]);
+    expect(available).toEqual(["activityLog", "entraId", "defenderExport"]);
   });
 
   it("has an entry for every catalog id and no other", () => {
@@ -117,7 +117,8 @@ describe("ITEM_AVAILABILITY", () => {
     expect(itemAvailability("noSuchItem").status).toBe("not-built");
     expect(itemAvailability("defenderExport").status).toBe("available");
     expect(itemAvailability("activityLog").status).toBe("available");
-    expect(itemAvailability("entraId").status).toBe("not-built");
+    expect(itemAvailability("entraId").status).toBe("available");
+    expect(itemAvailability("diagnosticSettingsInitiative").status).toBe("not-built");
   });
 });
 
@@ -137,12 +138,12 @@ describe("ITEM_PREREQUISITES", () => {
 });
 
 describe("sectionAvailability", () => {
-  it("makes the script section available while entraId, in the same section, is not built", () => {
+  it("makes the script section available, with entraId (AZR-99) now automatable in it", () => {
     const script = section("script");
     expect(script.rows.map((r) => r.id)).toEqual(
       expect.arrayContaining(["entraId", "defenderExport"]),
     );
-    expect(itemAvailability("entraId").status).toBe("not-built");
+    expect(itemAvailability("entraId").status).toBe("available");
     expect(sectionAvailability(script)).toBe("available");
   });
 

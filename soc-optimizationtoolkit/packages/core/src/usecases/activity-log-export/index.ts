@@ -8,6 +8,7 @@
 export {
   ACTIVITY_LOG_ITEM_ID,
   deployActivityLogExport,
+  listDiagnosticSettings,
   readActivityLogState,
 } from "./activity-log-export";
 export type {

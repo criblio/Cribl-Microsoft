@@ -28,7 +28,8 @@ import {
 } from "../entra-diagnostics/entra-diagnostic-setting";
 import { LEGACY_WRITER } from "../logging-map/ownership";
 import type { PlanValues } from "../onboarding-howto/plan-values";
-import { planRuleId } from "./eventhub-steps";
+import { planNamespace, planRuleId } from "./eventhub-steps";
+import type { EntraSettingInput } from "../entra-diagnostics/entra-setting-deploy";
 import {
   IDENTITY_TEMPLATE,
   LEGACY_POLICY_NAMES,
@@ -67,6 +68,43 @@ export function entraSettingRequest(v: PlanValues, subSelection: readonly string
     eventHubName: "",
     categories: entraCategoriesFor(subSelection),
   });
+}
+
+/**
+ * The Entra Deploy's target, from the PLAN (AZR-99): the namespace located by
+ * planNamespace (the namespace's own subscription and resource group via
+ * eventHubLocation - never the shared ones), the plan's Send rule, and the
+ * chosen profile's categories. The SAME inputs {@link entraSettingRequest}
+ * renders into the How-to step and Validate's entra-setting check reads, so
+ * Deploy writes the setting both of them describe.
+ *
+ * `missing` names the plan values still blank (the Deploy cannot run without
+ * them); `input` is null exactly when something is missing.
+ */
+export function entraDeployTarget(
+  v: PlanValues,
+  subSelection: readonly string[],
+): { readonly input: EntraSettingInput | null; readonly missing: readonly string[] } {
+  const namespace = planNamespace(v);
+  const ruleName = (v.sendRule ?? "").trim();
+  const missing: string[] = [];
+  if (namespace.subscriptionId.trim() === "") missing.push("eventHubSubscriptionId");
+  if (namespace.resourceGroup.trim() === "") missing.push("eventHubResourceGroup");
+  if (namespace.name.trim() === "") missing.push("namespace");
+  if (ruleName === "") missing.push("sendRule");
+  if (missing.length > 0) return { input: null, missing };
+  return {
+    input: {
+      namespace: {
+        subscriptionId: namespace.subscriptionId.trim(),
+        resourceGroup: namespace.resourceGroup.trim(),
+        name: namespace.name.trim(),
+      },
+      ruleName,
+      categories: entraCategoriesFor(subSelection),
+    },
+    missing: [],
+  };
 }
 
 const ENTRA_URL = buildEntraDiagnosticRequest({

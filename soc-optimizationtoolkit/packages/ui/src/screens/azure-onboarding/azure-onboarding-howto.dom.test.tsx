@@ -92,15 +92,15 @@ const notFound = (): PortHttpResponse =>
 
 /**
  * A progress document with Defender chosen in How-to mode against ns1/h1. The
- * Activity Log is pinned to How-to and not chosen: it became automatable
- * (AZR-98), and with no stored mode the default selection would choose it,
+ * Activity Log and Entra ID are pinned to How-to and not chosen: they became automatable
+ * (AZR-98, AZR-99), and with no stored mode the default selection would choose them,
  * putting a second source into every Defender-only pin here.
  */
 function progressDoc(over: Record<string, unknown> = {}): unknown {
   return {
     kind: ONBOARDING_PROGRESS_KIND,
     version: ONBOARDING_PROGRESS_VERSION,
-    sources: { defenderExport: { chosen: true, mode: "manual" }, activityLog: { chosen: false, mode: "manual" } },
+    sources: { defenderExport: { chosen: true, mode: "manual" }, activityLog: { chosen: false, mode: "manual" }, entraId: { chosen: false, mode: "manual" } },
     planValues: { subscriptionId: SUB, resourceGroup: RG, namespace: NS, hubName: HUB, consumerGroup: "cribl" },
     ticks: {},
     criblSources: {},
@@ -337,7 +337,7 @@ describe("AzureOnboardingScreen - progress writes", () => {
     expect(screen.getByTestId("azo-choice-defenderExport").textContent).toBe(unreadable);
     expect(screen.getByTestId("azo-choice-entraId").textContent).toBe(unreadable);
     // The deploy sections render, but Deploy is off and says why in the same words.
-    expect(screen.getAllByText(`${unreadable} Deploy is off until it is known.`).length).toBe(2);
+    expect(screen.getAllByText(`${unreadable} Deploy is off until it is known.`).length).toBe(3);
     for (let i = 0; i < 5; i += 1) await Promise.resolve();
     expect(store.saves).toEqual([]);
   });

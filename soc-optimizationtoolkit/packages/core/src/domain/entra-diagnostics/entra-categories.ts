@@ -73,6 +73,18 @@ export interface EntraCategory {
    * Cribl and UEBA stops seeing it, permanently, with no workaround.
    */
   readonly uebaBoundTable: string | null;
+  /**
+   * The licence Microsoft documents for this category's data, or `null` when
+   * Microsoft Entra ID Free carries it (audit and sign-in logs). AZR-99, from
+   * learn.microsoft.com: "Microsoft Entra monitoring and health" licensing
+   * (provisioning, Graph activity, Usage and insights need P1 or P2), "Microsoft
+   * Entra ID Protection" (P2), Workload ID, and the Global Secure Access
+   * categories' own "doesn't add new logs ... unless" notes. The app cannot
+   * see a tenant's licences, so this is a NOTE shown beside the category, never
+   * a gate: an unlicensed category is named by Azure's answer at the write or
+   * by the read-back, not silently dropped.
+   */
+  readonly licence: string | null;
 }
 
 /**
@@ -85,12 +97,14 @@ export const ENTRA_CATEGORIES: readonly EntraCategory[] = [
     description: "Directory changes, app registrations, role assignments",
     volumeWarning: null,
     uebaBoundTable: "AuditLogs",
+    licence: null,
   },
   {
     name: "SignInLogs",
     description: "Interactive user sign-ins",
     volumeWarning: null,
     uebaBoundTable: "SigninLogs",
+    licence: null,
   },
   {
     name: "NonInteractiveUserSignInLogs",
@@ -98,66 +112,77 @@ export const ENTRA_CATEGORIES: readonly EntraCategory[] = [
     volumeWarning:
       "5-10x the volume of interactive sign-ins. This is the single largest category here.",
     uebaBoundTable: null,
+    licence: null,
   },
   {
     name: "ServicePrincipalSignInLogs",
     description: "Service principal sign-ins",
     volumeWarning: null,
     uebaBoundTable: "AADServicePrincipalSignInLogs",
+    licence: null,
   },
   {
     name: "ManagedIdentitySignInLogs",
     description: "Managed identity sign-ins",
     volumeWarning: null,
     uebaBoundTable: "AADManagedIdentitySignInLogs",
+    licence: null,
   },
   {
     name: "ProvisioningLogs",
     description: "User and group provisioning activity",
     volumeWarning: null,
     uebaBoundTable: null,
+    licence: "Microsoft Entra ID P1 or P2 (provisioning logs are not available on Free).",
   },
   {
     name: "ADFSSignInLogs",
     description: "AD FS sign-ins",
     volumeWarning: null,
     uebaBoundTable: null,
+    licence: "Microsoft Entra ID P1 or P2 (part of Usage and insights), with AD FS sign-ins reported to Entra ID.",
   },
   {
     name: "RiskyUsers",
     description: "Identity Protection risky user state",
     volumeWarning: null,
     uebaBoundTable: null,
+    licence: "Microsoft Entra ID P2 (ID Protection); Free and P1 tenants see limited risk data.",
   },
   {
     name: "UserRiskEvents",
     description: "Identity Protection user risk detections",
     volumeWarning: null,
     uebaBoundTable: null,
+    licence: "Microsoft Entra ID P2 (ID Protection); Free and P1 tenants see limited risk data.",
   },
   {
     name: "RiskyServicePrincipals",
     description: "Identity Protection risky service principal state",
     volumeWarning: null,
     uebaBoundTable: null,
+    licence: "Microsoft Entra Workload ID licences (risky workload identities).",
   },
   {
     name: "ServicePrincipalRiskEvents",
     description: "Identity Protection service principal risk detections",
     volumeWarning: null,
     uebaBoundTable: null,
+    licence: "Microsoft Entra Workload ID licences (risky workload identities).",
   },
   {
     name: "NetworkAccessTrafficLogs",
     description: "Global Secure Access traffic",
     volumeWarning: null,
     uebaBoundTable: null,
+    licence: "Microsoft Entra Internet Access or Private Access (Global Secure Access); no data without it.",
   },
   {
     name: "EnrichedOffice365AuditLogs",
     description: "Enriched Microsoft 365 audit logs",
     volumeWarning: null,
     uebaBoundTable: null,
+    licence: "Microsoft Entra Internet Access with enriched Microsoft 365 logs turned on; no data without it.",
   },
   {
     name: "MicrosoftGraphActivityLogs",
@@ -165,12 +190,14 @@ export const ENTRA_CATEGORIES: readonly EntraCategory[] = [
     volumeWarning:
       "High volume in tenants with heavy Graph automation - every API call is an event.",
     uebaBoundTable: null,
+    licence: "Microsoft Entra ID P1 or P2 (Microsoft Graph activity logs are not available on Free).",
   },
   {
     name: "RemoteNetworkHealthLogs",
     description: "Global Secure Access remote network health",
     volumeWarning: null,
     uebaBoundTable: null,
+    licence: "Microsoft Entra Internet Access or Private Access (Global Secure Access); no data without it.",
   },
 ];
 
@@ -266,6 +293,21 @@ export function uebaBoundTables(
   for (const name of selected) {
     const table = entraCategory(name)?.uebaBoundTable;
     if (table !== undefined && table !== null && !out.includes(table)) out.push(table);
+  }
+  return out;
+}
+
+/**
+ * Every licence note a selection carries, paired with its category, in
+ * selection order (AZR-99). Empty when every chosen category is on Free.
+ */
+export function licenceNotes(
+  selected: readonly EntraCategoryName[],
+): readonly { readonly category: EntraCategoryName; readonly licence: string }[] {
+  const out: { category: EntraCategoryName; licence: string }[] = [];
+  for (const name of selected) {
+    const licence = entraCategory(name)?.licence;
+    if (licence !== undefined && licence !== null) out.push({ category: name, licence });
   }
   return out;
 }

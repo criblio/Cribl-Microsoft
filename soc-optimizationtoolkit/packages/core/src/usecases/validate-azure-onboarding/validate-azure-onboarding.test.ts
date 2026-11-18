@@ -32,8 +32,12 @@ import {
   verdictsForStep,
   ACTIVITY_LOG_WRITTEN_UNCONFIRMED_DETAIL,
   applyActivityLogDeploy,
+  applyEntraDeploy,
   applyOnboardingDeploy,
+  ENTRA_WRITTEN_UNCONFIRMED_DETAIL,
 } from "./index";
+import { buildEntraSettingPutRequest, entraDiagnosticInputFor } from "../../domain/entra-diagnostics";
+import { entraCategoriesFor } from "../../domain/onboarding-howto-steps/entra-activity-steps";
 
 const FULL: PlanValues = {
   ...defaultPlanValues({ subscriptionId: "sub-1", resourceGroup: "rg-1" }),
@@ -648,5 +652,92 @@ describe("an Activity Log deploy made after the run (AZR-98)", () => {
     expect(viaDefender.checks.filter((c) => c.kind === "activity-log-setting")).toEqual(
       run.checks.filter((c) => c.kind === "activity-log-setting"),
     );
+  });
+});
+
+describe("an Entra ID deploy made after the run (AZR-99)", () => {
+  const NS = { subscriptionId: "sub-1", resourceGroup: "rg-1", name: "ns1" };
+  const TARGET = { namespace: NS, ruleName: "sender", categories: entraCategoriesFor(["Standard"]) };
+  const deploy = (outcome: "written-and-read-back" | "accepted-not-verified", input = TARGET) =>
+    ({ source: "entraId", outcome, input }) as const;
+  const absentRun = () => validateAzureOnboarding(new RecordingAzure(), planValidation(["entraId"], FULL));
+  const settingVerdicts = (r: { checks: readonly { kind: string; key: string }[]; verdicts: Readonly<Record<string, unknown>> }) =>
+    r.checks.filter((c) => c.kind === "entra-setting").map((c) => r.verdicts[c.key]);
+
+  it("a read-back after an absent verdict replaces 'not found' with as-expected, and nothing else", async () => {
+    const before = await absentRun();
+    expect(settingVerdicts(before)).toHaveLength(1);
+    expect(settingVerdicts(before)).toEqual([{ kind: "absent" }]);
+    const after = applyEntraDeploy(before, FULL, deploy("written-and-read-back"))!;
+    expect(settingVerdicts(after)).toEqual([{ kind: "as-expected" }]);
+    const others = (r: typeof before) => r.checks.filter((c) => c.kind !== "entra-setting");
+    expect(others(after)).toEqual(others(before));
+  });
+
+  it("is what a fresh read of the setting the deploy writes would say (the amend is not a guess)", async () => {
+    const written = buildEntraSettingPutRequest(entraDiagnosticInputFor(TARGET));
+    const azure = new RecordingAzure([
+      onPath("/providers/microsoft.aadiam/diagnosticSettings", {
+        status: 200,
+        body: { value: [{ id: written.path, name: "CriblEntraIDLogs", properties: written.body.properties }] },
+      } as unknown as PortHttpResponse),
+    ]);
+    const fresh = await validateAzureOnboarding(azure, planValidation(["entraId"], FULL));
+    expect(settingVerdicts(fresh)).toEqual([{ kind: "as-expected" }]);
+  });
+
+  it("an unconfirmed write retires the verdict to unknown, never as-expected", async () => {
+    const after = applyEntraDeploy(await absentRun(), FULL, deploy("accepted-not-verified"))!;
+    expect(settingVerdicts(after)).toEqual([{ kind: "unknown", reason: "failed", detail: ENTRA_WRITTEN_UNCONFIRMED_DETAIL }]);
+  });
+
+  it("a deploy to another namespace or rule than the plan's says nothing about the run", async () => {
+    const before = await absentRun();
+    for (const input of [
+      { ...TARGET, ruleName: "other-rule" },
+      { ...TARGET, namespace: { ...NS, name: "ns2" } },
+      { ...TARGET, namespace: { ...NS, subscriptionId: "sub-2" } },
+    ]) {
+      expect(applyEntraDeploy(before, FULL, deploy("written-and-read-back", input))).toBeNull();
+    }
+  });
+
+  it("a deploy of other categories than the run required says nothing about the run (profile changed after Validate)", async () => {
+    // Validate ran with HighVolume; the operator then picked Standard and deployed.
+    const wide = await validateAzureOnboarding(
+      new RecordingAzure(),
+      planValidation([{ id: "entraId", subSelection: ["HighVolume"] }], FULL),
+    );
+    const wideChecks = wide.checks.filter((c) => c.kind === "entra-setting");
+    expect(wideChecks).toHaveLength(1);
+    expect(wideChecks[0]!.entraCategories).toEqual(entraCategoriesFor(["HighVolume"]));
+    expect(entraCategoriesFor(["HighVolume"])).not.toEqual(TARGET.categories);
+    expect(applyEntraDeploy(wide, FULL, deploy("written-and-read-back"))).toBeNull();
+    expect(applyEntraDeploy(wide, FULL, deploy("accepted-not-verified"))).toBeNull();
+    // A subset or superset is not a match either.
+    const before = await absentRun();
+    expect(applyEntraDeploy(before, FULL, deploy("written-and-read-back", { ...TARGET, categories: TARGET.categories.slice(1) }))).toBeNull();
+    expect(
+      applyEntraDeploy(before, FULL, deploy("written-and-read-back", { ...TARGET, categories: [...TARGET.categories, "MicrosoftGraphActivityLogs"] })),
+    ).toBeNull();
+    // The same categories in another order and case are a match.
+    const reordered = [...TARGET.categories].reverse().map((c) => c.toLowerCase());
+    expect(settingVerdicts(applyEntraDeploy(before, FULL, deploy("written-and-read-back", { ...TARGET, categories: reordered }))!)).toEqual([
+      { kind: "as-expected" },
+    ]);
+  });
+
+  it("a result whose entra check does not carry its categories is never amended", async () => {
+    const before = await absentRun();
+    const stripped = { ...before, checks: before.checks.map(({ entraCategories: _drop, ...c }) => c) };
+    expect(applyEntraDeploy(stripped, FULL, deploy("written-and-read-back"))).toBeNull();
+  });
+
+  it("applyOnboardingDeploy routes an Entra deploy to the Entra amend only", async () => {
+    const run = await validateAzureOnboarding(new RecordingAzure(), planValidation(["entraId", "activityLog"], FULL));
+    const after = applyOnboardingDeploy(run, FULL, deploy("written-and-read-back"))!;
+    expect(settingVerdicts(after)).toEqual([{ kind: "as-expected" }]);
+    const al = (r: typeof run) => r.checks.filter((c) => c.kind === "activity-log-setting");
+    expect(al(after)).toEqual(al(run));
   });
 });

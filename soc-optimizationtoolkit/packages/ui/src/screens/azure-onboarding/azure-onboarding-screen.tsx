@@ -123,6 +123,15 @@ import {
   withLakeRouteAfterTeardown,
   withoutActivityLogSetting,
   withoutCriblSource,
+  ENTRA_ITEM_ID,
+  ENTRA_SETTING_NAME,
+  entraDeployTarget,
+  entraProfileFrom,
+  entraSettingRecord,
+  readEntraSettingState,
+  expectedEntraSetting,
+  withEntraSetting,
+  withoutEntraSetting,
 } from "@soc/core";
 import type {
   TenantInventory,
@@ -141,6 +150,10 @@ import type {
   CoverageSelection,
   ActivityLogDeployForValidation,
   ActivityLogState,
+  EntraDeployForValidation,
+  EntraRemoveOutcome,
+  EntraSettingInput,
+  EntraSettingState,
   DefenderDeployForValidation,
   DefenderState,
   EventHubSource,
@@ -195,6 +208,9 @@ import { EventHubPrerequisiteSection, PickerLine } from "./eventhub-prerequisite
 import type { EventHubTarget } from "./eventhub-prerequisite-section";
 import { DefenderExportSection } from "./defender-export-section";
 import { ActivityLogSection } from "./activity-log-section";
+import { EntraSettingSection } from "./entra-setting-section";
+import { EntraRemovePanel } from "./entra-remove-panel";
+import { entraDeployedItems, entraReadDisprovesRecord } from "./entra-setting-state";
 import { TenantInventoryHeatmap } from "./inventory/tenant-inventory-heatmap";
 import { HowToPanel } from "./howto/howto-panel";
 import { ChoosePanel } from "./howto/choose-panel";
@@ -224,6 +240,7 @@ import {
   changedPlanKeys,
   activityLogAmendNote,
   defenderAmendNote,
+  entraAmendNote,
   validateRunReducer,
 } from "./validate/validate-state";
 import { CriblSourcePanel } from "./cribl-source/cribl-source-panel";
@@ -251,7 +268,7 @@ const SECTION_TIPS: Readonly<Record<OnboardingSectionView["key"], string>> = {
   "custom-initiative":
     "A community-maintained policy initiative that covers resource types the built-in one does not. Deploying it from here is not available yet.",
   script:
-    "Sources configured directly, without a policy. The Activity Log (one subscription diagnostic setting) and the Defender for Cloud alert export can be deployed from here once chosen in Automate mode; Entra ID is shown for completeness.",
+    "Sources configured directly, without a policy. The Activity Log (one subscription diagnostic setting), Entra ID (one tenant diagnostic setting) and the Defender for Cloud alert export can be deployed from here once chosen in Automate mode.",
   "guided-portal":
     "The Defender XDR streaming export is finished in the Microsoft Defender portal. Guidance for it is not available here yet.",
   none: "Sources that cannot stream to an Event Hub at all, with what to use instead. Nothing here is deployed.",
@@ -342,6 +359,12 @@ const CHOOSER_ANCHOR_ID = "azo-choose-section";
  * when the row is not rendered (the progress document has not loaded or could
  * not be read). DOM only - no state, no IO.
  */
+/** The Entra Deploy's target as the row label judges against it: null until progress loads or while values are missing. */
+function entraRowTargetInput(load: ProgressLoadState, selection: CoverageSelection | null): EntraSettingInput | null {
+  const p = loadedProgress(load);
+  return p === null ? null : entraDeployTarget(p.planValues, selection?.subSelections[ENTRA_ITEM_ID] ?? []).input;
+}
+
 function showHowto(id: OnboardingSourceId): void {
   const radio = document.getElementById(howtoModeRadioId(id));
   const usableRadio = radio instanceof HTMLInputElement && !radio.disabled ? radio : null;
@@ -391,6 +414,9 @@ export function AzureOnboardingScreen({
   const [target, setTarget] = useState<EventHubTarget>(EMPTY_EVENTHUB_TARGET);
   const [defenderState, setDefenderState] = useState<DefenderState | null>(null);
   const [activityLogState, setActivityLogState] = useState<ActivityLogState | null>(null);
+  const [entraState, setEntraState] = useState<EntraSettingState | null>(null);
+  // AZR-99: the next Entra read follows the app's own write (see onEntraState).
+  const entraReadAfterDeploy = useRef(false);
 
   // How-to progress (ADR 0007 D1, D3).
   const [progressLoad, setProgressLoad] = useState<ProgressLoadState>(
@@ -553,8 +579,11 @@ export function AzureOnboardingScreen({
     if (activityLogState?.unknownReason !== undefined) {
       map.set(ACTIVITY_LOG_ITEM_ID, activityLogState.unknownReason);
     }
+    if (entraState?.unknownReason !== undefined) {
+      map.set(ENTRA_ITEM_ID, entraState.unknownReason);
+    }
     return map;
-  }, [defenderState, activityLogState]);
+  }, [defenderState, activityLogState, entraState]);
   // What the reads found deployed. Null until one read happened; a source not
   // yet read is then labelled from what is known (deployedFrom).
   const deployed = useMemo(
@@ -562,8 +591,9 @@ export function AzureOnboardingScreen({
       deployedFrom([
         [DEFENDER_EXPORT_ITEM_ID, defenderState?.deployed ?? null],
         [ACTIVITY_LOG_ITEM_ID, activityLogState?.deployed ?? null],
+        [ENTRA_ITEM_ID, entraDeployedItems(entraState, entraRowTargetInput(progressLoad, selection))],
       ]),
-    [defenderState, activityLogState],
+    [defenderState, activityLogState, entraState, progressLoad, selection],
   );
   const selectionCause = selectionUnknownCause(load, store !== undefined);
   // The chooser's answer per source: the ONLY input the method sections'
@@ -597,6 +627,8 @@ export function AzureOnboardingScreen({
   const titleOf = (id: OnboardingSourceId): string => onboardingSource(id)?.title ?? id;
   const defenderBlock = deployBlockView(choiceOf(DEFENDER_EXPORT_ITEM_ID), defenderHowTo, titleOf(DEFENDER_EXPORT_ITEM_ID));
   const activityLogBlock = deployBlockView(choiceOf(ACTIVITY_LOG_ITEM_ID), activityLogHowTo, titleOf(ACTIVITY_LOG_ITEM_ID));
+  const entraHowTo = progress !== null && effectiveMode(progress, ENTRA_ITEM_ID) === "manual";
+  const entraBlock = deployBlockView(choiceOf(ENTRA_ITEM_ID), entraHowTo, titleOf(ENTRA_ITEM_ID));
   const chosen = useMemo(
     () => (progress === null ? [] : chosenSourceIds(progress, selection)),
     [progress, selection],
@@ -881,6 +913,75 @@ export function AzureOnboardingScreen({
       showMessage("howto", {
         tone: "warning",
         text: `The Activity Log setting ${ACTIVITY_LOG_SETTING_NAME} was created, but your saved progress could not be updated, so this page cannot prove it created it and will not offer to remove it.`,
+      });
+    }
+  }
+
+  /**
+   * AZR-99: an Entra ID deploy that wrote the setting amends the last Validate
+   * run, and records the setting (by tenant) so Remove can prove it the app's.
+   */
+  function onEntraDeployed(deploy: EntraDeployForValidation): void {
+    entraReadAfterDeploy.current = true;
+    amendLastRun(deploy, entraAmendNote(deploy.outcome, new Date().toLocaleTimeString()));
+    logger?.info(`${LOG} Entra ID deploy applied to the last Validate result`, { outcome: deploy.outcome });
+    const p = loadedProgress(latestProgressLoad.current);
+    const recorded =
+      p !== null &&
+      config.tenantId.trim() !== "" &&
+      commitProgress(
+        withEntraSetting(p, {
+          tenantId: config.tenantId,
+          settingName: ENTRA_SETTING_NAME,
+          ruleId: expectedEntraSetting(deploy.input).ruleId,
+        }),
+        "entra setting",
+      );
+    if (!recorded) {
+      showMessage("howto", {
+        tone: "warning",
+        text: `The Entra ID setting ${ENTRA_SETTING_NAME} was created, but your saved progress could not be updated, so this page cannot prove it created it and will not offer to remove it.`,
+      });
+    }
+  }
+
+  /**
+   * AZR-99: every Entra read lands here. A read that no longer lists the
+   * setting forgets this tenant's record (entraReadDisprovesRecord), so a
+   * stale record never proves ownership of a setting re-created by hand -
+   * except the read right after the app's own write, which may simply lag.
+   */
+  function onEntraState(next: EntraSettingState): void {
+    setEntraState(next);
+    const afterOwnWrite = entraReadAfterDeploy.current;
+    entraReadAfterDeploy.current = false;
+    if (afterOwnWrite) return;
+    const p = loadedProgress(latestProgressLoad.current);
+    if (p === null || !entraReadDisprovesRecord(next, entraSettingRecord(p, config.tenantId))) return;
+    if (commitProgress(withoutEntraSetting(p, config.tenantId), "entra setting found gone")) {
+      logger?.info(`${LOG} Entra ID setting record dropped: the read no longer lists it`, {});
+      showMessage("howto", {
+        tone: "info",
+        text: `${ENTRA_SETTING_NAME} is no longer in this tenant, so this page has forgotten creating it. A setting of that name made later is not removed from here.`,
+      });
+    }
+  }
+
+  /**
+   * AZR-99: after a removal that left nothing behind, forget the record; after
+   * any removal that reached Azure, re-read, so the row and Deploy stop
+   * describing the setting as it was before.
+   */
+  function onEntraRemoved(outcome: EntraRemoveOutcome): void {
+    if (outcome.kind === "removed" || outcome.kind === "already-gone") {
+      const p = loadedProgress(latestProgressLoad.current);
+      if (p !== null) commitProgress(withoutEntraSetting(p, config.tenantId), "entra setting removed");
+    }
+    if (outcome.kind === "removed" || outcome.kind === "removed-not-confirmed" || outcome.kind === "already-gone") {
+      void readEntraSettingState(ports.azure, logger).then(onEntraState, (error: unknown) => {
+        // The usecase never throws; a wiring fault must not leave the old state looking current.
+        setEntraState(null);
+        logger?.error(`${LOG} Entra ID re-read after remove threw`, { error: errorText(error) });
       });
     }
   }
@@ -1265,6 +1366,25 @@ export function AzureOnboardingScreen({
                   onShowHowto={() => showHowto(ACTIVITY_LOG_ITEM_ID)}
                 />
               ))}
+            {view.rows.some((r) => r.kind === "item" && r.id === ENTRA_ITEM_ID) &&
+              (entraBlock.kind === "none" ? null : entraBlock.kind === "howto-note" ? (
+                <p className="field-hint" data-testid={`azo-howto-note-${ENTRA_ITEM_ID}`}>
+                  {entraBlock.text}
+                </p>
+              ) : (
+                <EntraSettingSection
+                  choice={choiceOf(ENTRA_ITEM_ID)}
+                  entraTarget={values === null ? null : entraDeployTarget(values, subSelectionOf(ENTRA_ITEM_ID))}
+                  profile={entraProfileFrom(subSelectionOf(ENTRA_ITEM_ID))}
+                  picked={target}
+                  record={progress === null ? null : entraSettingRecord(progress, config.tenantId)}
+                  state={entraState}
+                  onState={onEntraState}
+                  onDeployed={onEntraDeployed}
+                  howtoSection={CHOOSER_SECTION_NUMBER}
+                  onShowHowto={() => showHowto(ENTRA_ITEM_ID)}
+                />
+              ))}
             {view.rows.some((r) => r.kind === "item" && r.id === DEFENDER_EXPORT_ITEM_ID) &&
               (defenderBlock.kind === "none" ? null : defenderBlock.kind === "howto-note" ? (
                 <p className="field-hint" data-testid={`azo-howto-note-${DEFENDER_EXPORT_ITEM_ID}`}>
@@ -1372,6 +1492,9 @@ export function AzureOnboardingScreen({
               onPlanPause,
               onApplyPause,
             }}
+            azure={
+              <EntraRemovePanel record={entraSettingRecord(progress, config.tenantId)} onRemoved={onEntraRemoved} />
+            }
           />
         )}
       </NumberedSection>

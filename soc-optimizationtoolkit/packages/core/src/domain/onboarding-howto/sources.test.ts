@@ -119,10 +119,11 @@ describe("isAutomatable", () => {
   });
 
   // AZR-98 deliberately added activityLog.
-  it("is today exactly the Activity Log and the Defender export", () => {
+  it("is today exactly the Activity Log, the Defender export and Entra ID", () => {
     expect(ONBOARDING_SOURCES.filter((s) => isAutomatable(s.id)).map((s) => s.id).sort()).toEqual([
       "activityLog",
       "defenderExport",
+      "entraId",
     ]);
   });
 });

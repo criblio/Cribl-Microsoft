@@ -271,16 +271,23 @@ one check named.
 - Security Administrator  [feature, unverified]  
     Scope:          tenant-wide (an Entra ID directory role, not consent or  
                     IAM)  
-    Needed for:     Check the Entra ID diagnostic settings  
+    Needed for:     Check, deploy and remove the Entra ID diagnostic setting  
     Why:            Security Administrator is a privileged Entra directory  
                     role: it can change security policy and Conditional Access  
                     across the whole tenant. It is asked for only so  
                     Validate's optional Entra ID diagnostic settings check can  
                     read GET /providers/microsoft.aadiam/diagnosticSettings,  
-                    for which Microsoft documents no read-only role. We  
-                    recommend refusing it unless that check is needed.  
+                    for which Microsoft documents no read-only role, and so  
+                    the onboarding screen's optional Entra ID Deploy can  
+                    create (and Remove can delete) the one tenant setting  
+                    CriblEntraIDLogs it streams sign-in and audit logs with.  
+                    We recommend refusing it unless that check or that deploy  
+                    is needed.  
     If not granted: Validate's Entra ID diagnostic settings check reads as  
-                    could not be read. Nothing else is affected.  
+                    could not be read, and the Entra ID Deploy is refused by  
+                    Azure; the How-to steps still let an administrator who  
+                    holds the role create the setting by hand. Nothing else is  
+                    affected.  
     Where:          Entra ID > Roles and administrators > this role > Add  
                     assignments, for this app's service principal.  
 

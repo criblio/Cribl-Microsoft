@@ -71,12 +71,16 @@ export {
   withoutTick,
   activityLogSettingRecord,
   withActivityLogSetting,
+  entraSettingRecord,
+  withEntraSetting,
+  withoutEntraSetting,
   withLakeRouteAfterTeardown,
   withoutActivityLogSetting,
   withoutCriblSource,
 } from "./progress-document";
 export type {
   ActivityLogSettingRecord,
+  EntraSettingRecord,
   CriblSourceRecord,
   LakeRouteRecord,
   DecodedProgress,

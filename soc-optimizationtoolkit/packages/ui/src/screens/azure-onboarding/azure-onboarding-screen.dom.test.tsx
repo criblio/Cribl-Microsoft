@@ -452,6 +452,7 @@ async function readyToDeployFrom(target: () => Promise<void>): Promise<void> {
 }
 
 const ENTRA_TITLE = COVERAGE_CATALOG.find((i) => i.id === "entraId")?.title ?? "";
+const XDR_TITLE = COVERAGE_CATALOG.find((i) => i.id === "xdrStreaming")?.title ?? "";
 
 describe("AzureOnboardingScreen - mount and the saved selection", () => {
   it("mounts reading only the tenant's two documents (and, on a first run, their legacy copies), the tenant to Cribl mapping, and zero Azure calls", async () => {
@@ -585,13 +586,13 @@ describe("AzureOnboardingScreen - mount and the saved selection", () => {
     await waitFor(() => expect(screen.getByText(/Your choice was not saved/)).toBeTruthy());
     store.failSaves(null);
     // A How-to choice writes progress successfully, in the same section.
-    fireEvent.click(chooseBox(ENTRA_TITLE));
+    fireEvent.click(chooseBox(XDR_TITLE));
     await waitFor(() => expect(store.saves.some((s) => s.key === PROGRESS_KEY)).toBe(true));
     await settle();
     expect(screen.getByText(/Your choice was not saved/)).toBeTruthy();
     // A failed progress write shows its own line beside it, not over it.
     store.failSaves(new Error("PUT kvstore: HTTP 503"));
-    fireEvent.click(chooseBox(ENTRA_TITLE));
+    fireEvent.click(chooseBox(XDR_TITLE));
     await waitFor(() => expect(screen.getByText(/Your How-to progress was not saved/)).toBeTruthy());
     expect(screen.getByText(/Your choice was not saved/)).toBeTruthy();
     // Only a successful selection write clears it.
@@ -782,13 +783,13 @@ describe("AzureOnboardingScreen - the catalog layout", () => {
         label: true,
       });
     }
-    // Only the two deployable sources can be Automated; the rest are locked.
+    // Only the three deployable sources can be Automated; the rest are locked.
     for (const item of COVERAGE_CATALOG) {
       const automate = screen.getByRole("radio", { name: `Automate ${item.title}` }) as HTMLInputElement;
       expect({ id: item.id, disabled: automate.disabled }).toEqual({
         id: item.id,
-        // AZR-98 deliberately made the Activity Log deployable beside Defender.
-        disabled: item.id !== "defenderExport" && item.id !== "activityLog",
+        // AZR-98 made the Activity Log, and AZR-99 Entra ID, deployable beside Defender.
+        disabled: item.id !== "defenderExport" && item.id !== "activityLog" && item.id !== "entraId",
       });
     }
   });
@@ -1482,7 +1483,7 @@ describe("the tenant inventory heat map on the screen", () => {
     expect(read.disabled).toBe(false);
     expect(screen.queryByText(/still loading/)).toBeNull();
     fireEvent.click(read);
-    const entra = await screen.findByRole("button", { name: /Entra ID/ });
+    const entra = await screen.findByRole("button", { name: /^Entra ID/ });
     fireEvent.click(entra);
     const signIn = screen.getAllByRole("listitem").find((t) => within(t).queryByText("SignInLogs") !== null)!;
     expect(signIn.textContent).toContain("archive not known (this app's own Cribl setup could not be read)");

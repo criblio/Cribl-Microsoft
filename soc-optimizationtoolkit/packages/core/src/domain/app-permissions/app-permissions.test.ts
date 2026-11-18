@@ -594,7 +594,9 @@ describe("AZR-82 - management-group and tenant reads are asked for", () => {
     expect(role?.justification).toContain("privileged Entra directory role");
     expect(role?.justification).toContain("change security policy and Conditional Access across the whole tenant");
     expect(role?.justification).toContain("only so Validate's optional Entra ID diagnostic settings check");
-    expect(role?.justification).toContain("We recommend refusing it unless that check is needed.");
+    expect(role?.justification).toContain("the onboarding screen's optional Entra ID Deploy can create (and Remove can delete) the one tenant setting CriblEntraIDLogs");
+    expect(role?.justification).toContain("We recommend refusing it unless that check or that deploy is needed.");
+    expect(role?.withoutIt).toContain("the Entra ID Deploy is refused by Azure");
   });
 
   it("reports both to the preflight as not measured", () => {
@@ -607,7 +609,7 @@ describe("AZR-82 - management-group and tenant reads are asked for", () => {
     expect(grants).toContainEqual({
       name: "Security Administrator",
       where: "the tenant (Entra ID directory role)",
-      feature: "Check the Entra ID diagnostic settings",
+      feature: "Check, deploy and remove the Entra ID diagnostic setting",
     });
   });
 });

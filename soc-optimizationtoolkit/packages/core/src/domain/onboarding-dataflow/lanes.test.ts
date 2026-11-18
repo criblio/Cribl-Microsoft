@@ -81,8 +81,8 @@ describe("chosen sources (D2)", () => {
     expect(isLaneChosen(SELECTION_NONE, p, "defenderExport")).toBe(false);
     expect(isLaneChosen({ ...SELECTION_NONE, enabled: ["defenderExport"] }, p, "defenderExport")).toBe(true);
     // Not automatable: the selection does not choose it, progress does.
-    expect(isLaneChosen({ ...SELECTION_NONE, enabled: ["entraId"] }, p, "entraId")).toBe(false);
-    expect(isLaneChosen(SELECTION_NONE, manual(p, "entraId"), "entraId")).toBe(true);
+    expect(isLaneChosen({ ...SELECTION_NONE, enabled: ["xdrStreaming"] }, p, "xdrStreaming")).toBe(false);
+    expect(isLaneChosen(SELECTION_NONE, manual(p, "xdrStreaming"), "xdrStreaming")).toBe(true);
     // A How-to Defender ignores the selection.
     const howto = withSourceMode(p, "defenderExport", "manual");
     expect(isLaneChosen({ ...SELECTION_NONE, enabled: ["defenderExport"] }, howto, "defenderExport")).toBe(false);
