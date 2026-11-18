@@ -16,6 +16,13 @@
  * the second pin until it is either named by the audit lists (and so here) or
  * listed in NOT_KV_DOCUMENT_KEYS with the reason it is not a KV document key.
  *
+ * DERIVED KEYS (review round 1). The tenant-scoped documents (ADR 0009) also
+ * have a one-time migration claim, `{base}-migrated` (tenantMigrationClaimKey),
+ * which loadTenantDocument reads and writes. Those are not `*_KEY` constants,
+ * so the guard derives them from TENANT_SCOPED_BASES through the same function
+ * the code uses. The per-tenant `{base}.{tenantId}` keys are covered by the
+ * addendum's note rather than by name, since the tenant id is runtime data.
+ *
  * WHAT IT CANNOT SEE: a key spelled inline rather than as an exported `*_KEY`
  * constant, and keys owned by @soc/ui (appTheme, which the list names) or the
  * shell (the secret keys, which it names too). Keys that go through
@@ -37,6 +44,13 @@ const NOT_KV_DOCUMENT_KEYS: Readonly<Record<string, string>> = {
   FLOW_EVENTS_KEY: "a metric field name in the onboarding flow query, not a KV key",
 };
 
+/**
+ * The document keys stored per tenant through loadTenantDocument (ADR 0009):
+ * the only callers pass these two (azure-onboarding-screen.tsx), and each
+ * one's migration claim is a KV document of its own.
+ */
+const TENANT_SCOPED_BASES = ["COVERAGE_SELECTION_KEY", "ONBOARDING_PROGRESS_KEY"] as const;
+
 /** The barrel's exported `*_KEY` string constants, by export name. */
 function barrelKeyConstants(): Record<string, string> {
   const out: Record<string, string> = {};
@@ -46,11 +60,20 @@ function barrelKeyConstants(): Record<string, string> {
   return out;
 }
 
-/** The app KV document keys: the barrel's `*_KEY` constants less the exclusions. */
+/**
+ * The app KV document keys: the barrel's `*_KEY` constants less the exclusions,
+ * plus each tenant-scoped base's migration claim (named `claim(BASE)`).
+ */
 function kvDocumentKeys(): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(barrelKeyConstants()).filter(([name]) => NOT_KV_DOCUMENT_KEYS[name] === undefined),
-  );
+  const constants = barrelKeyConstants();
+  const claims = TENANT_SCOPED_BASES.map((name) => [
+    `claim(${name})`,
+    core.tenantMigrationClaimKey(constants[name] ?? `missing ${name}`),
+  ]);
+  return Object.fromEntries([
+    ...Object.entries(constants).filter(([name]) => NOT_KV_DOCUMENT_KEYS[name] === undefined),
+    ...claims,
+  ]);
 }
 
 /** Every key an audit list names: the text after " - " in each cited row, split on commas and semicolons. */
@@ -75,6 +98,8 @@ describe("app KV document keys against the least-privilege audit lists (AZR-125)
       FLOW_LAST_SEEN_KEY: "azure-onboarding-flow-last-seen",
       ONBOARDING_PROGRESS_KEY: "azure-onboarding-progress",
       TENANT_CRIBL_MAPPING_KEY: "tenant-cribl-mapping",
+      "claim(COVERAGE_SELECTION_KEY)": "azure-coverage-selection-migrated",
+      "claim(ONBOARDING_PROGRESS_KEY)": "azure-onboarding-progress-migrated",
     });
   });
 

@@ -1836,7 +1836,7 @@ const OPERATIONS = {
     audit: [
       "GET /kvstore/{key} (app-scoped; rewritten to /api/v1/a/{appId}/kvstore/{key}) - azureProfiles, azureConfig, auaAcceptance, setupComplete, appOptions, appTheme, githubPatStatus, diagnosticsWarnLog, azure-coverage-selection, azure-onboarding-progress, content-cache-{hash}, jobs/{id}, jobs-index, tagged-samples-*, pack-builds/*, spike-*",
       // AZR-125: the dated 2026-11-03 row above omits these; the addendum adds them.
-      "GET /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping",
+      "GET /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping, azure-coverage-selection-migrated, azure-onboarding-progress-migrated",
     ],
   },
   "cribl.kv.write": {
@@ -1853,7 +1853,7 @@ const OPERATIONS = {
     confidence: "high",
     audit: [
       "PUT /kvstore/{key} and /kvstore/{key}?encrypted=true (app-scoped) - azureBasic, azureArmToken, azureGraphToken, githubPat (encrypted); azureProfiles, auaAcceptance, setupComplete, appOptions, appTheme, githubPatStatus, diagnosticsWarnLog, content-cache-*, jobs/*, jobs-index, tagged-samples-*, pack-builds/*, azure-coverage-selection, azure-onboarding-progress, spike-*",
-      "PUT /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping",
+      "PUT /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping, azure-coverage-selection-migrated, azure-onboarding-progress-migrated",
     ],
   },
   "cribl.kv.delete": {

@@ -236,8 +236,8 @@ describe("least-privilege operations against the audit", () => {
 
   it("reads the addenda's rows, and every one is new", () => {
     expect(ADDENDA.map(keyOf)).toEqual([
-      "GET /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping",
-      "PUT /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping",
+      "GET /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping, azure-coverage-selection-migrated, azure-onboarding-progress-migrated",
+      "PUT /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping, azure-coverage-selection-migrated, azure-onboarding-progress-migrated",
     ]);
     const dated = new Set(CORRECTED.map(keyOf));
     expect(ADDENDA.map(keyOf).filter((key) => dated.has(key))).toEqual([]);
