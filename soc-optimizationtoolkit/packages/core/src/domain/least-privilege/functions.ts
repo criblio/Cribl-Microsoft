@@ -156,11 +156,13 @@ const FUNCTIONS = [
   },
   {
     id: "activity-log-export",
-    label: "Deploy the subscription Activity Log diagnostic setting",
+    label: "Deploy (and remove) the subscription Activity Log diagnostic setting",
     necessity: "feature",
     operations: [
       "activityLog.diagnosticSettings.read",
       "activityLog.diagnosticSetting.write",
+      // AZR-105: the in-app Remove of the setting this deploy created.
+      "activityLog.diagnosticSetting.delete",
       // The app never calls listKeys here, but Azure checks the caller holds
       // it on the rule a diagnostic setting names (documented, not measured).
       "eventhub.rule.listKeys",

@@ -18,3 +18,11 @@ export type {
   ActivityLogSettingsState,
   ActivityLogState,
 } from "./activity-log-export";
+
+// AZR-105: remove the setting the app created, once proven its own.
+export { removeActivityLogExport } from "./remove-activity-log-export";
+export type {
+  ActivityLogRemoveInput,
+  ActivityLogRemoveOutcome,
+  ActivityLogRemoveStep,
+} from "./remove-activity-log-export";

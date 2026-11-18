@@ -428,6 +428,22 @@ const OPERATIONS = {
     auditGap:
       "Added after the 2026-11-03 audit (AZR-98): the Activity Log deploy creates one subscription diagnostic setting. Documented, not measured - the role and the rule permission come from Azure Monitor documentation; no call has been made with a reduced identity.",
   },
+  "activityLog.diagnosticSetting.delete": {
+    id: "activityLog.diagnosticSetting.delete",
+    calls: [
+      { method: "DELETE", path: "/subscriptions/{sub}/providers/Microsoft.Insights/diagnosticSettings/{name}", api: "arm" },
+    ],
+    operation: "Microsoft.Insights/diagnosticSettings/delete",
+    leastRole: "Monitoring Contributor",
+    alsoGrantedBy: ["Contributor", "Owner"],
+    scope: "subscription",
+    scopeNote: "the subscription whose Activity Log setting this app created",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/permissions/monitor",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added with AZR-105: Remove deletes the one subscription diagnostic setting the Activity Log deploy created, only once the app proved it its own. Documented, not measured - no delete has been made with a reduced identity.",
+  },
   "resourceGraph.query": {
     id: "resourceGraph.query",
     calls: [

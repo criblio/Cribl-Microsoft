@@ -164,8 +164,11 @@ describe('config/policies.yml grants exactly what the app calls', () => {
   it('declares the AZR-33/AZR-34 grants exactly (ADR 0007 D11)', () => {
     const actions = (object: string) => policies.find((p) => p.object === object)?.actions;
     expect(actions('/m/:gid/system/inputs')).toEqual(['GET', 'POST']);
-    expect(actions('/m/:gid/system/inputs/:id')).toEqual(['GET']);
-    expect(actions('/m/:gid/system/secrets/:id')).toEqual(['GET']);
+    // AZR-105: Pause / Resume (PATCH) and Remove (DELETE) of an input the app proves its own.
+    expect(actions('/m/:gid/system/inputs/:id')).toEqual(['GET', 'PATCH', 'DELETE']);
+    expect(actions('/m/:gid/system/secrets/:id')).toEqual(['GET', 'DELETE']);
+    expect(actions('/m/:gid/pipelines/:id')).toEqual(['DELETE']);
+    expect(actions('/products/lake/lakes/:lakeId/datasets/:id')).toEqual(['DELETE']);
     expect(actions('/m/:gid/version/status')).toEqual(['GET']);
     expect(actions('/m/:gid/version')).toEqual(['GET']);
     expect(actions('/system/metrics/query')).toEqual(['POST']);
@@ -176,11 +179,13 @@ describe('config/policies.yml grants exactly what the app calls', () => {
     // The kit's 404 fallbacks stay granted.
     expect(actions('/master/groups/:id')).toEqual(['GET']);
     expect(actions('/master/groups/:id/deploy')).toEqual(['PATCH']);
-    // Create-only: no input write beyond POST anywhere.
-    const inputWrites = policies.filter(
-      (p) => /\/system\/inputs/.test(p.object) && p.actions.some((a) => a === 'PATCH' || a === 'PUT' || a === 'DELETE'),
-    );
-    expect(inputWrites).toEqual([]);
+    // The create stays create-only: the only input writes beyond POST are the
+    // AZR-105 Pause / Remove of ONE input by id, and nothing PUTs an input.
+    const inputWrites = policies
+      .filter((p) => /\/system\/inputs/.test(p.object) && p.actions.some((a) => a === 'PATCH' || a === 'PUT' || a === 'DELETE'))
+      .map((p) => p.object);
+    expect(inputWrites).toEqual(['/m/:gid/system/inputs/:id']);
+    expect(policies.some((p) => /\/system\/inputs/.test(p.object) && p.actions.includes('PUT'))).toBe(false);
   });
 });
 
@@ -198,7 +203,11 @@ describe('the coverage check bites (mutations of the real file)', () => {
   });
 
   it('adding an unused grant fails it', () => {
-    expect(clean([...policies, { object: '/m/:gid/system/inputs/:id', actions: ['DELETE'] }])).toBe(false);
+    expect(clean([...policies, { object: '/m/:gid/lib/breakers/:id', actions: ['DELETE'] }])).toBe(false);
+  });
+
+  it('removing the AZR-105 input DELETE fails it', () => {
+    expect(clean(without('/m/:gid/system/inputs/:id', 'DELETE'))).toBe(false);
   });
 
   it("removing '/m/:gid/search/jobs/*' from the exception list fails it", () => {

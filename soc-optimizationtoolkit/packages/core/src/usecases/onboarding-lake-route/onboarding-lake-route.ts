@@ -422,7 +422,9 @@ export async function applyLakeRoute(ports: LakeRoutePorts, ready: ReadyLakeRout
   const record = (routeId: string | null): LakeRouteRecord | null => {
     const pipelineId = pipeline === "created" || pipeline === "reused" || pipeline === "created-not-verified" ? ready.pipeline.id : null;
     if (dataset !== "created" && pipelineId === null && routeId === null) return null;
-    return { groupId, datasetId: ready.dataset.id, pipelineId, routeId };
+    // AZR-105: only a dataset this apply created (2xx, then listed) is the
+    // app's; one that existed (or answered 409) is used, never claimed.
+    return { groupId, datasetId: ready.dataset.id, pipelineId, routeId, ...(dataset === "created" ? { datasetCreated: true as const } : {}) };
   };
   const end = (
     kind: ApplyLakeRouteOutcome["kind"],

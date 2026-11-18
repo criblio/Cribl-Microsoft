@@ -22,6 +22,8 @@ export * from "./activity-log-export";
 export * from "./route-insert";
 // AZR-35: route an onboarding source to Cribl Lake through the unroll pipeline.
 export * from "./onboarding-lake-route";
+// AZR-105: Remove and Pause for what the onboarding screen created in Cribl.
+export * from "./onboarding-teardown";
 export * from "./guided-deploy";
 // DBT-152: create-or-update a named text secret, updating only one that is ours.
 export * from "./ensure-secret";

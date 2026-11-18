@@ -157,7 +157,7 @@ const PANEL_TIP =
   "the client secret (or, in the fallback modes, the key) goes into a Cribl " +
   "secret, and the source names the secret and never holds it. After the create, " +
   "the app commits the changed files and deploys the worker group, which " +
-  "restarts its workers.";
+  "restarts its workers. Pause and Remove, further down, change only a source it can prove it created.";
 
 const ENTRA_TENANT_TIP =
   "The Entra tenant (directory) ID of the service principal Cribl signs in as. " +
