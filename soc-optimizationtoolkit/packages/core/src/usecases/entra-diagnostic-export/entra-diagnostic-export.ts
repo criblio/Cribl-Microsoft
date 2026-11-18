@@ -22,6 +22,10 @@
  *   possible-duplicate   another setting already sends a chosen category to
  *                        the same namespace, so those events would arrive twice
  *
+ * An EMPTY list (unverified, not a measured none) is followed by a GET of ours
+ * by name; only a 404 lets the PUT go ahead, so a setting the list could not
+ * show is never replaced unseen.
+ *
  * THEN, in this order and nothing else: PUT, GET it back by name. A read-back
  * that matches is `written-and-read-back`; anything short of that after an
  * accepted PUT is `accepted-not-verified` with the fields named - including
@@ -88,7 +92,7 @@ export interface EntraSettingState {
 export type EntraDeployInput = EntraSettingInput;
 
 /** The deploy steps, named in denied / unregistered / failed outcomes. */
-export type EntraDeployStep = "setting-list" | "setting-put";
+export type EntraDeployStep = "setting-list" | "setting-read" | "setting-put";
 
 /** Every way {@link deployEntraSetting} can end. */
 export type EntraDeployOutcome =
@@ -149,9 +153,10 @@ function stepFailure(step: EntraDeployStep, failure: ArmReadFailure): EntraDeplo
  * Create CriblEntraIDLogs: the plan's rule, no hub name (Azure creates one hub
  * per category), the chosen categories enabled and the rest written disabled.
  *
- * Order, exactly: refuse unknown categories; re-list the tenant's settings
- * (refuse already-exists / present-differs / possible-duplicate); PUT; GET by
- * name. Never throws, never DELETEs, never re-PUTs. The caller has already
+ * Order, exactly: refuse unknown categories; re-list the tenant's settings;
+ * when the list is empty (unverified), GET ours by name and go on only on a
+ * 404 (refuse already-exists / present-differs / possible-duplicate); PUT;
+ * GET by name. Never throws, never DELETEs, never re-PUTs. The caller has already
  * had the operator confirm.
  */
 export async function deployEntraSetting(
@@ -180,12 +185,37 @@ export async function deployEntraSetting(
   const settings = await listTenantSettings(azure);
   if (settings.kind === "unread") return done(stepFailure("setting-list", settings.failure));
   const expected = expectedEntraSetting(input);
-  const ours = classifyOursEntraSetting(settings.listing, expected);
+  // An EMPTY list is not a measured "none": an identity that cannot see the
+  // tenant's settings gets the same 200 with no rows. The PUT replaces
+  // whatever sits at our name, so before writing on an unverified empty list
+  // GET ours by name - a 404 is the only answer that lets the PUT go ahead,
+  // and a setting found there is judged exactly as a listed one would be.
+  let listing = settings.listing;
+  if (listing.kind === "empty") {
+    const byName = await attemptArm(() => azure.request(buildEntraSettingGetRequest(ENTRA_SETTING_NAME)));
+    if (!(byName.ok && byName.response.status === 404)) {
+      if (!byName.ok || !is2xx(byName.response.status)) {
+        return done(stepFailure("setting-read", classifyArmFailure(byName, `Read ${ENTRA_SETTING_NAME} by name`)));
+      }
+      const found = readDiagnosticSetting(byName.response.body);
+      if (found.name === "" && found.id === "") {
+        return done({
+          kind: "failed",
+          step: "setting-read",
+          status: byName.response.status,
+          code: "",
+          message: `Read ${ENTRA_SETTING_NAME} by name: HTTP ${byName.response.status}, but the answer was not a diagnostic setting. Nothing was written.`,
+        });
+      }
+      listing = { kind: "rows", rows: [found] };
+    }
+  }
+  const ours = classifyOursEntraSetting(listing, expected);
   if (ours.kind === "present-matching") return done({ kind: "already-exists", settingId: ours.setting.id || settingId });
   if (ours.kind === "present-differs") {
     return done({ kind: "present-differs", settingId: ours.setting.id || settingId, ruleId: ours.setting.ruleId, diffs: ours.diffs });
   }
-  const overlapping = findOverlappingEntraSettings(settings.listing, input.namespace, input.categories);
+  const overlapping = findOverlappingEntraSettings(listing, input.namespace, input.categories);
   if (overlapping.length > 0) return done({ kind: "possible-duplicate", names: overlapping.map((s) => s.name) });
 
   // 2. PUT.

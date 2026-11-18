@@ -230,6 +230,7 @@ export const ENTRA_DELIVERY_NOT_VERIFIED =
 
 const STEP_LABELS: Readonly<Record<EntraDeployStep, string>> = {
   "setting-list": "listing the tenant's Entra ID diagnostic settings",
+  "setting-read": "reading CriblEntraIDLogs by name",
   "setting-put": "creating the diagnostic setting",
 };
 

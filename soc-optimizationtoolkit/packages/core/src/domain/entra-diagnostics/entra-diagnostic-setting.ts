@@ -176,10 +176,13 @@ export function buildEntraDiagnosticRequest(
  * operator is told to PUT by hand is byte-for-byte what Deploy writes.
  */
 export function entraDiagnosticBody(input: EntraDiagnosticInput): EntraDiagnosticRequest["body"] {
-  const ticked = new Set(input.categories);
+  // Case-insensitive, as unknownEntraCategories accepts names: a chosen
+  // category in another case passes that guard, so it must be enabled here
+  // too rather than silently written as disabled.
+  const ticked = new Set(input.categories.map((c) => c.toLowerCase()));
   const logs: DiagnosticLogEntry[] = ENTRA_CATEGORIES.map((c) => ({
     category: c.name,
-    enabled: ticked.has(c.name),
+    enabled: ticked.has(c.name.toLowerCase()),
   }));
   return {
     properties: {

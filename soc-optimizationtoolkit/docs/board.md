@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**104 in the backlog, 39 in progress, 225 done.**
+**105 in the backlog, 39 in progress, 225 done.**
 
 ## By menu item
 
@@ -36,13 +36,13 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 10 | 5 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 32 | 52 | 9 |
+| Azure Native Source Onboarding | 33 | 52 | 10 |
 | Azure Logging Map | 3 | 2 | 1 |
 | Tenant Logging Gaps | 2 | 1 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 18 | 6 |
 
-Open work totals 143.
+Open work totals 144.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 62% (63/101)
+### `AZR` Azure native source onboarding - 62% (63/102)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 0/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 40/58 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 40/59 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 20/24 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -1359,7 +1359,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (13)
+## Backlog - now (14)
 
 Next to pick up. Nothing blocks these.
 
@@ -1599,6 +1599,24 @@ Next to pick up. Nothing blocks these.
   ActivityLogRemovePanel beside EntraRemovePanel), keyed on the record for the
   configured subscription, and pin that it is offered with the Activity Log in
   How-to mode.
+
+- **AZR-122** Activity Log Deploy treats an empty, unverified subscription settings list as ours-absent and PUTs, so a setting of our name the list could not show would be replaced
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-18 in review of [[AZR-99]]. deployActivityLogExport
+  (packages/core/src/usecases/activity-log-export/activity-log-export.ts, step
+  1) classifies ours with classifyOursSetting(settings.listing) and goes
+  straight to the PUT when ours is absent, including when the listing kind is
+  `empty` (a raw ARM list with no rows, which under RBAC is not a measured
+  none). A diagnostic-setting PUT replaces whatever sits at the name, so an
+  identity whose list returns 200 with value: [] while a setting of our name
+  exists would overwrite it, and the app would then record it as its own, so
+  Remove would later delete it. AZR-99 closed the same gap for Entra ID in
+  review round 3 (deployEntraSetting: on an empty list GET ours by name, go on
+  only on a 404, judge a found setting as a listed one, stop at a
+  `setting-read` step otherwise). FIX DIRECTION: the same by-name GET in
+  deployActivityLogExport (buildActivityLogSettingGetRequest exists), with
+  pins for 404 then PUT, found matching -> already-exists, found differing ->
+  present-differs, denied -> stops with nothing written, and a mutation check.
 
 ---
 
@@ -8483,7 +8501,19 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   re-created by hand under the same name and rule is never removed from the
   app. Residual: a delete and re-create with no app read between them is still
   indistinguishable, since an aadiam setting carries no timestamp or etag to
-  prove it. Pins mutation-checked; nothing live.
+  prove it. Pins mutation-checked; nothing live. REVIEW ROUND 3 (2026-11-18,
+  before merge): (1) Deploy on an EMPTY tenant list (unverified, not a
+  measured none) now GETs CriblEntraIDLogs by name before the PUT and goes on
+  only on a 404; a setting found there is judged as a listed one (already
+  applied or refused as differing), and an unreadable answer stops at the new
+  `setting-read` step, so a setting the list could not show is never replaced
+  unseen. The duplicate check still has nothing to compare on an empty list
+  (the existing warning note says so). The Activity Log deploy has the same
+  gap and is filed as [[AZR-122]]. (2) entraDiagnosticBody matches chosen
+  categories case-insensitively, as unknownEntraCategories accepts them, so a
+  category in another case is written enabled under Azure's name instead of
+  passing the guard and being written disabled. Pins mutation-checked; nothing
+  live.
 
 - **AZR-100** Two source-selection controls on the onboarding screen contradict each other: the Automate sections and the How-to chooser each keep their own choice
   `AZR-F9` `bug` `settled` `verified: pins`
