@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { entraCategoriesFor, parseDiagnosticSettings } from "@soc/core";
+import { ENTRA_ITEM_ID, entraCategoriesFor, namespaceRuleResourceId, parseDiagnosticSettings } from "@soc/core";
 import type { EntraSettingState } from "@soc/core";
 import {
+  ENTRA_DIFFERS_FOREIGN_ADVICE,
+  ENTRA_DIFFERS_OURS_ADVICE,
   entraDeployDisabledReason,
+  entraDeployedItems,
   entraOutcomeMessage,
   entraRemoveDisabledReason,
   entraRemoveMessage,
@@ -24,7 +27,74 @@ const GATE: EntraDeployGate = {
   tenantId: "t1",
   target: { input: INPUT, missing: [] },
   ruleRights: ["Manage", "Send", "Listen"],
+  record: null,
 };
+
+/** CriblEntraIDLogs sending with the plan's rule, the chosen categories plus one extra. */
+const RULE_ID = namespaceRuleResourceId(NS, "send");
+const WIDER: EntraSettingState = {
+  settings: {
+    kind: "listed",
+    listing: parseDiagnosticSettings([
+      {
+        id: "/providers/microsoft.aadiam/diagnosticSettings/CriblEntraIDLogs",
+        name: "CriblEntraIDLogs",
+        properties: {
+          eventHubAuthorizationRuleId: RULE_ID,
+          eventHubName: "",
+          logs: [...INPUT.categories, "MicrosoftGraphActivityLogs"].map((category) => ({ category, enabled: true })),
+        },
+      },
+    ]),
+  },
+  ours: { kind: "absent", measured: true },
+  // The read's own target-free answer: a CriblEntraIDLogs to a namespace rule.
+  deployed: [ENTRA_ITEM_ID],
+};
+const OUR_RECORD = { tenantId: "t1", settingName: "CriblEntraIDLogs", ruleId: RULE_ID.toUpperCase() };
+const DIFFERS_PREFIX =
+  "CriblEntraIDLogs exists in this tenant but differs from what this app writes: ";
+
+describe("a differing setting: whose advice", () => {
+  it("names the in-app Remove when this tenant's record names the rule the setting sends with", () => {
+    const reason = entraDeployDisabledReason({ ...GATE, state: WIDER, record: OUR_RECORD });
+    expect(reason?.startsWith(DIFFERS_PREFIX)).toBe(true);
+    expect(reason?.endsWith(` ${ENTRA_DIFFERS_OURS_ADVICE}`)).toBe(true);
+    expect(reason).not.toContain("Microsoft Entra admin center");
+  });
+
+  it("keeps the admin-center advice with no record, or a record of another rule", () => {
+    for (const record of [null, { ...OUR_RECORD, ruleId: namespaceRuleResourceId(NS, "other") }]) {
+      const reason = entraDeployDisabledReason({ ...GATE, state: WIDER, record });
+      expect(reason?.endsWith(` ${ENTRA_DIFFERS_FOREIGN_ADVICE}`)).toBe(true);
+    }
+  });
+
+  it("the deploy outcome gives the same advice", () => {
+    const outcome = {
+      kind: "present-differs" as const,
+      settingId: "s",
+      ruleId: RULE_ID,
+      diffs: [{ field: "logs" as const, expected: "exactly x", actual: "enabled but not chosen: y" }],
+    };
+    expect(entraOutcomeMessage(outcome, OUR_RECORD).text.endsWith(` ${ENTRA_DIFFERS_OURS_ADVICE}`)).toBe(true);
+    expect(entraOutcomeMessage(outcome).text.endsWith(` ${ENTRA_DIFFERS_FOREIGN_ADVICE}`)).toBe(true);
+  });
+});
+
+describe("entraDeployedItems (the row label)", () => {
+  it("judges against the plan's target once there is one, as the Deploy gate does", () => {
+    expect(entraDeployedItems(WIDER, INPUT)).toEqual([]);
+    expect(entraDeployDisabledReason({ ...GATE, state: WIDER })?.startsWith(DIFFERS_PREFIX)).toBe(true);
+    const exact = { ...INPUT, categories: [...INPUT.categories, "MicrosoftGraphActivityLogs"] };
+    expect(entraDeployedItems(WIDER, exact)).toEqual([ENTRA_ITEM_ID]);
+  });
+
+  it("before a target exists it is the read's own answer; unread is null", () => {
+    expect(entraDeployedItems(WIDER, null)).toEqual([ENTRA_ITEM_ID]);
+    expect(entraDeployedItems(null, INPUT)).toBeNull();
+  });
+});
 
 describe("entraDeployDisabledReason", () => {
   it("is null only when everything is in place", () => {

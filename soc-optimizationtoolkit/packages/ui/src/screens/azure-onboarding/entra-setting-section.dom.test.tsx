@@ -227,6 +227,35 @@ describe("Entra ID section - deploy and remove", () => {
   });
 });
 
+describe("Entra ID section - a setting this app wrote that now differs", () => {
+  it("points at the app's own Remove, not the admin center, and the row is not labelled Deployed", async () => {
+    const azure = mount();
+    await loaded();
+    await chooseTarget("DiagManage");
+    await readSettings();
+    fireEvent.click(deployButton());
+    fireEvent.click(within(screen.getByRole("group", { name: "Confirm Entra ID deploy" })).getByRole("button", { name: "Confirm deploy" }));
+    await waitFor(() => expect(within(block()).getByText(/CriblEntraIDLogs is already applied in this tenant, exactly as this app would write it/)).toBeTruthy());
+    const row = (): HTMLElement => document.querySelector<HTMLElement>('li[data-item="entraId"] .azure-onboarding-state')!;
+    expect(row().textContent).toBe("Deployed");
+
+    // The setting now carries a category the plan did not choose (the tenant's
+    // setting widened; a profile change shows the same difference).
+    const stored = (azure as unknown as { settings: { properties: { logs: unknown[] } }[] }).settings[0]!;
+    stored.properties.logs.push({ category: "MicrosoftGraphActivityLogs", enabled: true });
+    await readSettings();
+    await waitFor(() => expect(within(block()).getAllByText(/enabled but not chosen: MicrosoftGraphActivityLogs/).length).toBeGreaterThan(0));
+    expect(deployButton().disabled).toBe(true);
+    expect(
+      within(block()).getByText(/This app created it, and does not overwrite it in place\. Remove it under Remove or pause what this app created, then Deploy writes the current choice\./),
+    ).toBeTruthy();
+    expect(within(block()).queryByText(/change or remove it in the Microsoft Entra admin center/)).toBeNull();
+    expect(row().textContent).not.toBe("Deployed");
+    expect((within(teardown()).getByRole("button", { name: "Remove Entra ID setting" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(azure.writes().map((w) => w.method)).toEqual(["PUT"]);
+  });
+});
+
 describe("Entra ID section - refusals disable Deploy and write nothing", () => {
   it("a matching setting made elsewhere is already applied, and is never offered for removal", async () => {
     const azure = mount(new RoutingAzure([setting("CriblEntraIDLogs", RULE_ID)]));

@@ -8466,6 +8466,15 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   limit check built, none verified). dependsOn AZR-98 dropped at close: what
   AZR-99 needed from it (the read/refuse/read-back shape, the shared reader)
   is merged; AZR-98 stays in-progress only for its own live measurements.
+  REVIEW ROUND 1 (2026-11-18, before merge): (1) a Deploy made after Validate
+  amends the run only when it wrote exactly the categories that run required -
+  the profile chosen at Validate is now carried on the entra-setting check,
+  since a profile change does not make the run stale; (2) a differing
+  CriblEntraIDLogs this app recorded writing (same tenant, same rule) now
+  points at the app's own Remove instead of the Entra admin center; (3) ONE
+  category rule (core entraCategoriesDiff: exactly the chosen ones, groups
+  named) shared by Validate and Deploy, and the row label judged against the
+  plan's target. Pins mutation-checked; still nothing live.
 
 - **AZR-100** Two source-selection controls on the onboarding screen contradict each other: the Automate sections and the How-to chooser each keep their own choice
   `AZR-F9` `bug` `settled` `verified: pins`

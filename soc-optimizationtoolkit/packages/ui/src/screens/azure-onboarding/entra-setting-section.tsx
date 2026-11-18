@@ -41,7 +41,13 @@ import {
   licenceNotes,
   readEntraSettingState,
 } from "@soc/core";
-import type { EntraDeployForValidation, EntraDeployOutcome, EntraSettingState, RequiredAction } from "@soc/core";
+import type {
+  EntraDeployForValidation,
+  EntraDeployOutcome,
+  EntraSettingRecord,
+  EntraSettingState,
+  RequiredAction,
+} from "@soc/core";
 import { usePorts } from "../../ports-context";
 import { verifiedNoneInventoryMessage } from "../../capabilities/empty-inventory";
 import { PickerLine } from "./eventhub-prerequisite-section";
@@ -67,6 +73,8 @@ export interface EntraSettingSectionProps {
   profile: string;
   /** Section 1's pick: used only to know the plan rule's rights when it is the same rule. */
   picked: EventHubTarget;
+  /** This app's record of writing the setting in this tenant, or null: chooses the advice for a differing setting. */
+  record: EntraSettingRecord | null;
   /** The last read, owned by the screen (its row label reads it too). */
   state: EntraSettingState | null;
   onState: (state: EntraSettingState) => void;
@@ -83,6 +91,7 @@ export function EntraSettingSection({
   entraTarget,
   profile,
   picked,
+  record,
   state,
   onState,
   onDeployed,
@@ -125,7 +134,7 @@ export function EntraSettingSection({
 
   const input = entraTarget?.input ?? null;
   const ruleRights = planRuleRights(picked, input);
-  const reason = entraDeployDisabledReason({ running, choice, state, tenantId, target: entraTarget, ruleRights });
+  const reason = entraDeployDisabledReason({ running, choice, state, tenantId, target: entraTarget, ruleRights, record });
   const armKey = JSON.stringify([
     tenantId,
     input === null
@@ -302,7 +311,7 @@ export function EntraSettingSection({
         </div>
       )}
 
-      {outcome !== null && <PickerLine message={entraOutcomeMessage(outcome)} />}
+      {outcome !== null && <PickerLine message={entraOutcomeMessage(outcome, record)} />}
       <p className="field-hint">
         {`To remove ${ENTRA_SETTING_NAME} later, use Remove or pause what this app created, below; unchoosing Entra ID does not remove it.`}
       </p>

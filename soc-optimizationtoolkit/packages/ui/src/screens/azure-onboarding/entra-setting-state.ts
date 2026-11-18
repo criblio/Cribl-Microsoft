@@ -20,6 +20,7 @@
 
 import {
   ENTRA_AUTO_HUB_TEXT,
+  ENTRA_ITEM_ID,
   ENTRA_SETTING_NAME,
   classifyOursEntraSetting,
   describeSettingDiff,
@@ -36,6 +37,7 @@ import type {
   EntraSettingInput,
   EntraSettingRecord,
   EntraSettingState,
+  OnboardingItemId,
   OursSettingState,
 } from "@soc/core";
 import { unmeasuredInventoryMessage } from "../../capabilities/empty-inventory";
@@ -70,6 +72,33 @@ export interface EntraDeployGate {
    * they were read), else null: not known, and never guessed.
    */
   readonly ruleRights: readonly string[] | null;
+  /**
+   * This app's record of writing the setting in this tenant (progress
+   * entraSettings), or null. Decides only the ADVICE for a setting that
+   * differs: the app still never overwrites it.
+   */
+  readonly record: EntraSettingRecord | null;
+}
+
+/** The advice for a setting the app did not write (or cannot show it wrote). */
+export const ENTRA_DIFFERS_FOREIGN_ADVICE =
+  "The app does not overwrite a setting it did not write this way; change or remove it in the Microsoft Entra admin center.";
+
+/** The advice for a differing setting this app's record shows it wrote. */
+export const ENTRA_DIFFERS_OURS_ADVICE =
+  "This app created it, and does not overwrite it in place. Remove it under Remove or pause what this app created, " +
+  "then Deploy writes the current choice.";
+
+/**
+ * Which advice a differing setting gets: ours when this tenant's record names
+ * the rule the setting still sends with (the same proof Remove checks), else
+ * the foreign advice.
+ */
+export function entraDiffersAdvice(record: EntraSettingRecord | null, observedRuleId: string): string {
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  return record !== null && observedRuleId.trim() !== "" && same(record.ruleId, observedRuleId)
+    ? ENTRA_DIFFERS_OURS_ADVICE
+    : ENTRA_DIFFERS_FOREIGN_ADVICE;
 }
 
 /**
@@ -89,6 +118,22 @@ export function entraOursForTarget(state: EntraSettingState | null, input: Entra
   return input === null
     ? classifyOursEntraSetting(state.settings.listing)
     : classifyOursEntraSetting(state.settings.listing, expectedEntraSetting(input));
+}
+
+/**
+ * What the Entra row's deploy label reads from: the items the last read found
+ * deployed, null when not read. Once the plan names a target, "deployed" means
+ * the setting matches THAT target (the same judgement the Deploy gate and
+ * Validate make), not merely that a CriblEntraIDLogs sends to some namespace
+ * rule; before a target exists it is the read's own, target-free answer.
+ */
+export function entraDeployedItems(
+  state: EntraSettingState | null,
+  input: EntraSettingInput | null,
+): readonly OnboardingItemId[] | null {
+  if (state === null) return null;
+  if (input === null || state.settings.kind !== "listed") return state.deployed;
+  return entraOursForTarget(state, input)?.kind === "present-matching" ? [ENTRA_ITEM_ID] : [];
 }
 
 /**
@@ -119,7 +164,7 @@ export function entraDeployDisabledReason(gate: EntraDeployGate): string | null 
     if (ours?.kind === "present-differs") {
       return (
         `${ENTRA_SETTING_NAME} exists in this tenant but differs from what this app writes: ` +
-        `${ours.diffs.map(describeSettingDiff).join(" ")} The app does not overwrite a setting it did not write this way; change or remove it in the Microsoft Entra admin center.`
+        `${ours.diffs.map(describeSettingDiff).join(" ")} ${entraDiffersAdvice(gate.record, ours.setting.ruleId)}`
       );
     }
     const others = findOverlappingEntraSettings(state.settings.listing, input.namespace, input.categories);
@@ -177,8 +222,8 @@ const STEP_LABELS: Readonly<Record<EntraDeployStep, string>> = {
 const ROLE_HINT =
   " Writing an Entra ID diagnostic setting needs the Security Administrator or Global Administrator directory role; the app cannot check that before it runs.";
 
-/** The deploy outcome as the screen says it. */
-export function entraOutcomeMessage(outcome: EntraDeployOutcome): PickerMessage {
+/** The deploy outcome as the screen says it; `record` only chooses the advice for a differing setting. */
+export function entraOutcomeMessage(outcome: EntraDeployOutcome, record: EntraSettingRecord | null = null): PickerMessage {
   switch (outcome.kind) {
     case "written-and-read-back":
       return { tone: "info", text: `${ENTRA_SETTING_NAME} was created and read back from Azure. ${ENTRA_DELIVERY_NOT_VERIFIED}` };
@@ -194,7 +239,9 @@ export function entraOutcomeMessage(outcome: EntraDeployOutcome): PickerMessage 
     case "present-differs":
       return {
         tone: "warning",
-        text: `Nothing was written: ${ENTRA_SETTING_NAME} exists but differs - ${outcome.diffs.map(describeSettingDiff).join(" ")}`,
+        text:
+          `Nothing was written: ${ENTRA_SETTING_NAME} exists but differs - ${outcome.diffs.map(describeSettingDiff).join(" ")} ` +
+          entraDiffersAdvice(record, outcome.ruleId),
       };
     case "possible-duplicate":
       return {

@@ -151,6 +151,7 @@ import type {
   ActivityLogState,
   EntraDeployForValidation,
   EntraRemoveOutcome,
+  EntraSettingInput,
   EntraSettingState,
   DefenderDeployForValidation,
   DefenderState,
@@ -208,6 +209,7 @@ import { DefenderExportSection } from "./defender-export-section";
 import { ActivityLogSection } from "./activity-log-section";
 import { EntraSettingSection } from "./entra-setting-section";
 import { EntraRemovePanel } from "./entra-remove-panel";
+import { entraDeployedItems } from "./entra-setting-state";
 import { TenantInventoryHeatmap } from "./inventory/tenant-inventory-heatmap";
 import { HowToPanel } from "./howto/howto-panel";
 import { ChoosePanel } from "./howto/choose-panel";
@@ -356,6 +358,12 @@ const CHOOSER_ANCHOR_ID = "azo-choose-section";
  * when the row is not rendered (the progress document has not loaded or could
  * not be read). DOM only - no state, no IO.
  */
+/** The Entra Deploy's target as the row label judges against it: null until progress loads or while values are missing. */
+function entraRowTargetInput(load: ProgressLoadState, selection: CoverageSelection | null): EntraSettingInput | null {
+  const p = loadedProgress(load);
+  return p === null ? null : entraDeployTarget(p.planValues, selection?.subSelections[ENTRA_ITEM_ID] ?? []).input;
+}
+
 function showHowto(id: OnboardingSourceId): void {
   const radio = document.getElementById(howtoModeRadioId(id));
   const usableRadio = radio instanceof HTMLInputElement && !radio.disabled ? radio : null;
@@ -580,9 +588,9 @@ export function AzureOnboardingScreen({
       deployedFrom([
         [DEFENDER_EXPORT_ITEM_ID, defenderState?.deployed ?? null],
         [ACTIVITY_LOG_ITEM_ID, activityLogState?.deployed ?? null],
-        [ENTRA_ITEM_ID, entraState?.deployed ?? null],
+        [ENTRA_ITEM_ID, entraDeployedItems(entraState, entraRowTargetInput(progressLoad, selection))],
       ]),
-    [defenderState, activityLogState, entraState],
+    [defenderState, activityLogState, entraState, progressLoad, selection],
   );
   const selectionCause = selectionUnknownCause(load, store !== undefined);
   // The chooser's answer per source: the ONLY input the method sections'
@@ -1331,6 +1339,7 @@ export function AzureOnboardingScreen({
                   entraTarget={values === null ? null : entraDeployTarget(values, subSelectionOf(ENTRA_ITEM_ID))}
                   profile={entraProfileFrom(subSelectionOf(ENTRA_ITEM_ID))}
                   picked={target}
+                  record={progress === null ? null : entraSettingRecord(progress, config.tenantId)}
                   state={entraState}
                   onState={setEntraState}
                   onDeployed={onEntraDeployed}
