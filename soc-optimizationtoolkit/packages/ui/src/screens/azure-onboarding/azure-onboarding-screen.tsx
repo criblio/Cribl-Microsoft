@@ -133,9 +133,11 @@ import {
   expectedEntraSetting,
   withEntraSetting,
   withoutEntraSetting,
+  withReceiverGrant,
 } from "@soc/core";
 import type {
   TenantInventory,
+  ReceiverGrantRecord,
   ActivityLogRemoveOutcome,
   ApplyPauseOutcome,
   ApplyTeardownOutcome,
@@ -210,6 +212,7 @@ import type { EventHubTarget } from "./eventhub-prerequisite-section";
 import { DefenderExportSection } from "./defender-export-section";
 import { ActivityLogSection } from "./activity-log-section";
 import { EntraSettingSection } from "./entra-setting-section";
+import { ReceiverGrantSection } from "./receiver-grant-section";
 import { EntraRemovePanel } from "./entra-remove-panel";
 import { ActivityLogRemovePanel } from "./activity-log-remove-panel";
 import { entraDeployedItems, entraReadDisprovesRecord } from "./entra-setting-state";
@@ -365,6 +368,14 @@ const CHOOSER_ANCHOR_ID = "azo-choose-section";
 function entraRowTargetInput(load: ProgressLoadState, selection: CoverageSelection | null): EntraSettingInput | null {
   const p = loadedProgress(load);
   return p === null ? null : entraDeployTarget(p.planValues, selection?.subSelections[ENTRA_ITEM_ID] ?? []).input;
+}
+
+/** Scroll to and focus the How-to section (the Data Receiver grant is a step of every Event Hub source there). */
+function showHowtoSection(): void {
+  const el = document.getElementById(HOWTO_ANCHOR_ID);
+  if (el === null) return;
+  if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "start", behavior: "smooth" });
+  el.focus({ preventScroll: true });
 }
 
 function showHowto(id: OnboardingSourceId): void {
@@ -952,6 +963,18 @@ export function AzureOnboardingScreen({
   }
 
   /**
+   * AZR-103: record a Data Receiver assignment Azure accepted from the app's
+   * own PUT, so a removal can prove it the app's. Returns whether the
+   * progress document took it; the section says so when it did not.
+   */
+  function onReceiverGranted(record: ReceiverGrantRecord): boolean {
+    const p = loadedProgress(latestProgressLoad.current);
+    const recorded = p !== null && commitProgress(withReceiverGrant(p, record), "receiver grant");
+    logger?.info(`${LOG} receiver grant recorded`, { recorded });
+    return recorded;
+  }
+
+  /**
    * AZR-99: every Entra read lands here. A read that no longer lists the
    * setting forgets this tenant's record (entraReadDisprovesRecord), so a
    * stale record never proves ownership of a setting re-created by hand -
@@ -1473,6 +1496,16 @@ export function AzureOnboardingScreen({
       <NumberedSection number={firstExtra + 3} title={HOWTO_SECTION_TITLES.cribl} status="available" infoTip={CRIBL_TIP}>
         {rulesMessage !== null && <PickerLine message={rulesMessage} />}
         <StrandedSourcesNotice notice={strandedNotice} />
+        {progress !== null && values !== null && (
+          <ReceiverGrantSection
+            values={values}
+            readSeq={readSeq}
+            records={progress.receiverGrants ?? []}
+            onGranted={onReceiverGranted}
+            howtoSection={CHOOSER_SECTION_NUMBER}
+            onShowHowto={showHowtoSection}
+          />
+        )}
         {progress === null || values === null ? (
           <p className="field-hint">The Cribl source can be created once your How-to progress is loaded.</p>
         ) : (

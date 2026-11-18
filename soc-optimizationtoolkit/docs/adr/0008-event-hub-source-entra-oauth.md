@@ -124,6 +124,29 @@ hand-edited OAuth input still refuses by name.
   path-segment boundary: a grant on hub `h1` never covers `h10`, nor one on
   namespace `ns1` a hub of `ns10`.
 
+**Amendment (2026-11-18, AZR-103): the app can make the Data Receiver
+assignment.** The How-to step stays; beside it the Cribl source section
+offers "Grant Azure Event Hubs Data Receiver", behind a confirm that quotes
+the scope id, the role (by name and built-in definition GUID
+a638d3c7-ab3a-418d-83e6-5f17a39d4fde, never looked up by name) and the
+principal object id. The scope is the HUB by default; the namespace only
+when the operator picks it. The principal object id is the plan value, cross-
+checked against the client id as section 2 does; when it is blank it is
+looked up from the client id in the directory, and anything but exactly one
+match is refused with the reason (never guessed). The assignment name is a
+version 5 GUID of the scope, role and principal, so a repeat lands on the
+same name; a covering Data Receiver grant found by the read, or Azure's 409
+RoleAssignmentExists, reads as already granted and is never recorded. Only
+an assignment Azure accepted from the app's PUT is recorded in the progress
+document (receiverGrants), and it carries the app's description stamp:
+record, name and stamp are the three ownership signals a removal checks.
+Removing it from the app is not built (AZR-141). Permission:
+Microsoft.Authorization/roleAssignments/write at the scope, not measured,
+shown as a banner; the change request asks for RBAC Administrator there,
+conditioned to this one role and service principals. Unverified live: the
+PUT and read-back, the 409 and PrincipalNotFound answers, and how long the
+assignment takes to reach the Kafka endpoint.
+
 ## Unverified (measured by AZR-115)
 
 Amended 2026-11-17: AZR-59 closed on pins and this list moved, unchanged, to
@@ -161,5 +184,6 @@ AZR-115. It is still unmeasured.
 
 - Certificate-based authentication for the Cribl principal (the schema allows
   it; nothing asks for it yet).
-- Creating the Cribl principal or its role assignment from the app (a How-to
-  step, as creating the Listen rule is today under AZR-36).
+- Creating the Cribl principal from the app (a How-to step, as creating the
+  Listen rule is today under AZR-36). Its role assignment is now offered by
+  the app (amendment to section 4, AZR-103).
