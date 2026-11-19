@@ -72,6 +72,8 @@ export * from "./domain/eventhub-discovery";
 // AZR-12: the shared Microsoft.EventHub ARM builders labs, discovery and the
 // Azure onboarding screen all use.
 export * from "./domain/eventhub-arm";
+// AZR-36: the Listen rule and consumer group the Cribl Event Hubs source reads with.
+export * from "./domain/eventhub-listen-access";
 // AZR-3: Defender for Cloud continuous export (plans read-only, create-only).
 export * from "./domain/defender-export";
 // CAP-2 / CAP-3: write actions measured ahead of the Azure Policy feature.

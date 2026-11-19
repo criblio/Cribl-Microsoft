@@ -14,6 +14,8 @@ export * from "./list-service-principals";
 export * from "./discover-event-hubs";
 // AZR-11: hubs and Send-capable namespace rules for one chosen namespace.
 export * from "./eventhub-target";
+// AZR-36: create (and remove) the Listen rule and consumer group the Cribl source reads with.
+export * from "./eventhub-listen-access";
 // AZR-3: read Defender state subscription-wide; create-only deploy.
 export * from "./defender-export";
 // AZR-98: read the subscription diagnostic settings; create-only Activity Log setting.

@@ -48,6 +48,7 @@ import {
   type CriblInputType,
   type OnboardingSourceId,
 } from "./sources";
+import type { EventHubAccessRecord } from "../eventhub-listen-access/listen-access";
 
 /** The KV key. */
 export const ONBOARDING_PROGRESS_KEY = "azure-onboarding-progress";
@@ -185,6 +186,13 @@ export interface OnboardingProgress {
    */
   readonly receiverGrants?: readonly ReceiverGrantRecord[];
   /**
+   * AZR-36: the Listen rules and consumer groups the app's own PUT created,
+   * by resource id, so a removal can prove them the app's. Optional for the
+   * same reason as criblLakeRoutes; absent reads as none (nothing is then
+   * ever removed from the app), and an older release decodes it as dropped.
+   */
+  readonly eventHubAccess?: readonly EventHubAccessRecord[];
+  /**
    * AZR-102: where the Event Hub plan values (EVENT_HUB_PLAN_KEYS) come from.
    * `section1` - they follow the screen's Event Hub picker, which writes them;
    * `own` - the operator's own names, which the picker never overwrites.
@@ -212,6 +220,21 @@ export function eventHubFollowsSection1(p: OnboardingProgress): boolean {
   // Only the keys the picker writes: the shared subscription and resource
   // group are the operator's and never decide this.
   return EVENT_HUB_PLAN_KEYS.every((k) => (p.planValues[k] ?? "").trim() === "");
+}
+
+/** AZR-36: add the objects the app's PUT just created (one record per resource id). */
+export function withEventHubAccess(p: OnboardingProgress, records: readonly EventHubAccessRecord[]): OnboardingProgress {
+  if (records.length === 0) return p;
+  const ids = new Set(records.map((r) => r.resourceId.toLowerCase()));
+  const others = (p.eventHubAccess ?? []).filter((r) => !ids.has(r.resourceId.toLowerCase()));
+  return { ...p, eventHubAccess: [...others, ...records] };
+}
+
+/** AZR-36: forget one object (after it was removed, or found gone). */
+export function withoutEventHubAccess(p: OnboardingProgress, resourceId: string): OnboardingProgress {
+  const left = (p.eventHubAccess ?? []).filter((r) => r.resourceId.toLowerCase() !== resourceId.trim().toLowerCase());
+  const { eventHubAccess: _drop, ...rest } = p;
+  return left.length > 0 ? { ...rest, eventHubAccess: left } : rest;
 }
 
 /** Record where the Event Hub plan values come from (AZR-102). */
@@ -301,6 +324,9 @@ export function encodeProgress(progress: OnboardingProgress): string {
       const kb = receiverGrantKey(b);
       return ka < kb ? -1 : ka > kb ? 1 : 0;
     });
+  const eventHubAccess = [...(progress.eventHubAccess ?? [])]
+    .map((r) => ({ kind: r.kind, resourceId: r.resourceId, ...(r.createdAt === undefined || r.createdAt === "" ? {} : { createdAt: r.createdAt }) }))
+    .sort((a, b) => (a.resourceId < b.resourceId ? -1 : a.resourceId > b.resourceId ? 1 : 0));
   return JSON.stringify({
     kind: ONBOARDING_PROGRESS_KIND,
     version: ONBOARDING_PROGRESS_VERSION,
@@ -315,6 +341,7 @@ export function encodeProgress(progress: OnboardingProgress): string {
     ...(activityLogSettings.length > 0 ? { activityLogSettings } : {}),
     ...(entraSettings.length > 0 ? { entraSettings } : {}),
     ...(receiverGrants.length > 0 ? { receiverGrants } : {}),
+    ...(eventHubAccess.length > 0 ? { eventHubAccess } : {}),
     // AZR-102: written only once set, so an older document encodes as before.
     ...(progress.eventHubSource === undefined ? {} : { eventHubSource: progress.eventHubSource }),
   });
@@ -517,6 +544,30 @@ export function decodeProgress(raw: unknown): DecodedProgress {
   } else if (raw["receiverGrants"] !== undefined) {
     dropped.push("receiverGrants");
   }
+  const eventHubAccess: EventHubAccessRecord[] = [];
+  if (Array.isArray(raw["eventHubAccess"])) {
+    raw["eventHubAccess"].forEach((v, i) => {
+      const kind = isRecord(v) ? v["kind"] : undefined;
+      const resourceId = isRecord(v) ? str(v["resourceId"]) : null;
+      const ok =
+        (kind === "listen-rule" || kind === "consumer-group") &&
+        resourceId !== null &&
+        resourceId.trim() !== "" &&
+        !eventHubAccess.some((r) => r.resourceId.toLowerCase() === resourceId.toLowerCase());
+      if (!ok) {
+        dropped.push(`eventHubAccess[${i}]`);
+        return;
+      }
+      // createdAt is optional: a non-string or blank one is left out (the
+      // record then cannot prove a rule, which is the safe direction).
+      const createdAt = isRecord(v) ? str(v["createdAt"]) : null;
+      eventHubAccess.push(
+        createdAt !== null && createdAt.trim() !== "" ? { kind, resourceId, createdAt: createdAt.trim() } : { kind, resourceId },
+      );
+    });
+  } else if (raw["eventHubAccess"] !== undefined) {
+    dropped.push("eventHubAccess");
+  }
   // AZR-102: anything but the two known values is dropped (and reported), so
   // the document then resolves by the pre-AZR-102 rule.
   const rawSource = raw["eventHubSource"];
@@ -538,6 +589,7 @@ export function decodeProgress(raw: unknown): DecodedProgress {
         "activityLogSettings",
         "entraSettings",
         "receiverGrants",
+        "eventHubAccess",
         "eventHubSource",
       ].includes(k)
     ) {
@@ -556,6 +608,7 @@ export function decodeProgress(raw: unknown): DecodedProgress {
       ...(activityLogSettings.length > 0 ? { activityLogSettings } : {}),
       ...(entraSettings.length > 0 ? { entraSettings } : {}),
       ...(receiverGrants.length > 0 ? { receiverGrants } : {}),
+      ...(eventHubAccess.length > 0 ? { eventHubAccess } : {}),
       ...(eventHubSource === undefined ? {} : { eventHubSource }),
     },
     dropped,

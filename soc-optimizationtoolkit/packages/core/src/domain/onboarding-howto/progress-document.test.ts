@@ -34,6 +34,8 @@ import {
   receiverGrantRecord,
   withReceiverGrant,
   withoutReceiverGrant,
+  withEventHubAccess,
+  withoutEventHubAccess,
 } from "./index";
 import type { OnboardingProgress } from "./index";
 
@@ -477,6 +479,49 @@ describe("Entra ID setting records (AZR-99)", () => {
     const { progress, dropped } = decodeProgress(raw);
     expect(progress.entraSettings).toEqual([{ tenantId: "t1", settingName: "CriblEntraIDLogs", ruleId: RULE }]);
     expect(dropped).toEqual(["entraSettings[1]", "entraSettings[2]"]);
+  });
+});
+
+describe("Event Hub access records (AZR-36)", () => {
+  const NS = "/subscriptions/s/resourceGroups/r/providers/Microsoft.EventHub/namespaces/n";
+  const RULE = { kind: "listen-rule" as const, resourceId: `${NS}/authorizationRules/cribl-listen` };
+  const CG = { kind: "consumer-group" as const, resourceId: `${NS}/eventhubs/h/consumergroups/cribl` };
+
+  it("adds one record per resource id, round-trips sorted, and forgets one at a time", () => {
+    let p = withEventHubAccess(emptyProgress(), [CG]);
+    p = withEventHubAccess(p, [RULE, { ...CG, resourceId: CG.resourceId.toUpperCase() }]);
+    expect(p.eventHubAccess).toHaveLength(2);
+    const back = decodeProgress(JSON.parse(encodeProgress(p))).progress;
+    expect(back.eventHubAccess?.map((r) => r.kind)).toEqual(["consumer-group", "listen-rule"]);
+    const one = withoutEventHubAccess(back, RULE.resourceId.toLowerCase());
+    expect(one.eventHubAccess?.map((r) => r.kind)).toEqual(["consumer-group"]);
+    const gone = withoutEventHubAccess(one, CG.resourceId);
+    expect(gone).not.toHaveProperty("eventHubAccess");
+    expect(JSON.parse(encodeProgress(gone))).not.toHaveProperty("eventHubAccess");
+    expect(withEventHubAccess(gone, [])).toBe(gone);
+  });
+
+  it("drops and reports malformed and duplicate records, never inventing one", () => {
+    const raw = JSON.parse(encodeProgress(emptyProgress()));
+    raw.eventHubAccess = [RULE, { ...RULE }, { kind: "hub", resourceId: "x" }, { kind: "consumer-group", resourceId: " " }, CG];
+    const { progress, dropped } = decodeProgress(raw);
+    expect(progress.eventHubAccess).toEqual([RULE, CG]);
+    expect(dropped).toEqual(["eventHubAccess[1]", "eventHubAccess[2]", "eventHubAccess[3]"]);
+  });
+
+  it("round-trips a record's creation time exactly, and leaves out a blank or non-string one", () => {
+    const AT = "2026-11-18T10:00:00.123Z";
+    const p = withEventHubAccess(emptyProgress(), [{ ...RULE, createdAt: AT }, CG]);
+    expect(JSON.parse(encodeProgress(p)).eventHubAccess).toEqual([
+      { kind: "listen-rule", resourceId: RULE.resourceId, createdAt: AT },
+      { kind: "consumer-group", resourceId: CG.resourceId },
+    ]);
+    expect(decodeProgress(JSON.parse(encodeProgress(p))).progress.eventHubAccess).toEqual([{ ...RULE, createdAt: AT }, CG]);
+    const raw = JSON.parse(encodeProgress(emptyProgress()));
+    raw.eventHubAccess = [{ ...RULE, createdAt: 5 }, { ...CG, createdAt: "  " }];
+    const { progress, dropped } = decodeProgress(raw);
+    expect(progress.eventHubAccess).toEqual([RULE, CG]);
+    expect(dropped).toEqual([]);
   });
 });
 

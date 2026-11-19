@@ -166,6 +166,19 @@ const FUNCTIONS = [
     ],
   },
   {
+    id: "eventhub-listen-access",
+    label: "Create (and remove) the Listen rule and consumer group the Cribl Event Hub source reads with",
+    necessity: "feature",
+    operations: [
+      "eventhub.rule.read",
+      "eventhub.rule.write",
+      "eventhub.rule.delete",
+      "eventhub.consumerGroup.read",
+      "eventhub.consumerGroup.write",
+      "eventhub.consumerGroup.delete",
+    ],
+  },
+  {
     id: "defender-export",
     label: "Deploy the Defender for Cloud continuous export",
     necessity: "feature",
