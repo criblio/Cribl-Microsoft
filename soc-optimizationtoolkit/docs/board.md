@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**104 in the backlog, 35 in progress, 249 done.**
+**106 in the backlog, 33 in progress, 251 done.**
 
 ## By menu item
 
@@ -36,7 +36,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 8 | 13 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 31 | 64 | 4 |
+| Azure Native Source Onboarding | 31 | 66 | 3 |
 | Azure Logging Map | 3 | 2 | 1 |
 | Tenant Logging Gaps | 1 | 3 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 68% (78/114)
+### `AZR` Azure native source onboarding - 69% (80/116)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 1/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 51/69 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-138, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117, AZR-141, AZR-142, AZR-143 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 53/71 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-138, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117, AZR-141, AZR-142, AZR-143, AZR-144, AZR-145 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 23/26 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-125*, AZR-126*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (35)
+## In progress (33)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1011,37 +1011,6 @@ Started. Anything here with an unfinished dependency is called out on its card.
   with the benefit Microsoft actually applied over those days (Operation
   table) shown beside it.
 
-- **AZR-141** Remove the Data Receiver assignment the app granted, from the teardown panel
-  `AZR-F9` `story` `settled`
-  FOUND 2026-11-18 while building [[AZR-103]]: the app now creates an Azure
-  Event Hubs Data Receiver role assignment for the Cribl principal and records
-  it (progress.receiverGrants), but nothing removes it from the app; the grant
-  panel says an administrator removes it in the portal. Scope: a row in
-  'Remove or pause what this app created' ([[AZR-105]]) per recorded grant,
-  deleting only with all three ownership signals (the record, the
-  deterministic name receiverGrantAssignmentName, the description stamp),
-  behind a confirm quoting scope, role and principal; DELETE by name, GET for
-  the 404, forget the record on removed or already-gone; refuse when the Cribl
-  source still uses Entra ID on that hub unless the operator says so. Needs
-  Microsoft.Authorization/roleAssignments/delete in the least-privilege
-  registry and the change request.
-
-- **AZR-143** Cribl source plan reads 'not cross-checked' when the directory lists the object id under another client id
-  `AZR-F9` `bug` `settled`
-  FOUND 2026-11-18 in review round 1 of [[AZR-103]]. crossCheckPrincipal
-  (usecases/cribl-principal, used by plan-cribl-source for an Entra ID Cribl
-  source) only looks for the CLIENT id in the directory listing. When the
-  listing lacks the client id but lists the typed object id under ANOTHER
-  appId, the directory has disproved the pair, yet the plan reads
-  principalCheck 'not-cross-checked' and goes on to read the receive role for
-  that other principal, so its role verdict describes the wrong identity and a
-  source is offered that will fail to read. AZR-103 closed the same gap for
-  the grant (resolveCriblPrincipal refuses principal-mismatch, naming the
-  appId and display name the directory gives); this card applies the same rule
-  to crossCheckPrincipal so both callers agree, with a pin in
-  create-cribl-source.test.ts (graphOf([sp(OBJ, 'other-client')]) refuses
-  principal-mismatch before any Azure or Cribl call).
-
 ---
 
 ## Backlog - now (12)
@@ -1271,7 +1240,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (53)
+## Backlog - next (54)
 
 Settled and unblocked, sequenced behind now.
 
@@ -2228,9 +2197,22 @@ Settled and unblocked, sequenced behind now.
   first event, and put the number in the success message. Each write is an
   Azure write: one confirm per write.
 
+- **AZR-145** Live-verify removing the Data Receiver grant from the teardown panel
+  `AZR-F9` `enabler` `settled` `blocked by AZR-142`
+  SPLIT 2026-11-19 from [[AZR-141]], closed on pins. In Live Preview with the
+  operator present, after [[AZR-142]] made a grant on a lab hub: (1) the
+  teardown panel lists the recorded grant; Remove's confirm quotes the DELETE;
+  (2) with a recorded Cribl Event Hubs source, the removal is refused after
+  one GET and 'Remove anyway' arms the second confirm; (3) the DELETE succeeds
+  and the follow-up GET answers 404 (record forgotten), or note how long the
+  404 takes; (4) an identity without roleAssignments/delete at the scope gets
+  the 403 message naming RBAC Administrator; (5) a grant re-made by hand under
+  another name is not removed. Each delete is an Azure write: one confirm per
+  write.
+
 ---
 
-## Backlog - later (39)
+## Backlog - later (40)
 
 Settled, gated on something above.
 
@@ -2820,9 +2802,24 @@ Settled, gated on something above.
   only, which AZR-81 made false (NetworkWatcherRG and the Event Grid admin
   step). FIX: move the rows into the table and correct the paragraph.
 
+- **AZR-144** Narrow the Data Receiver removal's in-use check to sources that sign in with Entra ID on that scope
+  `AZR-F9` `story` `settled`
+  FOUND 2026-11-19 while building [[AZR-141]]. The removal refuses while the
+  progress document records ANY Cribl Event Hubs source
+  (eventHubSourcesInUse), because CriblSourceRecord holds only groupId,
+  inputId, inputType and secretId: not the credential kind (Entra ID or a
+  Listen key) and not the namespace or hub (the input id is sanitised and
+  capped, so it cannot be read back). A source reading another hub, or with a
+  Listen-only key, therefore forces the operator through the override confirm
+  needlessly. Scope: record the source's auth kind and its namespace and hub
+  (or hub key) on CriblSourceRecord when the app creates it (optional fields,
+  old records read as unknown and stay conservative), and refuse only when a
+  recorded source signs in with Entra ID as this principal at or under the
+  grant's scope.
+
 ---
 
-## Done (249)
+## Done (251)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -10422,3 +10419,72 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   beside a disabled Deploy before and after a 403 read, the exact
   could-not-be-read reason, aria-describedby naming both, no 'stays available'
   text). Mutation-checked: the old wording fails 2 core pins and the DOM pin.
+
+- **AZR-141** Remove the Data Receiver assignment the app granted, from the teardown panel
+  `AZR-F9` `story` `settled` `verified: pins`
+  FOUND 2026-11-18 while building [[AZR-103]]: the app now creates an Azure
+  Event Hubs Data Receiver role assignment for the Cribl principal and records
+  it (progress.receiverGrants), but nothing removes it from the app; the grant
+  panel says an administrator removes it in the portal. Scope: a row in
+  'Remove or pause what this app created' ([[AZR-105]]) per recorded grant,
+  deleting only with all three ownership signals (the record, the
+  deterministic name receiverGrantAssignmentName, the description stamp),
+  behind a confirm quoting scope, role and principal; DELETE by name, GET for
+  the 404, forget the record on removed or already-gone; refuse when the Cribl
+  source still uses Entra ID on that hub unless the operator says so. Needs
+  Microsoft.Authorization/roleAssignments/delete in the least-privilege
+  registry and the change request. DONE 2026-11-19 (pins): core
+  removeReceiverGrant (usecases/eventhub-receiver-grant) GETs the recorded
+  assignment by name (404 = already gone), judges it with domain
+  classifyReceiverGrantRemoval - the record, the deterministic name
+  (receiverGrantAssignmentName) and the description stamp must all hold, and
+  the read must still be Data Receiver for that principal at that scope - then
+  DELETEs by name and GETs for the 404. Removed or already-gone forget the
+  record (screen onReceiverGrantRemoved -> withoutReceiverGrant); an
+  unreadable read, a refused DELETE or an unconfirmed removal keep it and say
+  so. UI: receiver-grant-remove-panel.tsx in the teardown panel's Azure slot,
+  two clicks, confirm quotes the exact DELETE, scope, role and principal. IN
+  USE: while the progress document records any Cribl Event Hubs source the
+  removal is refused (the source record holds neither its credential nor its
+  hub, so the check is conservative - narrowing it is [[AZR-144]]); the
+  refusal offers 'Remove anyway', a second, separately worded confirm naming
+  the sources; the override never bypasses the ownership proof. Grant and
+  Remove are mutually exclusive both ways (granting turns Remove off; removing
+  turns Check and Grant off and drops a plan or armed grant), as AZR-121 did
+  for the Activity Log. Permission: eventhub.receiverGrant.delete
+  (Microsoft.Authorization/roleAssignments/delete, least role RBAC
+  Administrator) in the registry, the eventhub-receiver-grant function, the
+  grant banner's not-measured list, a note on the row, and both change
+  requests (the app-registration row's justification and the resource-creation
+  ticket). ADR 0008 amended. Pins: core usecase (14, exact calls and strings),
+  UI state, panel DOM, and screen DOM (record forgotten in the saved document;
+  in-use keeps it); mutation-checked (stamp, name, record, in-use, granting
+  gate, removing key, override wiring, screen forget). Unverified live: the
+  DELETE, its 403 under a reduced identity, and the 404 read after it -
+  [[AZR-145]].
+
+- **AZR-143** Cribl source plan reads 'not cross-checked' when the directory lists the object id under another client id
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND 2026-11-18 in review round 1 of [[AZR-103]]. crossCheckPrincipal
+  (usecases/cribl-principal, used by plan-cribl-source for an Entra ID Cribl
+  source) only looks for the CLIENT id in the directory listing. When the
+  listing lacks the client id but lists the typed object id under ANOTHER
+  appId, the directory has disproved the pair, yet the plan reads
+  principalCheck 'not-cross-checked' and goes on to read the receive role for
+  that other principal, so its role verdict describes the wrong identity and a
+  source is offered that will fail to read. AZR-103 closed the same gap for
+  the grant (resolveCriblPrincipal refuses principal-mismatch, naming the
+  appId and display name the directory gives); this card applies the same rule
+  to crossCheckPrincipal so both callers agree, with a pin in
+  create-cribl-source.test.ts (graphOf([sp(OBJ, 'other-client')]) refuses
+  principal-mismatch before any Azure or Cribl call). DONE 2026-11-19 (pins):
+  the 'object id listed under another client id' rule moved INTO
+  crossCheckAgainst (usecases/cribl-principal), so crossCheckPrincipal
+  (plan-cribl-source, its only other caller) and resolveCriblPrincipal (the
+  grant) share ONE rule and one message, naming the other appId and display
+  name. Pin in create-cribl-source.test.ts: graphOf([sp(OBJ, 'other-client')])
+  refuses principal-mismatch with the exact detail, before any Azure or Cribl
+  call (h.log empty, one directory read); written first and seen failing (the
+  plan went on to a namespace read). Mutation: disabling the rule fails both
+  the plan pin and the grant's pin. Unverified live: nothing new beyond
+  AZR-142's directory cross-check.
