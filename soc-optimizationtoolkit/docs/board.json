@@ -4489,7 +4489,6 @@
       "id": "AZR-63",
       "type": "story",
       "priority": "now",
-      "menu": "tenant-gaps",
       "title": "Multi-tenant native logging gap dashboard: per tenant, configured in Azure vs not, onboarded to Cribl vs not",
       "detail": "OPERATOR REQUEST 2026-11-03: \"a dashboard that shows each tenant and a green or red indicator for what is being collected vs what is already produced and onboarded to cribl.\" SCOPE: a screen listing each connected tenant against each Azure native logging source (the onboarding catalog: Defender export, Entra diagnostics, Activity Log, policy initiatives, XDR, flow logs...), with two indicators per cell - configured in Azure, onboarded to Cribl - each green, red or UNKNOWN (inventory-honesty: a refused or unread check is never red). Reuses the Validate classifiers per tenant through that tenant's connection; Cribl side through AZR-64's mapping. Reads only on request, paced per tenant within the shared budget; mount makes no Azure call. Per the house dashboard standards, every tile has an (i). Reasoning in backlog.md section 6i.\n\nDONE 2026-11-03 (pins), ff9e1313 on feature/multi-tenant-azure: built test-first, adversarially reviewed (every confirmed finding fixed and its pin mutation-checked), and every CI gate re-run green by the operator's session after the last commit. Live check outstanding: the lab has one Azure tenant, so multi-tenant behaviour is proven with fakes until a second test tenant exists (ADR 0009).",
       "verified": "pins"
@@ -4800,7 +4799,6 @@
       "id": "AZR-90",
       "type": "story",
       "priority": "later",
-      "menu": "tenant-gaps",
       "title": "Tenant gap Read all: swap tenant to tenant and restore the active credential once at the end",
       "detail": "AZR-63 review follow-up. runTenantSession restores the active connection after EVERY tenant, so a Read all mints the active tenant's ARM and Graph tokens once per tenant for no gain (two proxied requests each). AZR-63 made every session request spend the run's pacer, so this costs budget time, not 429s. Fix: a batch form of the session that holds one lease and one exclusive section across the run, swaps A to B to C with a proof before and after each, and restores once. Reasoning in backlog.md section 6i. DONE 2026-11-17: core runTenantSessionBatch (port TenantSession.runBatch) holds one lease (re-read and renewed before each tenant after the first) and one exclusive section across a Read all, swaps tenant to tenant with each tenant still proven before and after its work, and restores the active credential ONCE when the batch settles - also after a half-way swap failure, a cancel, or the body throwing (restore decided by what the slot holds). runTenantSession is now the batch of one with its sequence unchanged. The tenant gap screen runs Read all as one batch and shows a failed final restore. Pinned in run-tenant-session.test.ts (9 batch pins, mutation-checked: a per-tenant restore and a restore outside finally both fail them) and tenant-gap-screen.dom.test.tsx. NOT verified live: the Read all against real tenants in Live Preview. REVIEW ROUND 1 (2026-11-17): holding one exclusive section for the whole run means Azure reads from other screens of the tab wait until the run ends (they ran between tenants before). Kept, since restoring between tenants is what the card removed; the Read all tip now says so, and the shell shows a notice above every screen while a run is in flight (TenantReadInFlightNotice, fed by TenantGapCache.subscribe; pinned and mutation-checked). Review round 2 (2026-11-18): the lease and the exclusive section are now taken by the first run that passes its refusals, so a Read of a refused tenant (or one with no plan values) writes no lease and blocks no other screen, and a run refused by another tab's lease no longer refuses the rest of the run. The lease is re-checked and renewed before the one restore; a lease another tab took is never renewed or released (the restore still runs, deliberately: a slot left on a tenant no tab is reading would serve it to the next ordinary batch, while the other tab's proven runs only turn unknown). Pinned with mutation checks; not verified live. Review round 3 (2026-11-18): the renewal before each tenant re-reads the lease instead of refusing on the local expiry, so a lease that only expired after a slow tenant (nobody else took it) is taken again and the next tenant is still read; only another tab's unexpired lease refuses, with a reason that says so. The shell notice and the earlier-read line now say leaving Tenant Logging Gaps cancels the read. Pinned (two batch pins, one screen text pin) and mutation-checked; not verified live.",
       "verified": "pins"
@@ -4816,7 +4814,6 @@
       "id": "AZR-91",
       "type": "story",
       "priority": "later",
-      "menu": "tenant-gaps",
       "title": "Tenant gap grid: one tab stop with arrow-key navigation between cells",
       "detail": "AZR-63 review follow-up. Every indicator carries an (i), so a keyboard user passes about 28 stops per tenant row to reach the next row's Read button. AZR-63 named every tip (tenant, source, side) so a screen reader can tell them apart; the remaining fix is a roving tabindex over the grid (arrow keys between cells, Enter opens the reason) so the Read buttons are a few keystrokes away. Reasoning in backlog.md section 6i. DONE 2026-11-17: roving tabindex over the tenant gap grid's indicator tips - one tab stop for the whole grid, arrow keys between indicators (clamped), Home/End to the row's ends, Ctrl+Home/End to the grid's, Enter/Space still toggles the reason; a click or focus moves the stop. InfoTip gained tabIndex and describedBy props; each grid tip's name now includes the state word and is described by a hidden keyboard hint. The tenant column (status tip, Read button) stays in normal tab order. Pinned in tenant-gap-screen.dom.test.tsx (5 pins; mutation-checked: every tip tabbable, and a wrong ArrowDown, both fail them). NOT verified live: real browser focus and a screen reader in Live Preview. Review round 3 (2026-11-18): the hidden hint's arrow-key model may not hold for screen readers in browse mode (the table is not a composite widget); carried by AZR-126, unverified.",
       "verified": "pins"
@@ -4849,7 +4846,6 @@
       "type": "bug",
       "priority": "later",
       "id": "AZR-126",
-      "menu": "tenant-gaps",
       "title": "Tenant gap grid: the keyboard hint promises arrow keys a screen reader in browse mode keeps",
       "detail": "Found in the AZR-91 review round 3 (2026-11-18). Every grid tip is described (aria-describedby tgap-grid-keys, tenant-gap-screen.tsx GRID_HINT) by 'Arrow keys move between indicators...'. The table is not a composite widget (no role=grid or toolbar), so NVDA or JAWS in browse mode is expected to keep the arrow keys for the virtual cursor and the roving handler never sees them; the hint is then wrong for exactly the users it is written for. Not measured: nobody has run a screen reader over it. FIX: run NVDA (browse and focus mode) over the grid first; then either give the indicator region composite semantics (role=grid, rows, gridcells) so screen readers switch to focus mode, or word the hint so it holds in both modes. Pin the chosen roles or wording.",
       "priorityWhy": "Nothing becomes unreachable: in browse mode a screen reader user can still walk the table with the virtual cursor and activate every tip, and each tip's name carries tenant, source, side and state. The cost is one misleading sentence, and the right fix depends on a screen-reader measurement this environment cannot make; guessing the roles risks a worse model than the table semantics there now."
@@ -5544,6 +5540,36 @@
       ],
       "title": "Live-verify removing the Data Receiver grant from the teardown panel",
       "detail": "SPLIT 2026-11-19 from [[AZR-141]], closed on pins. In Live Preview with the operator present, after [[AZR-142]] made a grant on a lab hub: (1) the teardown panel lists the recorded grant; Remove's confirm quotes the DELETE; (2) with a recorded Cribl Event Hubs source, the removal is refused after one GET and 'Remove anyway' arms the second confirm; (3) the DELETE succeeds and the follow-up GET answers 404 (record forgotten), or note how long the 404 takes; (4) an identity without roleAssignments/delete at the scope gets the 403 message naming RBAC Administrator; (5) a grant re-made by hand under another name is not removed. Each delete is an Azure write: one confirm per write."
+    },
+    {
+      "id": "AZR-147",
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "in-progress",
+      "settled": "settled",
+      "type": "story",
+      "priority": "now",
+      "dependsOn": [
+        "AZR-63",
+        "AZR-90",
+        "AZR-91"
+      ],
+      "title": "Fold Tenant Logging Gaps into Azure Native Source Onboarding",
+      "detail": "Operator request 2026-11-19: fold the Tenant Logging Gaps page into the Azure Native Source Onboarding page. Five operator decisions (recorded as an amendment to ADR 0009 decision 6): (1) a collapsible 'All tenants' section opens the onboarding page with the existing tenant gap grid, moved not rewritten, keeping its read, cancel, lease/slot ([[AZR-90]]), keyboard ([[AZR-91]]) and honesty rules, with the active tenant's row highlighted; (2) the Tenant Logging Gaps nav item goes; its route id 'tenant-gaps' keeps working by opening the onboarding page with All tenants expanded, and everything naming the old route (route capabilities, nav tests, board menus, the shell's read-in-flight notice) is updated; (3) a gap cell for the ACTIVE tenant jumps to that source's row on the page; for another tenant a confirm naming tenant and source comes first, then the active connection is switched with Setup's own switch and the page jumps; never without the confirm, and refused with the reason while a Read all, a tenant session, an Azure write or another tab's credential lease holds the slot; (4) each tenant's latest gap read is saved in one app KV document keyed by tenant (versioned, decode tolerant with dropped-reporting, like progress-document.ts), added to the least-privilege KV lists (the [[AZR-125]] guard), seeding the grid and the Focus summary after a reload; loading it is the only mount read, a saved answer shows its age, and a missing or undecodable document reads as not read yet, never green; (5) a 'Focus here' summary for the active tenant lists each red Azure or Cribl indicator with its reason and a jump link, counts unknown sources separately, shows when the read was taken, and offers to open All tenants when nothing is saved; each red source's row in the source chooser carries a small gap badge."
+    },
+    {
+      "id": "AZR-148",
+      "epic": "AZR",
+      "feature": "AZR-F10",
+      "status": "in-progress",
+      "settled": "settled",
+      "type": "bug",
+      "priority": "now",
+      "dependsOn": [
+        "AZR-90"
+      ],
+      "title": "The tenant read-in-flight notice says leaving the screen cancels the read; keep-alive keeps it running",
+      "detail": "FOUND 2026-11-19 while folding the tenant gap grid into Azure Native Source Onboarding ([[AZR-147]]). TENANT_READ_IN_FLIGHT (tenant-gap-screen.tsx), shown above every screen while a Read all holds the Azure slot, says 'Cancel on Tenant Logging Gaps stops it, and leaving that screen cancels it too'. The AppFrame keeps every visited route MOUNTED (hidden) so its state survives navigation, so leaving the screen does not unmount it and the unmount abort never runs: the read keeps going, holding the slot, while the notice tells the operator it was cancelled. FIX: word the notice for what happens - the run continues until it ends or is cancelled where it was started - and pin the wording."
     }
   ],
   "features": [

@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 33 in progress, 251 done.**
+**106 in the backlog, 35 in progress, 251 done.**
 
 ## By menu item
 
@@ -36,13 +36,12 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 8 | 13 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 31 | 66 | 3 |
+| Azure Native Source Onboarding | 34 | 69 | 5 |
 | Azure Logging Map | 3 | 2 | 1 |
-| Tenant Logging Gaps | 1 | 3 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 19 | 6 |
 
-Open work totals 139.
+Open work totals 141.
 
 ## Epics and features
 
@@ -51,7 +50,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 69% (80/116)
+### `AZR` Azure native source onboarding - 68% (80/118)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -65,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
 | `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 53/71 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-138, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117, AZR-141, AZR-142, AZR-143, AZR-144, AZR-145 |
-| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 23/26 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-125*, AZR-126*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 23/28 | AZR-61*, AZR-62*, AZR-63, AZR-64, AZR-65, AZR-90, AZR-91, AZR-125*, AZR-126, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111*, AZR-147, AZR-148 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -158,7 +157,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (33)
+## In progress (35)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1010,6 +1009,47 @@ Started. Anything here with an unfinished dependency is called out on its card.
   grant from licence counts multiplied by the complete days in the window,
   with the benefit Microsoft actually applied over those days (Operation
   table) shown beside it.
+
+- **AZR-147** Fold Tenant Logging Gaps into Azure Native Source Onboarding
+  `AZR-F10` `story` `settled`
+  Operator request 2026-11-19: fold the Tenant Logging Gaps page into the
+  Azure Native Source Onboarding page. Five operator decisions (recorded as an
+  amendment to ADR 0009 decision 6): (1) a collapsible 'All tenants' section
+  opens the onboarding page with the existing tenant gap grid, moved not
+  rewritten, keeping its read, cancel, lease/slot ([[AZR-90]]), keyboard
+  ([[AZR-91]]) and honesty rules, with the active tenant's row highlighted;
+  (2) the Tenant Logging Gaps nav item goes; its route id 'tenant-gaps' keeps
+  working by opening the onboarding page with All tenants expanded, and
+  everything naming the old route (route capabilities, nav tests, board menus,
+  the shell's read-in-flight notice) is updated; (3) a gap cell for the ACTIVE
+  tenant jumps to that source's row on the page; for another tenant a confirm
+  naming tenant and source comes first, then the active connection is switched
+  with Setup's own switch and the page jumps; never without the confirm, and
+  refused with the reason while a Read all, a tenant session, an Azure write
+  or another tab's credential lease holds the slot; (4) each tenant's latest
+  gap read is saved in one app KV document keyed by tenant (versioned, decode
+  tolerant with dropped-reporting, like progress-document.ts), added to the
+  least-privilege KV lists (the [[AZR-125]] guard), seeding the grid and the
+  Focus summary after a reload; loading it is the only mount read, a saved
+  answer shows its age, and a missing or undecodable document reads as not
+  read yet, never green; (5) a 'Focus here' summary for the active tenant
+  lists each red Azure or Cribl indicator with its reason and a jump link,
+  counts unknown sources separately, shows when the read was taken, and offers
+  to open All tenants when nothing is saved; each red source's row in the
+  source chooser carries a small gap badge.
+
+- **AZR-148** The tenant read-in-flight notice says leaving the screen cancels the read; keep-alive keeps it running
+  `AZR-F10` `bug` `settled`
+  FOUND 2026-11-19 while folding the tenant gap grid into Azure Native Source
+  Onboarding ([[AZR-147]]). TENANT_READ_IN_FLIGHT (tenant-gap-screen.tsx),
+  shown above every screen while a Read all holds the Azure slot, says 'Cancel
+  on Tenant Logging Gaps stops it, and leaving that screen cancels it too'.
+  The AppFrame keeps every visited route MOUNTED (hidden) so its state
+  survives navigation, so leaving the screen does not unmount it and the
+  unmount abort never runs: the read keeps going, holding the slot, while the
+  notice tells the operator it was cancelled. FIX: word the notice for what
+  happens - the run continues until it ends or is cancelled where it was
+  started - and pin the wording.
 
 ---
 
