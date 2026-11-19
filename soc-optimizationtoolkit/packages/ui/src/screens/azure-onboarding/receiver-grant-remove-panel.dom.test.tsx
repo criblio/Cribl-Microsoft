@@ -152,7 +152,7 @@ describe("ReceiverGrantRemovePanel (AZR-141)", () => {
     const { row } = mount(azure, { granting: true });
     const remove = within(row).getByRole("button", { name: "Remove" }) as HTMLButtonElement;
     expect(remove.disabled).toBe(true);
-    expect(within(row).getByText("A Data Receiver grant is running. Remove is off until it finishes.")).toBeTruthy();
+    expect(within(row).getByText("A Data Receiver check or grant is running. Remove is off until it finishes.")).toBeTruthy();
     fireEvent.click(remove);
     expect(within(row).queryByRole("group")).toBeNull();
     expect(azure.calls).toHaveLength(0);

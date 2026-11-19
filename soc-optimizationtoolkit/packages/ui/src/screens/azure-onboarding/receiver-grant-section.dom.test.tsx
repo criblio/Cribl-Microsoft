@@ -101,6 +101,29 @@ class RoutingAzure implements AzureManagement {
   }
 }
 
+/** Holds the plan's role-assignment listing until release(). */
+class HeldAzure extends RoutingAzure {
+  held = 0;
+  private gate: Promise<void>;
+  private open: () => void = () => undefined;
+  constructor() {
+    super();
+    this.gate = new Promise<void>((r) => {
+      this.open = r;
+    });
+  }
+  release(): void {
+    this.open();
+  }
+  override async request(r: AzureManagementRequest): Promise<PortHttpResponse> {
+    if (r.method === "GET" && r.path.endsWith("/providers/Microsoft.Authorization/roleAssignments")) {
+      this.held += 1;
+      await this.gate;
+    }
+    return super.request(r);
+  }
+}
+
 function mount(azure: RoutingAzure, v: PlanValues = values(), records: readonly ReceiverGrantRecord[] = []) {
   const ports = { azure, logger: new FakeLogger(() => "t") } as unknown as UiPorts;
   const recorded: ReceiverGrantRecord[] = [];
@@ -204,8 +227,39 @@ describe("ReceiverGrantSection (AZR-103)", () => {
     await check(block);
     fireEvent.click(within(block).getByRole("button", { name: "Grant Data Receiver" }));
     fireEvent.click(within(block).getByRole("button", { name: "Confirm grant" }));
-    await waitFor(() => expect(running).toEqual([true, false]));
+    // Two Checks and one grant, each reported start and finish (review round 1).
+    await waitFor(() => expect(running).toEqual([true, false, true, false, true, false]));
     expect(azure.writes()).toHaveLength(1);
+  });
+
+  // Review round 1: a Check's reads count as running, so Remove cannot start
+  // under a plan that would land describing the assignment before the DELETE.
+  it("a Check reports itself running from its first read until its plan lands", async () => {
+    const azure = new HeldAzure();
+    const ports = { azure, logger: new FakeLogger(() => "t") } as unknown as UiPorts;
+    const running: boolean[] = [];
+    render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <ReceiverGrantSection
+          values={values()}
+          readSeq={0}
+          records={[]}
+          onGranted={() => true}
+          howtoSection={2}
+          onShowHowto={() => undefined}
+          onRunningChange={(r) => running.push(r)}
+        />
+      </PortsProvider>,
+    );
+    const block = screen.getByTestId("azo-receiver-grant");
+    expect(running).toEqual([]);
+    fireEvent.click(within(block).getByRole("button", { name: "Check the grant" }));
+    await waitFor(() => expect(azure.held).toBe(1));
+    expect(running).toEqual([true]);
+    azure.release();
+    await waitFor(() => expect(running).toEqual([true, false]));
+    expect(within(block).getByRole("button", { name: "Grant Data Receiver" })).toBeTruthy();
+    expect(azure.writes()).toHaveLength(0);
   });
 
   it("writes at the namespace when the operator chooses it", async () => {

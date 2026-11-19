@@ -10461,7 +10461,17 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   in-use keeps it); mutation-checked (stamp, name, record, in-use, granting
   gate, removing key, override wiring, screen forget). Unverified live: the
   DELETE, its 403 under a reduced identity, and the 404 read after it -
-  [[AZR-145]].
+  [[AZR-145]]. REVIEW ROUND 1: a Check (planReceiverGrant) did not count as
+  running, so Remove could start while its reads were in flight; a plan read
+  before the DELETE then landed under the key `removing` returned to and
+  showed the removed assignment as in place, offering Record it. The grant
+  section now reports a Check as running too (onRunningChange around
+  planning), so Remove is off from the Check's first read until its plan lands
+  (reason now "A Data Receiver check or grant is running. Remove is off until
+  it finishes."). Pins: section DOM (a held listing reports [true], then
+  [true, false]); screen DOM (a held Check disables the teardown row's Remove
+  with the exact reason, a click sends nothing, Remove comes back when the
+  plan lands). Mutation-checked: dropping the two calls fails 3 pins.
 
 - **AZR-143** Cribl source plan reads 'not cross-checked' when the directory lists the object id under another client id
   `AZR-F9` `bug` `settled` `verified: pins`

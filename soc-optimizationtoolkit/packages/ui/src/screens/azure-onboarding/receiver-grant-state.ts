@@ -256,10 +256,10 @@ export function receiverGrantOverrideConfirmText(record: ReceiverGrantRecord, in
   );
 }
 
-/** Why Remove is off, or null. A running grant and a running removal never overlap. */
+/** Why Remove is off, or null. A running Check or grant and a running removal never overlap. */
 export function receiverGrantRemoveDisabledReason(gate: { readonly granting: boolean; readonly removing: boolean }): string | null {
   if (gate.removing) return "A removal is already running.";
-  if (gate.granting) return "A Data Receiver grant is running. Remove is off until it finishes.";
+  if (gate.granting) return "A Data Receiver check or grant is running. Remove is off until it finishes.";
   return null;
 }
 

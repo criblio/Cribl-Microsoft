@@ -20,7 +20,7 @@
  * naming those sources; only its confirm sends the override. The ownership
  * proof is never overridden.
  *
- * MUTUALLY EXCLUSIVE with the grant: Remove is off while a grant runs
+ * MUTUALLY EXCLUSIVE with the grant: Remove is off while a Check or grant runs
  * (`granting`), and a running Remove is reported (`onRunningChange`) so the
  * grant section keeps its Check and Grant off meanwhile - as the Activity
  * Log's Deploy and Remove are (AZR-121).
@@ -48,7 +48,7 @@ export interface ReceiverGrantRemovePanelProps {
   readonly records: readonly ReceiverGrantRecord[];
   /** The Cribl Event Hubs sources the app still records (they may read with these). */
   readonly inUseBy: readonly string[];
-  /** A Data Receiver grant is running in the grant section: Remove is off meanwhile. */
+  /** A Data Receiver Check or grant is running in the grant section: Remove is off meanwhile. */
   readonly granting: boolean;
   /** Told when a Remove starts and finishes, so the grant section stays off meanwhile. */
   readonly onRunningChange: (running: boolean) => void;

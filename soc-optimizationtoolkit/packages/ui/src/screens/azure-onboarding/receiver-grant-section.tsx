@@ -24,7 +24,10 @@
  * REMOVAL (AZR-141) is in "Remove or pause what this app created"
  * (receiver-grant-remove-panel.tsx), from the records. The two never run at
  * once: `removing` turns Check and Grant off, and `onRunningChange` reports a
- * running grant so the screen turns Remove off.
+ * running Check or grant so the screen turns Remove off. A Check counts too
+ * (review round 1): a plan read before a DELETE and landing after it would
+ * otherwise show the removed assignment as still in place, and offer to
+ * record it again.
  *
  * PERMISSIONS. roleAssignments/write at the scope is not measured: a banner
  * says so and lists the actions. Never a block - Azure's answer decides.
@@ -83,8 +86,8 @@ export interface ReceiverGrantSectionProps {
    */
   removing?: boolean;
   /**
-   * Told when a grant's PUT starts and finishes, so the screen keeps the
-   * teardown panel's Remove off meanwhile.
+   * Told when a Check's reads or a grant's PUT start and finish, so the
+   * screen keeps the teardown panel's Remove off meanwhile.
    */
   onRunningChange?: (running: boolean) => void;
 }
@@ -142,6 +145,7 @@ export function ReceiverGrantSection({
   async function check(): Promise<void> {
     if (azure === undefined || planning || running || removing) return;
     setPlanning(true);
+    onRunningChange?.(true);
     setPlanError("");
     setOutcome(null);
     setArmedFor(null);
@@ -159,6 +163,7 @@ export function ReceiverGrantSection({
       ports.logger?.error("azure-onboarding: receiver grant plan threw", { error: message });
     } finally {
       setPlanning(false);
+      onRunningChange?.(false);
     }
   }
 

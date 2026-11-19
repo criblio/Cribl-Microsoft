@@ -68,8 +68,16 @@ function progressDoc(over: Record<string, unknown> = {}): unknown {
 class RoutingAzure implements AzureManagement {
   readonly calls: AzureManagementRequest[] = [];
   present = true;
+  /** When set, the grant section's Check listing waits on it (review round 1). */
+  holdListing: Promise<void> | null = null;
+  listingsHeld = 0;
   async request(r: AzureManagementRequest): Promise<PortHttpResponse> {
     this.calls.push(r);
+    if (this.holdListing !== null && r.method === "GET" && r.path === `${HUB_ID}/providers/Microsoft.Authorization/roleAssignments`) {
+      this.listingsHeld += 1;
+      await this.holdListing;
+      return { status: 200, body: { value: [] } } as unknown as PortHttpResponse;
+    }
     if (r.path === PATH && r.method === "GET") {
       return (
         this.present
@@ -127,6 +135,35 @@ describe("Data Receiver grant removal through the screen (AZR-141)", () => {
     expect(saved).toBeDefined();
     expect(saved?.["receiverGrants"]).toBeUndefined();
     expect(within(teardown()).getByText(new RegExp(`assignment ${NAME} was removed`))).toBeTruthy();
+  });
+
+  // Review round 1: a plan read before a DELETE that lands after it would show
+  // the removed assignment as in place and offer to record it again. A Check
+  // running keeps Remove off, so the two cannot interleave.
+  it("Remove is off while the grant section's Check is reading, and back on when it lands", async () => {
+    const store = new FakeKvDocumentStore({ [PROGRESS_KEY]: progressDoc() });
+    const azure = new RoutingAzure();
+    let release: () => void = () => undefined;
+    azure.holdListing = new Promise<void>((r) => {
+      release = r;
+    });
+    mount(store, azure);
+    const row = await waitFor(() => within(teardown()).getByLabelText(TITLE));
+    const grant = screen.getByTestId("azo-receiver-grant");
+    fireEvent.click(within(grant).getByRole("button", { name: "Check the grant" }));
+    await waitFor(() => expect(azure.listingsHeld).toBe(1));
+
+    const remove = within(row).getByRole("button", { name: "Remove" }) as HTMLButtonElement;
+    expect(remove.disabled).toBe(true);
+    expect(within(row).getByText("A Data Receiver check or grant is running. Remove is off until it finishes.")).toBeTruthy();
+    fireEvent.click(remove);
+    expect(within(row).queryByRole("button", { name: "Confirm remove" })).toBeNull();
+    expect(azure.calls.filter((c) => c.path === PATH)).toEqual([]);
+
+    release();
+    await waitFor(() => expect((within(row).getByRole("button", { name: "Remove" }) as HTMLButtonElement).disabled).toBe(false));
+    expect(within(row).queryByText("A Data Receiver check or grant is running. Remove is off until it finishes.")).toBeNull();
+    expect(azure.calls.filter((c) => c.method !== "GET")).toEqual([]);
   });
 
   it("a recorded Cribl Event Hubs source refuses the removal and keeps the record", async () => {

@@ -225,7 +225,7 @@ describe("receiver grant removal copy", () => {
   it("Remove and a grant never run at once", () => {
     expect(receiverGrantRemoveDisabledReason({ granting: false, removing: false })).toBeNull();
     expect(receiverGrantRemoveDisabledReason({ granting: true, removing: false })).toBe(
-      "A Data Receiver grant is running. Remove is off until it finishes.",
+      "A Data Receiver check or grant is running. Remove is off until it finishes.",
     );
     expect(receiverGrantRemoveDisabledReason({ granting: false, removing: true })).toBe("A removal is already running.");
   });
