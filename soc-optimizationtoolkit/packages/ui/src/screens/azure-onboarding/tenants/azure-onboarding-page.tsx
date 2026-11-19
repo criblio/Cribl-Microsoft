@@ -309,7 +309,7 @@ export function AzureOnboardingPage({
       <FocusSummary
         tenantName={activeProfile?.name ?? null}
         entry={activeEntry}
-        now={now()}
+        now={now}
         onJump={(sourceId) => {
           if (activeProfileId !== null) requestJump(activeProfileId, sourceId);
         }}

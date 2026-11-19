@@ -19,14 +19,15 @@ import { focusSummary } from "@soc/core";
 import type { FocusIndicator, OnboardingSourceId } from "@soc/core";
 import { InfoTip } from "../../../components/info-tip";
 import { AZURE_WORD, CRIBL_WORD, readAgeText, type TenantGapEntry } from "../../tenant-gap/tenant-gap-state";
+import { useAgeTick } from "../../tenant-gap/use-age-tick";
 
 export interface FocusSummaryProps {
   /** The active connection's name, or null when there is none. */
   readonly tenantName: string | null;
   /** Its latest gap read, or null when none is saved or cached. */
   readonly entry: TenantGapEntry | null;
-  /** Epoch ms now, for the age. */
-  readonly now: number;
+  /** The clock, for the age; read at each render, and the summary ticks itself (review round 2). */
+  readonly now: () => number;
   /** Show the source on this page. */
   readonly onJump: (sourceId: OnboardingSourceId) => void;
   /** Open the All tenants section (to read this tenant). */
@@ -63,6 +64,7 @@ function sideLabel(i: FocusIndicator): string {
 }
 
 export function FocusSummary({ tenantName, entry, now, onJump, onOpenAllTenants }: FocusSummaryProps) {
+  useAgeTick(tenantName !== null && entry !== null);
   return (
     <section className="panel azo-focus" aria-labelledby="azo-focus-title">
       <h3 className="panel-title" id="azo-focus-title">
@@ -78,7 +80,7 @@ export function FocusSummary({ tenantName, entry, now, onJump, onOpenAllTenants 
           </button>
         </div>
       ) : (
-        <FocusBody entry={entry} now={now} onJump={onJump} />
+        <FocusBody entry={entry} now={now()} onJump={onJump} />
       )}
     </section>
   );

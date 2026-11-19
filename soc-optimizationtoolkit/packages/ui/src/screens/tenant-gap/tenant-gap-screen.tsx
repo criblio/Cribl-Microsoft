@@ -53,6 +53,7 @@ import type {
 import { usePorts } from "../../ports-context";
 import { InfoTip } from "../../components/info-tip";
 import { VALIDATE_REQUESTS_PER_MINUTE } from "../azure-onboarding/validate/validate-state";
+import { useAgeTick } from "./use-age-tick";
 import {
   AZURE_WORD,
   CRIBL_WORD,
@@ -251,6 +252,8 @@ export function TenantGapScreen({
     const e = cache.get(p);
     if (e !== null) (entries as Record<string, TenantGapEntry>)[p.id] = e;
   }
+  // Review round 2: each row's "Read at ..., N minutes ago" re-reads the clock once a minute.
+  useAgeTick(Object.keys(entries).length > 0);
   const [progress, setProgress] = useState<ScanProgress | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);

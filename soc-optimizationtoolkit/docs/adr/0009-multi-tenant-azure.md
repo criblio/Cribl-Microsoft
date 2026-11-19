@@ -186,7 +186,10 @@ What the amendment does not prove: none of it has run in Live Preview. The
 switch's refusal sees this tab's slot, the lease, and (review round 1) every
 write flow on the onboarding screen for its whole run, Azure or Cribl,
 through `operation-busy.ts` - not another tab's ordinary writes, and not a
-change running on another screen. The connection bar's own switch has no
+change running on another screen. Round 1 missed the Route to Cribl Lake
+apply; round 2 added it and a gate (`operation-busy-coverage.test.ts`) that
+fails when a component with a write phase does not report itself. A saved
+read's age re-reads the clock once a minute while it is shown. The connection bar's own switch has no
 such refusal (AZR-149). Two tabs saving gap reads at the same instant
 can lose one answer (no compare-and-swap); that costs a re-read, never a
 wrong colour.

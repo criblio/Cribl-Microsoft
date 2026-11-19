@@ -10591,19 +10591,30 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   which now reads storeRef rather than its render's store, so a rename or new
   connection made during the lease read is not written over. Decision 3's
   'refused while a deploy holds the slot' now covers a change for its WHOLE
-  run: every write flow on the screen (Activity Log, Entra and Defender
-  deploys and removals, the Data Receiver grant and its removal, the Listen
-  rule and consumer group create and removal, the Cribl source create, its
-  removal and pause) reports itself through operation-busy.ts, and the page
-  refuses with that flow's own words - between two requests and for Cribl
-  writes too, which the credential slot cannot see. A jump is cleared once the
-  screen acts on it (onJumped), so switching away and back does not repeat it.
-  Focus here says when the read it shows was cancelled (incomplete, not
-  saved). A save whose own load succeeds after a failed mount load now seeds
-  the other tenants it loaded and replaces the mount load's note.
-  Mutation-checked (10 mutations, each killed). Not pinned: App.tsx
-  handleSelectProfile reading storeRef (no App-level harness; the page-level
-  pin covers the stale closure). Unverified live.
+  run: the write flows on the screen (Activity Log, Entra and Defender deploys
+  and removals, the Data Receiver grant and its removal, the Listen rule and
+  consumer group create and removal, the Cribl source create, its removal and
+  pause; round 1 missed Route to Cribl Lake, see round 2) report themselves
+  through operation-busy.ts, and the page refuses with that flow's own words -
+  between two requests and for Cribl writes too, which the credential slot
+  cannot see. A jump is cleared once the screen acts on it (onJumped), so
+  switching away and back does not repeat it. Focus here says when the read it
+  shows was cancelled (incomplete, not saved). A save whose own load succeeds
+  after a failed mount load now seeds the other tenants it loaded and replaces
+  the mount load's note. Mutation-checked (10 mutations, each killed). Not
+  pinned: App.tsx handleSelectProfile reading storeRef (no App-level harness;
+  the page-level pin covers the stale closure). Unverified live. REVIEW ROUND
+  2 2026-11-19 (pins): the Route to Cribl Lake apply now reports itself too
+  (its plan, read-only, does not), and operation-busy-coverage.test.ts fails
+  when any component in the onboarding folder with a write phase does not call
+  useReportBusy, and pins the twelve labels exactly. A jump opens Choose what
+  to onboard when it is collapsed (the screen owns that section's collapsed
+  state) before focusing the row, instead of focusing inside a hidden body and
+  reporting the jump done. The age of a saved or cached read (Focus here and
+  the All tenants grid) re-reads the clock once a minute while one is shown
+  (use-age-tick.ts, the AuditAgeChip pattern), so 'just now' no longer stays
+  'just now' on a kept-alive page. Mutation-checked (5 mutations, each
+  killed). Unverified live.
 
 - **AZR-148** The tenant read-in-flight notice says leaving the screen cancels the read; keep-alive keeps it running
   `AZR-F10` `bug` `settled` `verified: pins`

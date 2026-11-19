@@ -20,7 +20,7 @@
  *      badges each red source.
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import {
   CREDENTIAL_LEASE_KEY,
@@ -53,6 +53,7 @@ import type {
 import { PortsProvider } from "../../../ports-context";
 import type { UiPorts } from "../../../ports-context";
 import { TenantGapCache } from "../../tenant-gap/tenant-gap-state";
+import { READ_AGE_TICK_MS } from "../../tenant-gap/use-age-tick";
 import { howtoRowAnchorId } from "../howto/howto-state";
 import { AzureOnboardingPage } from "./azure-onboarding-page";
 import type { AzureOnboardingPageProps } from "./azure-onboarding-page";
@@ -529,6 +530,48 @@ describe("3c. a jump is acted on once (review round 1)", () => {
     await settle();
     expect(document.activeElement).not.toBe(chooserRow(RED_SOURCE!.id));
     expect(document.activeElement).toBe(document.body);
+  });
+});
+
+describe("3d. a jump opens a collapsed chooser (review round 2)", () => {
+  it("expands Choose what to onboard and focuses the row, rather than focusing inside a hidden body", async () => {
+    mount();
+    expand();
+    await waitFor(() => expect(chooserRow(RED_SOURCE!.id)).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Choose what to onboard" }));
+    const body = chooserRow(RED_SOURCE!.id)!.closest<HTMLElement>("[hidden]");
+    expect(body).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: `Open ${RED_SOURCE!.title} on this page` }));
+    await waitFor(() => expect(document.activeElement).toBe(chooserRow(RED_SOURCE!.id)));
+    expect(body!.hidden).toBe(false);
+    expect(chooserRow(RED_SOURCE!.id)!.closest("[hidden]")).toBeNull();
+    expect(screen.getByRole("button", { name: "Collapse Choose what to onboard" }).getAttribute("aria-expanded")).toBe("true");
+  });
+});
+
+describe("5c. the age of a read moves on by itself (review round 2)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("Focus here and the grid re-read the clock once a minute, with nothing else re-rendering them", () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const cache = new TenantGapCache();
+    cache.set({
+      readAt: NOW,
+      row: { profileId: "pa", tenantId: TA, cells: savedCells(), status: { state: "green" as const, reason: "Read and proven." }, warnings: [], plannedReads: 4, cancelled: false },
+    });
+    let clock = NOW;
+    mount({ cache, extra: { now: () => clock } });
+    const focusAge = () => screen.getByTestId("azo-focus-read-at").textContent ?? "";
+    const gridAge = () => allTenantsBody().querySelector('tr[data-profile="pa"] .tgap-tenant-status')!.textContent ?? "";
+    expect(focusAge()).toMatch(/^Read at .*, just now\. /);
+    expect(gridAge()).toMatch(/^Read at [^,]*, just now/);
+    clock = NOW + 3 * 60 * 60 * 1000;
+    act(() => {
+      vi.advanceTimersByTime(READ_AGE_TICK_MS);
+    });
+    expect(focusAge()).toMatch(/^Read at .*, 3 hours ago\. /);
+    expect(gridAge()).toMatch(/^Read at [^,]*, 3 hours ago/);
+    expect(READ_AGE_TICK_MS).toBe(60_000);
   });
 });
 

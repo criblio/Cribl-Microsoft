@@ -20,6 +20,7 @@ import type { LakeRouteHooks } from "./lake-route-panel";
 import { CriblSourcePanel } from "./cribl-source-panel";
 import { sourceRows } from "./cribl-source-state";
 import { DEPLOYED, SOURCE, TABLE, readyLake } from "./lake-route.test-util";
+import { OperationBusyContext, createOperationBusyRegistry } from "../operation-busy";
 
 afterEach(cleanup);
 
@@ -160,6 +161,34 @@ describe("LakeRoutePanel", () => {
     fireEvent.click(actionButton());
     await waitFor(() => expect(h.onPlan).toHaveBeenCalledTimes(2));
     expect(h.onApply).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports its apply as running for the whole apply, and not while it only plans (AZR-147 review round 2)", async () => {
+    let finish: (o: ApplyLakeRouteOutcome) => void = () => undefined;
+    let planned: (r: PlanLakeRouteResult) => void = () => undefined;
+    const h = hooks({
+      onPlan: vi.fn(() => new Promise<PlanLakeRouteResult>((res) => (planned = res))),
+      onApply: vi.fn(() => new Promise<ApplyLakeRouteOutcome>((res) => (finish = res))),
+    });
+    const registry = createOperationBusyRegistry();
+    render(
+      <OperationBusyContext.Provider value={registry}>
+        <LakeRoutePanel sourceId="defenderExport" criblSource={SOURCE} readSeq={1} hooks={h} />
+      </OperationBusyContext.Provider>,
+    );
+    fireEvent.click(actionButton());
+    await waitFor(() => expect(h.onPlan).toHaveBeenCalledTimes(1));
+    // The plan only reads: a switch while it runs changes nothing, so it is not reported.
+    expect(registry.current()).toBeNull();
+    planned({ kind: "ready", ready: readyLake() });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Confirm: create the route to Cribl Lake" })).toBeTruthy());
+    expect(registry.current()).toBeNull();
+    fireEvent.click(actionButton());
+    await waitFor(() => expect(h.onApply).toHaveBeenCalledTimes(1));
+    expect(registry.current()).toBe("a route to Cribl Lake create");
+    finish(DEPLOYED);
+    await waitFor(() => expect(screen.getByText("Routed to Cribl Lake: committed and deployed.")).toBeTruthy());
+    expect(registry.current()).toBeNull();
   });
 
   it("names the route the app recorded creating", () => {

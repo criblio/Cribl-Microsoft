@@ -634,14 +634,24 @@ export function AzureOnboardingScreen({
 
   // AZR-147: follow a gap to its source - once per request, and only once the
   // saved choices have answered, so the row (or the chooser) is there to focus.
+  // Review round 2: the chooser section's collapsed state is the screen's, so a
+  // jump can open it first. A collapsed body stays mounted but hidden, and
+  // scrollIntoView and focus do nothing inside a hidden subtree: the jump
+  // reported done while nothing visible happened. The effect opens the section
+  // and returns; it runs again once the section is open and focuses the row.
+  const [chooserCollapsed, setChooserCollapsed] = useState(false);
   const jumpedSeq = useRef(0);
   const progressSettled = progressLoad.status !== "loading";
   useEffect(() => {
     if (jumpTo === null || jumpTo.seq === jumpedSeq.current || !progressSettled) return;
+    if (chooserCollapsed) {
+      setChooserCollapsed(false);
+      return;
+    }
     jumpedSeq.current = jumpTo.seq;
     showSource(jumpTo.sourceId);
     onJumped?.(jumpTo.seq);
-  }, [jumpTo, progressSettled, onJumped]);
+  }, [jumpTo, progressSettled, onJumped, chooserCollapsed]);
 
   // Tenant inventory heat map: the last read, kept in state only.
   const [inventory, setInventory] = useState<TenantInventory | null>(null);
@@ -1504,6 +1514,8 @@ export function AzureOnboardingScreen({
         title={CHOOSER_SECTION_TITLE}
         status="available"
         infoTip={CHOOSER_TIP}
+        collapsed={chooserCollapsed}
+        onCollapsedChange={setChooserCollapsed}
       >
         {selectionFailure !== null && <PickerLine message={selectionFailure} />}
         {messages.chooser !== null && <PickerLine message={messages.chooser} />}
