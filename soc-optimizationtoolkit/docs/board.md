@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 33 in progress, 251 done.**
+**107 in the backlog, 33 in progress, 253 done.**
 
 ## By menu item
 
@@ -36,13 +36,12 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 8 | 13 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 31 | 66 | 3 |
+| Azure Native Source Onboarding | 33 | 71 | 4 |
 | Azure Logging Map | 3 | 2 | 1 |
-| Tenant Logging Gaps | 1 | 3 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 19 | 6 |
 
-Open work totals 139.
+Open work totals 140.
 
 ## Epics and features
 
@@ -51,7 +50,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 69% (80/116)
+### `AZR` Azure native source onboarding - 69% (82/119)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -65,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
 | `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 53/71 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-138, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117, AZR-141, AZR-142, AZR-143, AZR-144, AZR-145 |
-| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 23/26 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-125*, AZR-126*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 25/29 | AZR-61*, AZR-62*, AZR-63, AZR-64, AZR-65, AZR-90, AZR-91, AZR-125*, AZR-126, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111*, AZR-147, AZR-148, AZR-149 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -1013,7 +1012,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (12)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1237,6 +1236,21 @@ Next to pick up. Nothing blocks these.
   config-json warning when an imported connectivity value is coerced to full;
   Batch's template-only export is gated on the identity fields, so
   Disconnected cannot reach it from Batch (fallback routing).
+
+- **AZR-149** The connection bar switches the active connection while an onboarding change is running, dropping its result
+  `AZR-F10` `bug` `settled`
+  FOUND 2026-11-19 in review round 1 of [[AZR-147]]. The connection picker in
+  the top bar (App.tsx handleSelectProfile, on every screen including Azure
+  Native Source Onboarding) switches the active connection with no busy check.
+  The onboarding screen is keyed on the active connection, so a switch while a
+  deploy, grant, Cribl source create or removal is running remounts it: the
+  running flow's state and result are dropped part-way, and the stored client
+  secret is cleared under it. AZR-147 refuses this for the switch from All
+  tenants (operation-busy.ts registry, scoped to the page); the connection bar
+  predates it and has the same gap, on main before AZR-147. FIX: lift the
+  operation-busy registry to the shell (or expose the page's) and have the
+  connection bar refuse, or ask, while a change is running, with the change's
+  own words - pin it with a running change and a bar switch.
 
 ---
 
@@ -2819,7 +2833,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (251)
+## Done (253)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -10498,3 +10512,142 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   plan went on to a namespace read). Mutation: disabling the rule fails both
   the plan pin and the grant's pin. Unverified live: nothing new beyond
   AZR-142's directory cross-check.
+
+- **AZR-147** Fold Tenant Logging Gaps into Azure Native Source Onboarding
+  `AZR-F10` `story` `settled` `verified: pins`
+  Operator request 2026-11-19: fold the Tenant Logging Gaps page into the
+  Azure Native Source Onboarding page. Five operator decisions (recorded as an
+  amendment to ADR 0009 decision 6): (1) a collapsible 'All tenants' section
+  opens the onboarding page with the existing tenant gap grid, moved not
+  rewritten, keeping its read, cancel, lease/slot ([[AZR-90]]), keyboard
+  ([[AZR-91]]) and honesty rules, with the active tenant's row highlighted;
+  (2) the Tenant Logging Gaps nav item goes; its route id 'tenant-gaps' keeps
+  working by opening the onboarding page with All tenants expanded, and
+  everything naming the old route (route capabilities, nav tests, board menus,
+  the shell's read-in-flight notice) is updated; (3) a gap cell for the ACTIVE
+  tenant jumps to that source's row on the page; for another tenant a confirm
+  naming tenant and source comes first, then the active connection is switched
+  with Setup's own switch and the page jumps; never without the confirm, and
+  refused with the reason while a Read all, a tenant session, an Azure write
+  or another tab's credential lease holds the slot; (4) each tenant's latest
+  gap read is saved in one app KV document keyed by tenant (versioned, decode
+  tolerant with dropped-reporting, like progress-document.ts), added to the
+  least-privilege KV lists (the [[AZR-125]] guard), seeding the grid and the
+  Focus summary after a reload; loading it is the only mount read, a saved
+  answer shows its age, and a missing or undecodable document reads as not
+  read yet, never green; (5) a 'Focus here' summary for the active tenant
+  lists each red Azure or Cribl indicator with its reason and a jump link,
+  counts unknown sources separately, shows when the read was taken, and offers
+  to open All tenants when nothing is saved; each red source's row in the
+  source chooser carries a small gap badge. DONE 2026-11-19 (pins; 1.13.38):
+  the grid (screens/tenant-gap, moved not rewritten) is the collapsible All
+  tenants section of the new AzureOnboardingPage
+  (screens/azure-onboarding/tenants/), which also renders Focus here and the
+  onboarding screen keyed on the active connection as before. Collapsing hides
+  the grid without unmounting it. The grid reads the shell cache through a
+  subscription; the active row is highlighted with an 'Active connection'
+  word; with onOpen each cell gets an Open link as a third roving stop (one
+  tab stop for the whole grid kept), and a click in a cell does the same. Open
+  on the active tenant focuses the source's row in Choose what to onboard; on
+  another tenant a confirm ('Switch the active tenant to <name> and open
+  <source>?') precedes the shell's handleSelectProfile, refused with the
+  reason while a Read all is in flight, AzureCredentialSlot.busyReason()
+  reports an exclusive holder or an Azure write in flight, or another tab
+  holds (or nobody can read) the credential lease; the jump runs once the
+  remounted screen's choices have loaded. Saved reads:
+  domain/tenant-gap/saved-reads.ts (key tenant-gap-reads, kind + version 1,
+  readProgressDocument-style gate, tolerant decode with dropped-reporting,
+  keyed by normalized tenant, seeds a connection only when it was read through
+  it, cancelled rows never saved); useSavedGapReads loads it once on mount (no
+  Azure, Graph or Cribl), seeds the cache (TenantGapCache.seed keeps the
+  newer), and merges each complete read into a fresh load before saving; an
+  unreadable document is never written over and the read says it was not
+  saved. Focus here: domain/tenant-gap/focus.ts buckets every source into gap,
+  unknown or ok; the summary lists red indicators with their reason and a jump
+  link, counts 'N not read or unknown' apart, shows the read's time and age,
+  and offers to open All tenants when nothing is saved; each red source's
+  chooser row gets a 'Gap' badge with an (i). Route: 'tenant-gaps' left the
+  route table, route-capabilities and board MENUS (AZR-63/90/91/126 now
+  inherit azure-onboarding from AZR-F10); AppFrame gained routeAliases, and
+  App.tsx aliases tenant-gaps onto azure-onboarding with All tenants opened.
+  KV lists: dated addendum
+  docs/audit/2026-11-19-tenant-gap-reads-addendum.json cited by
+  cribl.kv.read/write; the AZR-125 guard pins TENANT_GAP_READS_KEY. ADR 0009
+  decision 6 amended 2026-11-19. Pins: saved-reads.test.ts, focus.test.ts,
+  azure-onboarding-page.dom.test.tsx (18), tenant-gap-screen.dom.test.tsx
+  (+11), app-frame alias pins (3), credential-slot busyReason (3),
+  board-menus-routes tenant-gaps pins (2); mutation-checked (kv list row,
+  unknown bucket, cancelled save, Read all refusal, lease refusal, onRead on
+  cancel, write gate, badge, jump, slot write counter - each turned its pin
+  red). UNVERIFIED LIVE: nothing ran in Live Preview - the switch from the
+  grid (secret clear, switch notice, jump after the remount), the KV save and
+  reload of tenant-gap-reads on the real store, the alias from a real deep
+  link, and the layout of the badges and Focus list in both themes. REVIEW
+  ROUND 1 2026-11-19 (pins): the switch from All tenants now happens only for
+  the confirm on screen - each check carries a token that a Cancel, a new Open
+  or a later check replaces, so a Cancel or a second Open while the lease is
+  read never switches; a switch made elsewhere meanwhile drops it with a
+  sentence; and it calls the shell's CURRENT handleSelectProfile (a ref),
+  which now reads storeRef rather than its render's store, so a rename or new
+  connection made during the lease read is not written over. Decision 3's
+  'refused while a deploy holds the slot' now covers a change for its WHOLE
+  run: the write flows on the screen (Activity Log, Entra and Defender deploys
+  and removals, the Data Receiver grant and its removal, the Listen rule and
+  consumer group create and removal, the Cribl source create, its removal and
+  pause; round 1 missed Route to Cribl Lake, see round 2) report themselves
+  through operation-busy.ts, and the page refuses with that flow's own words -
+  between two requests and for Cribl writes too, which the credential slot
+  cannot see. A jump is cleared once the screen acts on it (onJumped), so
+  switching away and back does not repeat it. Focus here says when the read it
+  shows was cancelled (incomplete, not saved). A save whose own load succeeds
+  after a failed mount load now seeds the other tenants it loaded and replaces
+  the mount load's note. Mutation-checked (10 mutations, each killed). Not
+  pinned: App.tsx handleSelectProfile reading storeRef (no App-level harness;
+  the page-level pin covers the stale closure). Unverified live. REVIEW ROUND
+  2 2026-11-19 (pins): the Route to Cribl Lake apply now reports itself too
+  (its plan, read-only, does not), and operation-busy-coverage.test.ts fails
+  when any component in the onboarding folder with a write phase does not call
+  useReportBusy, and pins the twelve labels exactly. A jump opens Choose what
+  to onboard when it is collapsed (the screen owns that section's collapsed
+  state) before focusing the row, instead of focusing inside a hidden body and
+  reporting the jump done. The age of a saved or cached read (Focus here and
+  the All tenants grid) re-reads the clock once a minute while one is shown
+  (use-age-tick.ts, the AuditAgeChip pattern), so 'just now' no longer stays
+  'just now' on a kept-alive page. Mutation-checked (5 mutations, each
+  killed). Unverified live. REVIEW ROUND 3: a switch confirm is dropped with
+  the reason the moment its connection is deleted or re-pointed or the active
+  connection changes (an A-to-B-to-A round trip included), and the shell
+  switch (switchedProfileStore) treats an id no connection has as no switch,
+  so it never clears the still-active secret; Focus here says none saved only
+  when the saved reads loaded and were understood, and says loading or unknown
+  with the reason otherwise; the confirm is scrolled into view with Switch and
+  open focused, and Cancel returns focus to the Open that raised it.
+  Mutation-checked (5 mutations, each killed). Unverified live. Review round 4
+  (2026-11-19): a confirm dropped because the active connection changed or its
+  connection was deleted or re-pointed now takes focus back to the Open only
+  when focus was still inside the confirm or had been lost to the page body,
+  so an operator working in the connection bar keeps their place. An active
+  change with no switch requested says the switch was dropped (new wording);
+  the "while the switch was being checked" wording is kept for a change during
+  a requested check. Pinned with exact strings and focus targets, each
+  mutation-checked. Focus with a real screen reader and the live connection
+  bar is unverified live.
+
+- **AZR-148** The tenant read-in-flight notice says leaving the screen cancels the read; keep-alive keeps it running
+  `AZR-F10` `bug` `settled` `verified: pins`
+  FOUND 2026-11-19 while folding the tenant gap grid into Azure Native Source
+  Onboarding ([[AZR-147]]). TENANT_READ_IN_FLIGHT (tenant-gap-screen.tsx),
+  shown above every screen while a Read all holds the Azure slot, says 'Cancel
+  on Tenant Logging Gaps stops it, and leaving that screen cancels it too'.
+  The AppFrame keeps every visited route MOUNTED (hidden) so its state
+  survives navigation, so leaving the screen does not unmount it and the
+  unmount abort never runs: the read keeps going, holding the slot, while the
+  notice tells the operator it was cancelled. FIX: word the notice for what
+  happens - the run continues until it ends or is cancelled where it was
+  started - and pin the wording. DONE 2026-11-19 (pins): TENANT_READ_IN_FLIGHT
+  now says the read keeps running when the operator moves to another screen
+  and that Cancel in the All tenants section of Azure Native Source Onboarding
+  stops it; the pin asserts the exact sentence and that it no longer names
+  Tenant Logging Gaps or says leaving cancels it (mutation: the old sentence
+  fails it). EARLIER_RUN is unchanged and correct: it shows only after the
+  grid was unmounted, which does abort. Unverified live.

@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 import { ENTRA_SETTING_NAME, removeEntraSetting } from "@soc/core";
 import type { EntraRemoveOutcome, EntraSettingRecord } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { useReportBusy } from "./operation-busy";
 import { PickerLine } from "./eventhub-prerequisite-section";
 import { entraRemoveConfirmText, entraRemoveDisabledReason, entraRemoveMessage } from "./entra-setting-state";
 
@@ -30,6 +31,7 @@ export function EntraRemovePanel({ record, onRemoved }: EntraRemovePanelProps) {
   const tenantId = config.tenantId;
   const [armedFor, setArmedFor] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
+  useReportBusy("an Entra ID diagnostic setting removal", removing);
   const [outcome, setOutcome] = useState<EntraRemoveOutcome | null>(null);
 
   const reason = entraRemoveDisabledReason({ running: removing, tenantId, record });

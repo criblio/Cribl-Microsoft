@@ -41,6 +41,8 @@ export interface ChoosePanelProps {
   readonly writesBlockedReason?: string | null;
   readonly onSetMode: (id: OnboardingSourceId, mode: SourceMode) => void;
   readonly onSetChosen: (id: OnboardingSourceId, chosen: boolean) => void;
+  /** Sources the active tenant's latest gap read measured red (AZR-147): each row gets a gap badge. */
+  readonly gapSources?: ReadonlySet<OnboardingSourceId>;
 }
 
 /** Shown while the progress document has not answered yet. */
@@ -53,6 +55,7 @@ export function ChoosePanel({
   writesBlockedReason = null,
   onSetMode,
   onSetChosen,
+  gapSources,
 }: ChoosePanelProps) {
   const progress = loadedProgress(load);
   const canWrite = canWriteProgress(load) && writesBlockedReason === null;
@@ -72,6 +75,7 @@ export function ChoosePanel({
           selectionUnknownCause={selection === null ? (selectionCause ?? "not-read") : null}
           onSetChosen={onSetChosen}
           onSetMode={onSetMode}
+          {...(gapSources !== undefined ? { gapSources } : {})}
         />
       )}
     </div>

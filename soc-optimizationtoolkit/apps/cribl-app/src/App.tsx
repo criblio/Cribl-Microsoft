@@ -8,7 +8,7 @@ import {
   APP_THEME_KEY,
   AppFrame,
   ArchitectureScreen,
-  AzureOnboardingScreen,
+  AzureOnboardingPage,
   AuditAgeChip,
   AzureLoggingMapScreen,
   MappingCatalogScreen,
@@ -34,7 +34,6 @@ import {
   TenantCriblMappingSection,
   TenantGapCache,
   TenantReadInFlightNotice,
-  TenantGapScreen,
   TenantListSection,
   SetupWizard,
   SiemMigrationScreen,
@@ -59,6 +58,7 @@ import {
 import type {
   AppFrameNav,
   AppRoute,
+  RouteAlias,
   AzureConnectResult,
   CommitScopeOutcome,
   LoadableAcceptance,
@@ -95,6 +95,7 @@ import {
   serializeSetupRecord,
   serializeProfileStore,
   setActiveProfile,
+  switchedProfileStore,
   updateActiveConfig,
   upsertProfile,
   addTenantProfiles,
@@ -877,6 +878,10 @@ function App() {
   const [connectNonce, setConnectNonce] = useState(0);
   const handleConnected = useCallback(() => setConnectNonce((n) => n + 1), []);
 
+  // AZR-147: bumped whenever the retired 'tenant-gaps' route is asked for, so
+  // Azure Native Source Onboarding opens its All tenants section.
+  const [openAllTenants, setOpenAllTenants] = useState(0);
+
   // Inline rename state for the connection bar.
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
@@ -1155,14 +1160,20 @@ function App() {
   );
 
   // Connection <select>: the EXPLICIT switch. No-op when the selection is
-  // unchanged or blank.
+  // unchanged or blank. It reads storeRef, not this render's store: the All
+  // tenants grid calls it after awaiting the credential lease, and a store from
+  // the click's render would write back over a rename, a new connection or a
+  // switch made meanwhile (AZR-147 review round 1). An id no connection has
+  // (deleted while a confirm naming it was open) switches nothing: it must not
+  // reach applySwitch, which would clear the still-active connection's secret
+  // and say it switched (review round 3).
   const handleSelectProfile = (nextId: string) => {
-    if (nextId === '' || nextId === store.activeProfileId) {
+    const current = storeRef.current;
+    const nextStore = switchedProfileStore(current, nextId);
+    if (nextStore === null) {
       return;
     }
-    const prevConfig = getActiveConfig(store);
-    const nextStore = setActiveProfile(store, nextId);
-    applySwitch(prevConfig, getActiveConfig(nextStore), nextId, nextStore);
+    applySwitch(getActiveConfig(current), getActiveConfig(nextStore), nextId, nextStore);
   };
 
   // New connection: a fresh blank profile with a shell-minted id, made active.
@@ -2298,16 +2309,29 @@ function App() {
         </p>
       </header>
       <PortsProvider {...portsProviderProps}>
-        {/* Keyed on the active connection like the Setup sections, so a
-            connection switch starts the screen afresh rather than carrying the
-            previous tenant's run, worker group and Cribl side across (audit
-            tenancy MEDIUM, azure-onboarding-screen.tsx:245). AZR-60: the
-            Defender section's permission banner offers the connection bar's
-            own re-check rather than a second audit; permissionsAuditKey keeps
-            the previous connection's set (held until the new audit lands) from
-            being read as this one's, and the clock dates a denial. */}
-        <AzureOnboardingScreen
-          key={`azure-onboarding-${store.activeProfileId ?? 'none'}`}
+        {/* AZR-147: the page now opens with All tenants (the tenant gap grid,
+            moved from the retired Tenant Logging Gaps route) and Focus here.
+            The onboarding screen inside it is still keyed on the active
+            connection like the Setup sections, so a connection switch starts
+            the screen afresh rather than carrying the previous tenant's run,
+            worker group and Cribl side across (audit tenancy MEDIUM,
+            azure-onboarding-screen.tsx:245); the grid above it is not, so a
+            Read all survives a switch. A switch from the grid is Setup's own
+            (handleSelectProfile), refused while the credential slot is busy.
+            AZR-60: the Defender section's permission banner offers the
+            connection bar's own re-check rather than a second audit;
+            permissionsAuditKey keeps the previous connection's set (held until
+            the new audit lands) from being read as this one's, and the clock
+            dates a denial. */}
+        <AzureOnboardingPage
+          profiles={store.profiles}
+          activeProfileId={store.activeProfileId}
+          tenantGapCache={TENANT_GAP_CACHE}
+          tenantSession={tenantSession}
+          onSwitchConnection={handleSelectProfile}
+          slotBusyReason={() => azureCredentialSlot.busyReason()}
+          leaseHolderId={TAB_HOLDER_ID}
+          openAllTenantsSignal={openAllTenants}
           pacing={BATCH_PACING}
           onRecheckPermissions={capabilityAudit.refresh}
           recheckingPermissions={capabilityAudit.running}
@@ -2334,34 +2358,6 @@ function App() {
       </header>
       <PortsProvider {...portsProviderProps}>
         <AzureLoggingMapScreen key={`azure-logging-map-${store.activeProfileId ?? 'none'}`} />
-      </PortsProvider>
-    </>
-  );
-
-  // Tenant Logging Gaps (AZR-63, ADR 0009 decision 6, READ-ONLY): every
-  // connection against every Azure native logging source, configured in Azure
-  // (Validate through that tenant's own connection, via the tenant session)
-  // and onboarded to Cribl. Mount reads nothing; reads are paced on the shared
-  // budget. requires: [] - see route-capabilities.ts. No policies.yml or
-  // proxies.yml change: its Azure reads are Validate's (already proxied) and
-  // its one Cribl read, GET /m/:gid/system/inputs, is already declared.
-  const tenantGapsView = (
-    <>
-      <header className="harness-header">
-        <h1 className="harness-title">Tenant Logging Gaps</h1>
-        <p className="harness-subtitle">
-          See, for every Azure tenant you connect, which native logging sources
-          are set up in Azure and onboarded to Cribl. Nothing here changes Azure
-          or Cribl.
-        </p>
-      </header>
-      <PortsProvider {...portsProviderProps}>
-        <TenantGapScreen
-          profiles={store.profiles}
-          cache={TENANT_GAP_CACHE}
-          session={tenantSession}
-          pacing={BATCH_PACING}
-        />
       </PortsProvider>
     </>
   );
@@ -2629,6 +2625,14 @@ function App() {
   // since graduated into journey, leaving the rest parked below. Read the
   // route table for the current split - this comment records the RULE, and
   // the table is the only place the answer lives.
+  // Retired route ids that still resolve (AZR-147). Tenant Logging Gaps is the
+  // All tenants section of Azure Native Source Onboarding now: its old id
+  // opens that page with the section expanded, so a bookmark or a
+  // nav.navigate('tenant-gaps') still lands on the grid.
+  const ROUTE_ALIASES: Readonly<Record<string, RouteAlias>> = {
+    'tenant-gaps': { to: 'azure-onboarding', onArrive: () => setOpenAllTenants((n) => n + 1) },
+  };
+
   const routes: AppRoute[] = [
     // Dataflow is the JOURNEY landing item (user directive
     // 2026-07-20): users arrive here first to learn how the ingestion works
@@ -2649,7 +2653,6 @@ function App() {
     { id: 'azure-onboarding', label: 'Azure Native Source Onboarding', requires: capabilitiesForRoute('azure-onboarding'), section: 'development', render: () => azureOnboardingView },
     { id: 'mapping-catalog', label: 'Mapping Catalog', requires: capabilitiesForRoute('mapping-catalog'), section: 'development', render: () => mappingCatalogView },
     { id: 'azure-logging-map', label: 'Azure Logging Map', requires: capabilitiesForRoute('azure-logging-map'), section: 'development', render: () => azureLoggingMapView },
-    { id: 'tenant-gaps', label: 'Tenant Logging Gaps', requires: capabilitiesForRoute('tenant-gaps'), section: 'development', render: () => tenantGapsView },
     { id: 'harness', label: 'Diagnostics', requires: capabilitiesForRoute('harness'), section: 'diagnostics', render: () => harnessView },
   ];
 
@@ -2663,6 +2666,7 @@ function App() {
       topBar={connectionBar}
       footerNote={`v${window.__APP_VERSION_RUNTIME__ ?? __APP_VERSION__}`}
       initialRouteId="architecture"
+      routeAliases={ROUTE_ALIASES}
       themeControl={themeControl}
     />
   );

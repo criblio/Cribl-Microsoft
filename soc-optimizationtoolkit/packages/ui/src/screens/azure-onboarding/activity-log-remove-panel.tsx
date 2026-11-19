@@ -23,6 +23,7 @@ import { useEffect, useState } from "react";
 import { ACTIVITY_LOG_SETTING_NAME, removeActivityLogExport } from "@soc/core";
 import type { ActivityLogRemoveOutcome, ActivityLogSettingRecord } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { useReportBusy } from "./operation-busy";
 import { PickerLine } from "./eventhub-prerequisite-section";
 import { activityLogRemoveConfirmText, activityLogRemoveDisabledReason, activityLogRemoveMessage } from "./activity-log-state";
 
@@ -47,6 +48,7 @@ export function ActivityLogRemovePanel({ record, onRemoved, deploying, onRunning
   const subscriptionId = config.subscriptionId;
   const [armedFor, setArmedFor] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
+  useReportBusy("an Activity Log diagnostic setting removal", removing);
   const [outcome, setOutcome] = useState<ActivityLogRemoveOutcome | null>(null);
 
   const reason = activityLogRemoveDisabledReason({ running: removing || deploying, subscriptionId, record });

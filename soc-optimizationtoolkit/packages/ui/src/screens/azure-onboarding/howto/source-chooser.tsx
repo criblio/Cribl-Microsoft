@@ -43,7 +43,18 @@ export interface SourceChooserProps {
   readonly selectionUnknownCause?: ChoiceUnknownCause | null;
   readonly onSetChosen: (id: OnboardingSourceId, chosen: boolean) => void;
   readonly onSetMode: (id: OnboardingSourceId, mode: SourceMode) => void;
+  /**
+   * Sources the active tenant's latest gap read measured RED on either side
+   * (AZR-147). Each gets a small "Gap" badge with its (i); a source not in the
+   * set gets none, which says nothing about it either way.
+   */
+  readonly gapSources?: ReadonlySet<OnboardingSourceId>;
 }
+
+/** The (i) beside a row's gap badge (AZR-147). */
+const GAP_BADGE_TIP =
+  "The latest gap read of this tenant measured a gap for this source: Azure is not configured as its plan says, " +
+  "or this app has no Cribl source for it that Cribl still has. Focus here, at the top of this page, gives the reason.";
 
 /** The hint under an Automated row: the app deploys it from its own section. */
 export const AUTOMATE_CHOICE_HINT = "Automate: the app sets this source up from its section below.";
@@ -69,6 +80,7 @@ export function SourceChooser({
   selectionUnknownCause = null,
   onSetChosen,
   onSetMode,
+  gapSources,
 }: SourceChooserProps) {
   return (
     <ul className="azo-howto-chooser">
@@ -104,6 +116,11 @@ export function SourceChooser({
             <span className="integrate-check-text">{row.title}</span>
           </label>
           <InfoTip text={row.info} />
+          {gapSources?.has(row.id) === true && (
+            <span className="azo-gap-badge" data-testid={`azo-gap-badge-${row.id}`}>
+              Gap <InfoTip text={GAP_BADGE_TIP} label={`${row.title}: gap, why`} />
+            </span>
+          )}
           <span className="field-hint">{`${row.transportLabel}, read by a Cribl ${row.criblInputType} source`}</span>
           <div className="azo-mode-toggle" role="radiogroup" aria-label={`${row.title} setup`}>
             <label>

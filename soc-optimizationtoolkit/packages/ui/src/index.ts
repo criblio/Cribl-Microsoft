@@ -86,7 +86,7 @@ export type {
 
 // App frame: chrome, acceptance gate, and their pure state.
 export { AppFrame } from "./frame/app-frame";
-export type { AppFrameNav, AppFrameProps, AppRoute } from "./frame/app-frame";
+export type { AppFrameNav, AppFrameProps, AppRoute, RouteAlias } from "./frame/app-frame";
 export { AuaGate } from "./frame/aua-gate";
 export type { AuaGateProps } from "./frame/aua-gate";
 export {
@@ -536,6 +536,9 @@ export { AzureLoggingMapScreen } from "./screens/azure-logging-map/azure-logging
 // Azure Native Source Onboarding (AZR-18): the coverage catalog by collection
 // method, the Event Hub target, and the Defender for Cloud alert export.
 export { AzureOnboardingScreen } from "./screens/azure-onboarding/azure-onboarding-screen";
+// AZR-147: the onboarding page with the tenant gap grid folded in (All tenants, Focus here).
+export { AzureOnboardingPage } from "./screens/azure-onboarding/tenants/azure-onboarding-page";
+export type { AzureOnboardingPageProps } from "./screens/azure-onboarding/tenants/azure-onboarding-page";
 
 // Labs (roadmap Phase 5, LAB-01/02/13/14): app-provisioned disposable Azure
 // lab environments - the 8 UnifiedLab profiles as a planning surface plus the
@@ -774,8 +777,8 @@ export type { AzureResourcesSectionProps } from "./screens/setup-wizard/azure-re
 export { TenantCriblMappingSection } from "./screens/setup-wizard/tenant-cribl-mapping-section";
 export type { TenantCriblMappingSectionProps } from "./screens/setup-wizard/tenant-cribl-mapping-section";
 // ADR 0009 decision 6: the multi-tenant native logging gap dashboard.
-export { TENANT_READ_IN_FLIGHT, TenantGapScreen, TenantReadInFlightNotice } from "./screens/tenant-gap/tenant-gap-screen";
-export type { TenantGapScreenProps } from "./screens/tenant-gap/tenant-gap-screen";
+// AZR-147: the grid itself is rendered by AzureOnboardingPage (All tenants), so only the shell notice is exported.
+export { TENANT_READ_IN_FLIGHT, TenantReadInFlightNotice } from "./screens/tenant-gap/tenant-gap-screen";
 export { TenantGapCache } from "./screens/tenant-gap/tenant-gap-state";
 export type { TenantGapEntry } from "./screens/tenant-gap/tenant-gap-state";
 export { TenantListSection } from "./screens/setup-wizard/tenant-list-section";

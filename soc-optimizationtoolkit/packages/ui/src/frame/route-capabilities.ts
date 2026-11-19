@@ -83,6 +83,10 @@ export const ROUTE_CAPABILITIES: Readonly<Record<string, readonly Capability[]>>
     // each section banners them there. The Event Hub namespace-side actions
     // (listKeys and the namespace, hub and rule writes) are measured per
     // section by CAP-9 (split from CAP-7b), never by this entry.
+    // Since AZR-147 the route also hosts the tenant gap grid (All tenants, the
+    // retired tenant-gaps route), which reads several tenants each through its
+    // own connection; the audit measures only the ACTIVE one, so its verdicts
+    // say nothing about the others - one more reason the entry stays empty.
     "azure-onboarding": [],
     "mapping-catalog": [],
     // Same kind of gap eventhub-discovery had before CAP-1. The logging map
@@ -93,11 +97,6 @@ export const ROUTE_CAPABILITIES: Readonly<Record<string, readonly Capability[]>>
     // route is unconstrained and the screen reports every refused read itself
     // as UNKNOWN, counted. A dedicated capability is filed as its own card.
     "azure-logging-map": [],
-    // EXPLICITLY EMPTY. The tenant gap dashboard reads several tenants, each
-    // through its own connection; the audit measures only the ACTIVE one, so
-    // its verdicts say nothing about the others. Every refused read is shown
-    // as unknown in its own cell instead.
-    "tenant-gaps": [],
     // Diagnostics must stay reachable in every state - it is where you look when
     // something is wrong.
     harness: [],

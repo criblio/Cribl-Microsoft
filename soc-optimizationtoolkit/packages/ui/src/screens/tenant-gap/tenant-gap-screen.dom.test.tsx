@@ -46,7 +46,9 @@ import type {
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
 import { RESTORE_FAILED, TENANT_READ_IN_FLIGHT, TenantGapScreen, TenantReadInFlightNotice } from "./tenant-gap-screen";
-import { TenantGapCache } from "./tenant-gap-state";
+import type { TenantGapScreenProps } from "./tenant-gap-screen";
+import { TenantGapCache, readAgeText } from "./tenant-gap-state";
+import type { TenantGapEntry } from "./tenant-gap-state";
 
 afterEach(cleanup);
 
@@ -138,6 +140,7 @@ function mount(
     azure?: CountingAzure;
     profiles?: typeof PROFILES;
     store?: FakeKvDocumentStore;
+    extra?: Partial<TenantGapScreenProps>;
   } = {},
 ) {
   const azure = opts.azure ?? new CountingAzure();
@@ -154,6 +157,7 @@ function mount(
         now={() => Date.UTC(2026, 10, 3, 12, 0, 0)}
         {...(session !== undefined ? { session } : {})}
         {...(opts.pacing === null ? {} : { pacing: opts.pacing ?? PACING })}
+        {...(opts.extra ?? {})}
       />
     </PortsProvider>,
   );
@@ -534,15 +538,17 @@ describe("TenantReadInFlightNotice", () => {
       cache.track(new Promise<void>((r) => (finish = r)));
     });
     expect(screen.getByRole("status").textContent).toBe(TENANT_READ_IN_FLIGHT);
-    // Review round 3: off Tenant Logging Gaps the run is already cancelled, so
-    // the notice says leaving cancels it rather than sending the operator back
-    // to a Cancel button the screen no longer shows.
+    // AZR-148: the frame keeps a visited screen mounted, so leaving does NOT
+    // cancel the read (the old wording said it did); the notice says it keeps
+    // running and names where Cancel is since AZR-147 moved the grid.
     expect(TENANT_READ_IN_FLIGHT).toBe(
       "A tenant gap read is running or finishing. From the first tenant it reads through Azure until it ends, it holds " +
-        "the app's Azure credential slot, and Azure reads on every screen of this tab wait. Cancel on Tenant Logging " +
-        "Gaps stops it, and leaving that screen cancels it too; the slot frees once its current request returns and " +
-        "the active connection's credential is back.",
+        "the app's Azure credential slot, and Azure reads on every screen of this tab wait. It keeps running when you " +
+        "move to another screen; Cancel in the All tenants section of Azure Native Source Onboarding stops it. The " +
+        "slot frees once its current request returns and the active connection's credential is back.",
     );
+    expect(TENANT_READ_IN_FLIGHT).not.toContain("Tenant Logging Gaps");
+    expect(TENANT_READ_IN_FLIGHT).not.toContain("cancels it too");
     await act(async () => {
       finish();
     });
@@ -562,5 +568,144 @@ describe("TenantReadInFlightNotice", () => {
     off();
     cache.track(Promise.resolve());
     expect(calls).toBe(2);
+  });
+});
+
+// AZR-147: the grid as the All tenants section of Azure Native Source
+// Onboarding - the active row, the Open links, the saved answers and their age.
+describe("TenantGapScreen in All tenants (AZR-147)", () => {
+  const NOW = Date.UTC(2026, 10, 3, 12, 0, 0);
+  const entryFor = (profileId: string, tenantId: string, readAt: number): TenantGapEntry => ({
+    readAt,
+    row: { profileId, tenantId, cells: rowUnknown("seeded"), status: { state: "unknown", reason: "x" }, warnings: [], plannedReads: 0, cancelled: false },
+  });
+
+  it("highlights the active connection's row, and only that row, with a word", () => {
+    mount({ extra: { activeProfileId: "pb" } });
+    const rows = [...document.querySelectorAll<HTMLElement>("tbody tr")];
+    expect(rows.map((r) => r.dataset.active ?? "")).toEqual(["", "true"]);
+    expect(rows.map((r) => r.className)).toEqual(["", "tgap-row-active"]);
+    expect(screen.getAllByText("Active connection").length).toBe(1);
+    expect(within(rows[1]!).getByText("Active connection")).toBeTruthy();
+  });
+
+  it("without onOpen there are no Open links and two stops per source", () => {
+    mount();
+    expect(screen.queryAllByRole("button", { name: /^Open |^Switch to / }).length).toBe(0);
+    expect(document.querySelectorAll("tbody [data-col]").length).toBe(PROFILES.length * GAP_SOURCES.length * 2);
+  });
+
+  it("each cell gets an Open link named for what it does; the grid keeps ONE tab stop", () => {
+    const opened: string[] = [];
+    mount({ extra: { activeProfileId: "pa", onOpen: (p, s) => opened.push(`${p.id}:${s}`) } });
+    const first = GAP_SOURCES[0]!;
+    expect(screen.getAllByRole("button", { name: /^Open .* on this page$/ }).length).toBe(GAP_SOURCES.length);
+    expect(screen.getAllByRole("button", { name: /^Switch to Fabrikam and open / }).length).toBe(GAP_SOURCES.length);
+    const tabbable = [...document.querySelectorAll<HTMLElement>("tbody button, tbody [tabindex]")].filter(
+      (el) => el.tabIndex >= 0 && !(el as HTMLButtonElement).disabled,
+    );
+    expect(tabbable.length).toBe(PROFILES.length + 1);
+    fireEvent.click(screen.getByRole("button", { name: `Open ${first.title} on this page` }));
+    fireEvent.click(screen.getByRole("button", { name: `Switch to Fabrikam and open ${first.title}` }));
+    expect(opened).toEqual([`pa:${first.id}`, `pb:${first.id}`]);
+  });
+
+  it("the arrows reach the Open link as the third stop of a source", () => {
+    mount({ extra: { activeProfileId: "pa", onOpen: () => undefined } });
+    const azureTip = document.querySelector<HTMLElement>('tbody [data-row="0"][data-col="0"] [role="button"]')!;
+    azureTip.focus();
+    fireEvent.keyDown(azureTip, { key: "ArrowRight" });
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: "ArrowRight" });
+    expect((document.activeElement as HTMLElement).textContent).toBe("Open");
+    expect(document.activeElement?.getAttribute("aria-label")).toBe(`Open ${GAP_SOURCES[0]!.title} on this page`);
+    expect(document.getElementById("tgap-grid-keys")!.textContent).toContain("Arrow keys move between indicators and Open links");
+  });
+
+  it("a click in a cell opens it; a click on a tip does not", () => {
+    const opened: string[] = [];
+    mount({ extra: { activeProfileId: "pa", onOpen: (p, s) => opened.push(`${p.id}:${s}`) } });
+    const cell = document.querySelector<HTMLElement>('[data-profile="pb"] td')!;
+    fireEvent.click(cell);
+    fireEvent.click(cell.querySelector<HTMLElement>('[role="button"]')!);
+    expect(opened).toEqual([`pb:${GAP_SOURCES[0]!.id}`]);
+  });
+
+  it("hands every complete answer to onRead, once per tenant, and nothing on mount", async () => {
+    const reads: TenantGapEntry[] = [];
+    mount({ extra: { onRead: (e) => reads.push(e) } });
+    expect(reads).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Read all tenants" }));
+    await waitFor(() => expect(reads.length).toBe(2));
+    expect(reads.map((e) => [e.row.profileId, e.row.cancelled, e.readAt])).toEqual([
+      ["pa", false, NOW],
+      ["pb", false, NOW],
+    ]);
+  });
+
+  it("never hands a cancelled answer to onRead", async () => {
+    const reads: TenantGapEntry[] = [];
+    const azure = new CountingAzure();
+    const gate = deferred();
+    azure.gate = gate.promise;
+    mount({ azure, extra: { onRead: (e) => reads.push(e) } });
+    fireEvent.click(within(document.querySelector<HTMLElement>('[data-profile="pa"]')!).getByRole("button", { name: "Read Contoso" }));
+    await waitFor(() => expect(azure.sent.length).toBe(1));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    gate.resolve();
+    await waitFor(() => expect(screen.getByText(/cancelled/i)).toBeTruthy());
+    expect(reads).toEqual([]);
+  });
+
+  it("an answer seeded after mount shows at once, with its age", () => {
+    const cache = new TenantGapCache();
+    mount({ cache });
+    const row = document.querySelector<HTMLElement>('[data-profile="pa"]')!;
+    expect(within(row).getByText("Not read yet")).toBeTruthy();
+    act(() => {
+      cache.seed(entryFor("pa", TA, NOW - 3 * 60 * 60 * 1000));
+    });
+    expect(within(row).getByText(/^Read at .*, 3 hours ago$/)).toBeTruthy();
+    expect(indicators("pa", "azure")[0]!.querySelector('[role="tooltip"]')?.textContent).toBe("seeded");
+  });
+});
+
+describe("TenantGapCache.seed (AZR-147)", () => {
+  const row = (readAt: number, reason: string): TenantGapEntry => ({
+    readAt,
+    row: { profileId: "pa", tenantId: TA, cells: rowUnknown(reason), status: { state: "unknown", reason: "" }, warnings: [], plannedReads: 0, cancelled: false },
+  });
+
+  it("keeps a saved answer only when nothing newer is held", () => {
+    const cache = new TenantGapCache();
+    expect(cache.seed(row(10, "saved"))).toBe(true);
+    expect(cache.seed(row(5, "older"))).toBe(false);
+    expect(cache.get(PROFILES[0]!)?.readAt).toBe(10);
+    cache.set(row(20, "this session"));
+    expect(cache.seed(row(15, "saved later"))).toBe(false);
+    expect(cache.get(PROFILES[0]!)?.readAt).toBe(20);
+  });
+
+  it("tells subscribers, and moves the version", () => {
+    const cache = new TenantGapCache();
+    let calls = 0;
+    cache.subscribe(() => calls++);
+    const v = cache.version();
+    cache.seed(row(10, "saved"));
+    cache.set(row(11, "read"));
+    expect(calls).toBe(2);
+    expect(cache.version()).toBe(v + 2);
+  });
+});
+
+describe("readAgeText (AZR-147)", () => {
+  it("words the age of an answer", () => {
+    const t = Date.UTC(2026, 10, 19, 12, 0, 0);
+    expect(readAgeText(t, t + 5_000)).toBe("just now");
+    expect(readAgeText(t, t - 5_000)).toBe("just now");
+    expect(readAgeText(t, t + 60_000)).toBe("1 minute ago");
+    expect(readAgeText(t, t + 59 * 60_000)).toBe("59 minutes ago");
+    expect(readAgeText(t, t + 60 * 60_000)).toBe("1 hour ago");
+    expect(readAgeText(t, t + 25 * 60 * 60_000)).toBe("1 day ago");
+    expect(readAgeText(t, t + 72 * 60 * 60_000)).toBe("3 days ago");
   });
 });

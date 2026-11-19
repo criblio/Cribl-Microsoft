@@ -27,7 +27,7 @@
  * ThemeToggle at the top of the content area.
  */
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { annotateNavItems, emptyCapabilitySet } from "@soc/core";
 import type { Capability, CapabilityContext, CapabilitySet } from "@soc/core";
@@ -53,6 +53,17 @@ export interface AppFrameNav {
    * architecture deploy buttons).
    */
   canNavigate: (routeId: string) => boolean;
+}
+
+/**
+ * A retired route id that still resolves (AZR-147): navigating to it shows
+ * `to` instead, and calls `onArrive` so the shell can open the part of `to`
+ * the old route was (Tenant Logging Gaps is now the All tenants section of
+ * Azure Native Source Onboarding). An alias has no nav item.
+ */
+export interface RouteAlias {
+  readonly to: string;
+  readonly onArrive?: () => void;
 }
 
 /** One entry in the frame's route table. */
@@ -101,8 +112,13 @@ export interface AppFrameProps {
   topBar?: ReactNode;
   /** Small line in the sidebar footer (e.g. version). */
   footerNote?: string;
-  /** Route to show first; falls back to the first visible route. */
+  /** Route to show first; falls back to the first visible route. An alias id resolves too. */
   initialRouteId?: string;
+  /**
+   * Retired route ids that still work (AZR-147), each pointing at the route
+   * that replaced it. Bookmarked or linked ids keep landing somewhere real.
+   */
+  routeAliases?: Readonly<Record<string, RouteAlias>>;
   /**
    * Shell-provided theme wiring. When present the frame sets data-theme to
    * the shell-resolved theme on its root wrapper and renders the topBar
@@ -122,8 +138,21 @@ export function AppFrame(props: AppFrameProps) {
     footerNote,
     initialRouteId,
     themeControl,
+    routeAliases,
   } = props;
-  const [routeId, setRouteId] = useState(initialRouteId ?? "");
+  const aliasesRef = useRef(routeAliases);
+  aliasesRef.current = routeAliases;
+  const [routeId, setRouteId] = useState(() => {
+    const id = initialRouteId ?? "";
+    return routeAliases?.[id]?.to ?? id;
+  });
+  // An alias given as the FIRST route arrives once, after mount (the shell's
+  // onArrive sets its own state, which must not happen during this render).
+  const initialAlias = useRef(initialRouteId === undefined ? undefined : routeAliases?.[initialRouteId]);
+  useEffect(() => {
+    initialAlias.current?.onArrive?.();
+    initialAlias.current = undefined;
+  }, []);
 
   // ANNOTATE, never filter (capability-model-plan step 3). Every route reaches
   // the nav; what changes is the note beside it. This is the inversion of the
@@ -137,15 +166,35 @@ export function AppFrame(props: AppFrameProps) {
     annotated.map((entry) => [entry.item.id, entry] as const),
   );
 
-  const navigate = useCallback((id: string) => setRouteId(id), []);
+  const navigate = useCallback((id: string) => {
+    const alias = aliasesRef.current?.[id];
+    if (alias !== undefined) {
+      alias.onArrive?.();
+      setRouteId(alias.to);
+      return;
+    }
+    setRouteId(id);
+  }, []);
   // Every route in the table is navigable now that none are hidden. canNavigate
   // answers "does this route exist here?" - the honest question once capability
   // no longer removes anything, and the one cross-linking screens actually need.
   const routeIdKey = routes.map((route) => route.id).join(",");
+  const aliasKey = Object.entries(routeAliases ?? {})
+    .map(([from, alias]) => `${from}>${alias.to}`)
+    .join(",");
   const nav = useMemo<AppFrameNav>(() => {
     const ids = new Set(routeIdKey.split(",").filter((id) => id !== ""));
-    return { navigate, canNavigate: (id: string) => ids.has(id) };
-  }, [navigate, routeIdKey]);
+    const aliased = new Map(
+      aliasKey
+        .split(",")
+        .filter((pair) => pair !== "")
+        .map((pair) => pair.split(">") as [string, string]),
+    );
+    return {
+      navigate,
+      canNavigate: (id: string) => ids.has(id) || (aliased.has(id) && ids.has(aliased.get(id)!)),
+    };
+  }, [navigate, routeIdKey, aliasKey]);
   const active = routes.find((route) => route.id === routeId) ?? routes[0];
   const activeId = active?.id;
   const sections = groupNavSections(routes);

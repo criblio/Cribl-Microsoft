@@ -98,6 +98,7 @@ describe("app KV document keys against the least-privilege audit lists (AZR-125)
       FLOW_LAST_SEEN_KEY: "azure-onboarding-flow-last-seen",
       ONBOARDING_PROGRESS_KEY: "azure-onboarding-progress",
       TENANT_CRIBL_MAPPING_KEY: "tenant-cribl-mapping",
+      TENANT_GAP_READS_KEY: "tenant-gap-reads",
       "claim(COVERAGE_SELECTION_KEY)": "azure-coverage-selection-migrated",
       "claim(ONBOARDING_PROGRESS_KEY)": "azure-onboarding-progress-migrated",
     });

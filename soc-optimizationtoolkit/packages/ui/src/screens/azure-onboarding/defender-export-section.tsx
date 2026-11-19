@@ -68,6 +68,7 @@ import type {
   RequiredAction,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { useReportBusy } from "./operation-busy";
 import { SearchableSelect } from "../../components/searchable-select";
 import { InfoTip } from "../../components/info-tip";
 import {
@@ -175,6 +176,7 @@ export function DefenderExportSection({
   const [resourceGroup, setResourceGroup] = useState<AzureResourceGroup | null>(null);
   const [armedFor, setArmedFor] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  useReportBusy("a Defender for Cloud alert export deploy", running);
   const [outcome, setOutcome] = useState<DefenderDeployOutcome | null>(null);
 
   async function readState(): Promise<void> {

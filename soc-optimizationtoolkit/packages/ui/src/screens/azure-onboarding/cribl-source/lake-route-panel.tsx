@@ -32,6 +32,7 @@ import type {
 } from "@soc/core";
 import { InfoTip } from "../../../components/info-tip";
 import { SearchableSelect } from "../../../components/searchable-select";
+import { useReportBusy } from "../operation-busy";
 import type { OutcomeView } from "./cribl-source-state";
 import {
   LAKE_CONFIRM_IDLE,
@@ -102,6 +103,10 @@ export function LakeRoutePanel({ sourceId, criblSource, readSeq, hooks }: LakeRo
 
   const armed = isLakeArmed(state, key);
   const busy = state.phase === "planning" || state.phase === "applying";
+  // AZR-147 review round 2: the apply writes Cribl (dataset, pipeline, route,
+  // commit and deploy) and then records the route; a connection switch must
+  // not remount the screen under it. The plan is read-only and not reported.
+  useReportBusy("a route to Cribl Lake create", state.phase === "applying");
   const record = hooks.records[sourceId] ?? null;
 
   async function onClick(): Promise<void> {

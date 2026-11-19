@@ -49,6 +49,7 @@ import type {
   RequiredAction,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { useReportBusy } from "./operation-busy";
 import { verifiedNoneInventoryMessage } from "../../capabilities/empty-inventory";
 import { PickerLine } from "./eventhub-prerequisite-section";
 import type { EventHubTarget } from "./eventhub-prerequisite-section";
@@ -112,6 +113,7 @@ export function EntraSettingSection({
   const [readSeq, setReadSeq] = useState(0);
   const [armedFor, setArmedFor] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  useReportBusy("an Entra ID diagnostic setting deploy", running);
   const [outcome, setOutcome] = useState<EntraDeployOutcome | null>(null);
 
   async function readState(): Promise<void> {

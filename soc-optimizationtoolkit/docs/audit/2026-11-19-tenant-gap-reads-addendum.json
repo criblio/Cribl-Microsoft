@@ -1,0 +1,42 @@
+{
+  "record": "Status: Record - dated ADDENDUM to docs/audit/2026-11-03-least-privilege-audit.json, written 2026-11-19 for AZR-147. That audit and the 2026-11-18 addendum are dated records and are not edited; this file adds rows in the same shape. Its GET and PUT rows name one new app KV document key: tenant-gap-reads (TENANT_GAP_READS_KEY, packages/core/src/domain/tenant-gap/saved-reads.ts), each tenant's latest gap read and the time it was read, loaded once when Azure Native Source Onboarding mounts and written after a gap read the operator asked for. No permission changes: the key is in the app's own KV namespace, which the platform grants every App user and which cannot be narrowed per key, exactly as the 2026-11-03 rows say. packages/core/src/domain/least-privilege/operations.ts cites this row for cribl.kv.read and cribl.kv.write; operations.test.ts reads this file.",
+  "amends": "2026-11-03-least-privilege-audit.json",
+  "families": [
+    {
+      "family": "Cribl API",
+      "matrix": {
+        "rows": [
+          {
+            "method": "GET",
+            "path": "/kvstore/{key} (app-scoped; addendum 2026-11-19) - tenant-gap-reads",
+            "operation": "Cribl App Platform: App user access level on the installed app (platform grants /a/{appId}/kvstore/* through the AppUser role automatically; not declarable in policies.yml)",
+            "leastBuiltInRole": "App user (Apps > Installed > Share), the same grant as the 2026-11-03 GET /kvstore/{key} row",
+            "narrowestScope": "Cribl app (/a/{appId}/kvstore/*) within the one workspace; already the narrowest possible, cannot be narrowed per key",
+            "citation": "https://docs.cribl.io/apps/admin-guide/ (Sharing installed Apps; Who can run installed Apps)",
+            "confidence": "high",
+            "functions": [
+              "Azure Native Source Onboarding - All tenants: load the saved gap reads on mount, and again before each save to merge (azure-onboarding/tenants/use-saved-gap-reads.ts)"
+            ],
+            "api": "Cribl App KV store",
+            "notes": "Read through the KvDocumentStore port (apps/cribl-app/src/platform/kv-document-store.ts), never encrypted. The guard that keeps the lists whole is packages/core/src/domain/least-privilege/kv-keys.test.ts, which derives the document keys from the @soc/core barrel's *_KEY constants."
+          },
+          {
+            "method": "PUT",
+            "path": "/kvstore/{key} (app-scoped; addendum 2026-11-19) - tenant-gap-reads",
+            "operation": "Cribl App Platform: App user access (AppUser role covers /a/{appId}/kvstore/* for all verbs)",
+            "leastBuiltInRole": "App user, the same grant as the 2026-11-03 PUT /kvstore/{key} row",
+            "narrowestScope": "Cribl app KV namespace (/a/{appId}/kvstore/*), one workspace",
+            "citation": "https://docs.cribl.io/apps/admin-guide/ (App Settings / KV store; Sharing installed Apps)",
+            "confidence": "high",
+            "functions": [
+              "Azure Native Source Onboarding - All tenants: save a tenant's gap read after a read the operator asked for"
+            ],
+            "api": "Cribl App KV store",
+            "notes": "Written through KvDocumentStore.save, unencrypted, only after the document loaded as absent or as a readable document of this app (canWriteGapReads)."
+          }
+        ]
+      },
+      "verdicts": []
+    }
+  ]
+}

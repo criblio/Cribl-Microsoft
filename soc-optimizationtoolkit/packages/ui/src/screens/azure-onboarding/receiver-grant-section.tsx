@@ -50,6 +50,7 @@ import type {
   ReceiverGrantScopeChoice,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { useReportBusy } from "./operation-busy";
 import { PickerLine } from "./eventhub-prerequisite-section";
 import { AutomationPermissionBanner } from "./automation-permission-banner";
 import {
@@ -118,6 +119,7 @@ export function ReceiverGrantSection({
   const [planError, setPlanError] = useState("");
   const [armedFor, setArmedFor] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  useReportBusy("a Data Receiver role grant", running);
   const [outcome, setOutcome] = useState<{ outcome: ApplyReceiverGrantOutcome; recorded: boolean } | null>(null);
   const [rerecorded, setRerecorded] = useState<{ key: string; recorded: boolean } | null>(null);
 

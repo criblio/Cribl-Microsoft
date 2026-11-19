@@ -8526,6 +8526,88 @@ details[open] > summary::before {
 .tgap-unknown .tgap-word {
   color: var(--text-muted);
 }
+/* AZR-147: the grid as All tenants on Azure Native Source Onboarding. The
+ * active row says so in words too (.tgap-active-tag), not by colour alone. */
+.tgap-row-active th,
+.tgap-row-active td {
+  background: var(--accent-bg);
+}
+.tgap-active-tag {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 6px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-pill);
+  color: var(--accent-strong);
+}
+.tgap-cell-open {
+  cursor: pointer;
+}
+.tgap-open {
+  display: block;
+  margin-top: 2px;
+}
+
+/* AZR-147: All tenants (collapsible) and Focus here, above the onboarding screen. */
+.azo-all-tenants-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.azo-disclosure {
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text);
+  cursor: pointer;
+}
+.azo-focus-counts {
+  margin: 4px 0;
+  color: var(--text-strong);
+}
+.azo-focus-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.azo-focus-gap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius-control);
+  background: var(--error-bg);
+}
+.azo-focus-red {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+.azo-focus-reason {
+  font-size: 12px;
+  color: var(--text);
+}
+.azo-gap-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 6px;
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius-pill);
+  background: var(--error-bg);
+  color: var(--error-strong);
+}
 
 /* Azure connectivity section (setup pages): a segmented three-way choice, the
  * featured read-only block and the optional-permission checklist. */

@@ -2,7 +2,8 @@
  * The least-privilege OPERATIONS, populated from the 2026-11-03 audit
  * (docs/audit/2026-11-03-least-privilege-audit.json) with every skeptic
  * correction applied, plus the rows of its dated addenda (docs/audit/
- * 2026-11-18-kv-key-addendum.json, AZR-125), which add to that record rather
+ * 2026-11-18-kv-key-addendum.json, AZR-125; 2026-11-19-tenant-gap-reads-addendum.json,
+ * AZR-147), which add to that record rather
  * than edit it. One entry per kind of call; see least-privilege.ts for
  * what each field means and operations.test.ts for the pin that holds every
  * entry to its audit row.
@@ -1944,6 +1945,8 @@ const OPERATIONS = {
       "GET /kvstore/{key} (app-scoped; rewritten to /api/v1/a/{appId}/kvstore/{key}) - azureProfiles, azureConfig, auaAcceptance, setupComplete, appOptions, appTheme, githubPatStatus, diagnosticsWarnLog, azure-coverage-selection, azure-onboarding-progress, content-cache-{hash}, jobs/{id}, jobs-index, tagged-samples-*, pack-builds/*, spike-*",
       // AZR-125: the dated 2026-11-03 row above omits these; the addendum adds them.
       "GET /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping, azure-coverage-selection-migrated, azure-onboarding-progress-migrated",
+      // AZR-147: the saved tenant gap reads.
+      "GET /kvstore/{key} (app-scoped; addendum 2026-11-19) - tenant-gap-reads",
     ],
   },
   "cribl.kv.write": {
@@ -1961,6 +1964,7 @@ const OPERATIONS = {
     audit: [
       "PUT /kvstore/{key} and /kvstore/{key}?encrypted=true (app-scoped) - azureBasic, azureArmToken, azureGraphToken, githubPat (encrypted); azureProfiles, auaAcceptance, setupComplete, appOptions, appTheme, githubPatStatus, diagnosticsWarnLog, content-cache-*, jobs/*, jobs-index, tagged-samples-*, pack-builds/*, azure-coverage-selection, azure-onboarding-progress, spike-*",
       "PUT /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping, azure-coverage-selection-migrated, azure-onboarding-progress-migrated",
+      "PUT /kvstore/{key} (app-scoped; addendum 2026-11-19) - tenant-gap-reads",
     ],
   },
   "cribl.kv.delete": {

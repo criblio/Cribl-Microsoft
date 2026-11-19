@@ -13,11 +13,11 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { emptyCapabilitySet } from "@soc/core";
 import type { CapabilityContext, CapabilitySet } from "@soc/core";
 import { AppFrame } from "./app-frame";
-import type { AppRoute } from "./app-frame";
+import type { AppFrameNav, AppRoute } from "./app-frame";
 
 afterEach(cleanup);
 
@@ -165,5 +165,49 @@ describe("degradation", () => {
     );
     expect(screen.getByText("DCR Automation")).toBeTruthy();
     expect(screen.queryByText("no access")).toBeNull();
+  });
+});
+
+// AZR-147: a retired route id (Tenant Logging Gaps) still resolves, onto the
+// route that replaced it, and tells the shell it arrived that way.
+describe("route aliases", () => {
+  function aliasFrame(initialRouteId: string, arrivals: string[]) {
+    let nav: AppFrameNav | null = null;
+    const routes: AppRoute[] = [
+      { id: "home", label: "Setup", requires: [], section: "journey", render: (n) => { nav = n; return <p>home screen</p>; } },
+      { id: "azure-onboarding", label: "Azure Native Source Onboarding", requires: [], section: "development", render: () => <p>onboarding screen</p> },
+    ];
+    render(
+      <AppFrame
+        title="Toolkit"
+        routes={routes}
+        initialRouteId={initialRouteId}
+        routeAliases={{ "tenant-gaps": { to: "azure-onboarding", onArrive: () => arrivals.push("tenant-gaps") } }}
+      />,
+    );
+    return () => nav;
+  }
+
+  it("an alias has no nav item", () => {
+    aliasFrame("home", []);
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Setup", "Azure Native Source Onboarding"]);
+  });
+
+  it("navigating to an alias shows its target and calls onArrive once", () => {
+    const arrivals: string[] = [];
+    const nav = aliasFrame("home", arrivals);
+    expect(nav()?.canNavigate("tenant-gaps")).toBe(true);
+    expect(nav()?.canNavigate("no-such-route")).toBe(false);
+    act(() => nav()?.navigate("tenant-gaps"));
+    expect(screen.getByText("onboarding screen")).toBeTruthy();
+    expect(arrivals).toEqual(["tenant-gaps"]);
+  });
+
+  it("an alias as the first route lands on its target and arrives once", () => {
+    const arrivals: string[] = [];
+    aliasFrame("tenant-gaps", arrivals);
+    expect(screen.getByText("onboarding screen")).toBeTruthy();
+    expect(screen.queryByText("home screen")).toBeNull();
+    expect(arrivals).toEqual(["tenant-gaps"]);
   });
 });

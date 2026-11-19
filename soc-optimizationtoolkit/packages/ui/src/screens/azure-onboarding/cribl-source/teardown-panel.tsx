@@ -42,6 +42,7 @@ import type {
   ReadyTeardown,
 } from "@soc/core";
 import { InfoTip } from "../../../components/info-tip";
+import { useReportBusy } from "../operation-busy";
 import type { OutcomeView } from "./cribl-source-state";
 import {
   pauseArmKey,
@@ -139,6 +140,7 @@ function TeardownRowView({ row, hooks }: { readonly row: TeardownRow; readonly h
   const removeArmed = remove.phase === "armed" && remove.key === removeKey;
   const pauseArmed = pause.phase === "armed" && pause.key === pauseKey;
   const busy = remove.phase === "planning" || remove.phase === "applying" || pause.phase === "planning" || pause.phase === "applying";
+  useReportBusy("a Cribl source removal, pause or resume", remove.phase === "applying" || pause.phase === "applying");
 
   async function onRemove(): Promise<void> {
     const action = twoClick(remove, removeKey);

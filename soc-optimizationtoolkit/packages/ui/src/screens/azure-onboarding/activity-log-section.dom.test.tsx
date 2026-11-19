@@ -39,6 +39,7 @@ import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
 import { AzureOnboardingScreen } from "./azure-onboarding-screen";
 import { ActivityLogSection } from "./activity-log-section";
+import { OperationBusyContext, createOperationBusyRegistry } from "./operation-busy";
 
 afterEach(cleanup);
 
@@ -681,5 +682,36 @@ describe("Activity Log section - after a write", () => {
       outcome: "written-and-read-back",
       input: { subscriptionId: SUB, namespace: { subscriptionId: SUB, resourceGroup: EH_RG, name: NS_NAME }, ruleName: "DiagManage" },
     });
+  });
+});
+
+describe("Activity Log section - reports its deploy as running for the whole run (AZR-147 review round 1)", () => {
+  it("is registered between its PUT and its read-back, when no Azure write is in flight, and gone when it ends", async () => {
+    const azure = new RoutingAzure();
+    const registry = createOperationBusyRegistry();
+    const ports = { azure, logger: new FakeLogger(() => "t"), kvDocuments: new FakeKvDocumentStore() } as unknown as UiPorts;
+    render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <OperationBusyContext.Provider value={registry}>
+          <AzureOnboardingScreen />
+        </OperationBusyContext.Provider>
+      </PortsProvider>,
+    );
+    await loaded();
+    await chooseTarget("DiagManage");
+    await readSettings();
+    expect(registry.current()).toBeNull();
+    const releasePut = azure.hold("PUT", OURS);
+    fireEvent.click(deployButton());
+    fireEvent.click(within(screen.getByRole("group", { name: "Confirm Activity Log deploy" })).getByRole("button", { name: "Confirm deploy" }));
+    await waitFor(() => expect(azure.puts()).toHaveLength(1));
+    // The PUT lands; the read-back GET is then held - the deploy is between two requests.
+    const releaseGet = azure.hold("GET", OURS);
+    releasePut();
+    await waitFor(() => expect(azure.calls.filter((c) => c.method === "GET" && c.path === OURS)).toHaveLength(1));
+    expect(registry.current()).toBe("an Activity Log diagnostic setting deploy");
+    releaseGet();
+    await waitFor(() => expect(within(block()).getByText(/was created and read back from Azure/)).toBeTruthy());
+    expect(registry.current()).toBeNull();
   });
 });
