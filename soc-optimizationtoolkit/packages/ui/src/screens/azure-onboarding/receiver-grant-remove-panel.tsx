@@ -33,6 +33,7 @@ import { useEffect, useState } from "react";
 import { receiverGrantKey, removeReceiverGrant } from "@soc/core";
 import type { ReceiverGrantRecord, ReceiverGrantRemoveOutcome } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { useReportBusy } from "./operation-busy";
 import { PickerLine } from "./eventhub-prerequisite-section";
 import {
   RECEIVER_GRANT_REMOVE_PERMISSION_NOTE,
@@ -58,6 +59,7 @@ export interface ReceiverGrantRemovePanelProps {
 
 export function ReceiverGrantRemovePanel({ records, inUseBy, granting, onRunningChange, onRemoved }: ReceiverGrantRemovePanelProps) {
   const [removing, setRemoving] = useState(false);
+  useReportBusy("a Data Receiver role grant removal", removing);
   // The last outcome is kept here, not in its row: a removed assignment's
   // record goes, and its row with it, but what happened must still be said.
   const [last, setLast] = useState<ReceiverGrantRemoveOutcome | null>(null);

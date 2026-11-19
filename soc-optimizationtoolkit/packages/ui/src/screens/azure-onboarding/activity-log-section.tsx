@@ -69,6 +69,7 @@ import type {
   RequiredAction,
 } from "@soc/core";
 import { usePorts } from "../../ports-context";
+import { useReportBusy } from "./operation-busy";
 import { verifiedNoneInventoryMessage } from "../../capabilities/empty-inventory";
 import { PickerLine } from "./eventhub-prerequisite-section";
 import type { EventHubTarget } from "./eventhub-prerequisite-section";
@@ -163,6 +164,7 @@ export function ActivityLogSection({
   // click made just after a read: the deferred reset swallowed the arm.
   const [armedFor, setArmedFor] = useState<{ readonly key: string; readonly state: ActivityLogState | null } | null>(null);
   const [running, setRunning] = useState(false);
+  useReportBusy("an Activity Log diagnostic setting deploy", running);
   const [outcome, setOutcome] = useState<ActivityLogDeployOutcome | null>(null);
 
   async function readState(): Promise<void> {

@@ -16,6 +16,7 @@ import { useState } from "react";
 import { removeListenAccessObject } from "@soc/core";
 import type { EventHubAccessRecord, ListenAccessRemoveOutcome } from "@soc/core";
 import { usePorts } from "../../../ports-context";
+import { useReportBusy } from "../operation-busy";
 import { PickerLine } from "../eventhub-prerequisite-section";
 import { accessRecordTitle, accessRemoveConfirmText, accessRemoveMessage } from "./listen-access-state";
 
@@ -66,6 +67,7 @@ function RemoveRow({
   const { ports } = usePorts();
   const [armed, setArmed] = useState(false);
   const [removing, setRemoving] = useState(false);
+  useReportBusy("a Listen rule or consumer group removal", removing);
   const title = accessRecordTitle(record);
 
   async function confirmRemove(): Promise<void> {

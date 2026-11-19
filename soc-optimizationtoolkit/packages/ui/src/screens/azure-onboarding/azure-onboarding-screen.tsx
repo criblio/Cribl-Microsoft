@@ -384,6 +384,12 @@ export interface AzureOnboardingScreenProps {
    * lands after the screen has loaded for the new connection.
    */
   readonly jumpTo?: { readonly sourceId: OnboardingSourceId; readonly seq: number } | null;
+  /**
+   * Told once the screen has acted on a jump (its `seq`), so the asker can
+   * drop the request: the screen is keyed on the connection, and a remount
+   * would otherwise take the same old request as new (review round 1).
+   */
+  readonly onJumped?: (seq: number) => void;
 }
 
 /** The How-to section's wrapper. */
@@ -441,6 +447,7 @@ export function AzureOnboardingScreen({
   permissionsNow,
   gapSources,
   jumpTo = null,
+  onJumped,
 }: AzureOnboardingScreenProps = {}) {
   const { ports, config } = usePorts();
   const store = ports.kvDocuments;
@@ -633,7 +640,8 @@ export function AzureOnboardingScreen({
     if (jumpTo === null || jumpTo.seq === jumpedSeq.current || !progressSettled) return;
     jumpedSeq.current = jumpTo.seq;
     showSource(jumpTo.sourceId);
-  }, [jumpTo, progressSettled]);
+    onJumped?.(jumpTo.seq);
+  }, [jumpTo, progressSettled, onJumped]);
 
   // Tenant inventory heat map: the last read, kept in state only.
   const [inventory, setInventory] = useState<TenantInventory | null>(null);

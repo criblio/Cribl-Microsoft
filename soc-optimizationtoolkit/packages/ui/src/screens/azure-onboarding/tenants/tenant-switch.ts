@@ -15,7 +15,15 @@
  *   - a tenant session, a Save and connect, or an Azure write in this tab
  *     (the shell's credential slot answers);
  *   - another tab's credential lease, or a lease read that failed (an
- *     unreadable lease is never free - the same rule as Save and connect).
+ *     unreadable lease is never free - the same rule as Save and connect);
+ *   - a change this page is making (a deploy, grant, create or removal, Azure
+ *     or Cribl - operation-busy.ts), for its WHOLE run: the slot only sees a
+ *     request while it is in flight, and the switch remounts the screen the
+ *     change is running in (review round 1).
+ *
+ * And the switch happens only for the confirm on screen: a Cancel, or a new
+ * Open, while the lease is being read drops the earlier confirm's switch;
+ * and a switch made elsewhere meanwhile (the connection bar) drops it too.
  *
  * Pure: no IO, no React.
  */
@@ -35,6 +43,15 @@ export const SWITCH_CONSEQUENCE =
 /** Refused: a tenant gap Read all holds the slot. */
 export const SWITCH_REFUSED_READ_ALL =
   "Not switched: a tenant gap read is running and holds the Azure credential slot. Wait for it to finish, or Cancel it, then try again.";
+
+/** Refused: a change on this page is running, named by its own words (operation-busy.ts). */
+export function switchRefusedOperation(label: string): string {
+  return `Not switched: ${label} is running on this page, and switching now would cut it off part-way. Wait for it to finish, then try again.`;
+}
+
+/** Dropped: the active connection changed (elsewhere) while the switch was being checked. */
+export const SWITCH_REFUSED_ACTIVE_CHANGED =
+  "Not switched: the active connection changed while the switch was being checked. Open the source again to switch from the connection now active.";
 
 /** Refused: the shell cannot switch from here (no handler wired). */
 export const SWITCH_UNAVAILABLE =

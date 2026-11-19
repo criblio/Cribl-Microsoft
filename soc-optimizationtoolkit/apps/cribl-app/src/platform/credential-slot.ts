@@ -396,8 +396,9 @@ export class AzureCredentialSlot implements CredentialSlot {
    * has not settled. Ordinary reads do not block it: a switch rewrites the
    * owner record, so a read in flight across it is discarded as unknown by its
    * own after-read (AZR-92). What this cannot see: a deploy BETWEEN two of its
-   * requests (nothing in flight at that instant), and other tabs - the
-   * credential lease covers their sessions, and nothing covers their writes.
+   * requests (nothing in flight at that instant) - the onboarding page covers
+   * its own flows for their whole run (operation-busy.ts) - and other tabs:
+   * the credential lease covers their sessions, and nothing covers their writes.
    */
   busyReason(): string | null {
     if (this.pendingExclusive > 0) {

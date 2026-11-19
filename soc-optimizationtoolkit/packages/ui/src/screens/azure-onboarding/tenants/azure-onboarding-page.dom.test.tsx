@@ -56,7 +56,8 @@ import { TenantGapCache } from "../../tenant-gap/tenant-gap-state";
 import { howtoRowAnchorId } from "../howto/howto-state";
 import { AzureOnboardingPage } from "./azure-onboarding-page";
 import type { AzureOnboardingPageProps } from "./azure-onboarding-page";
-import { SWITCH_REFUSED_READ_ALL, switchConfirmText } from "./tenant-switch";
+import { FOCUS_CANCELLED_TEXT } from "./focus-summary";
+import { SWITCH_REFUSED_ACTIVE_CHANGED, SWITCH_REFUSED_READ_ALL, switchConfirmText } from "./tenant-switch";
 
 afterEach(cleanup);
 
@@ -135,6 +136,31 @@ function savedDoc(readAt = NOW - 2 * 60 * 60 * 1000): unknown {
     },
   });
   return JSON.parse(encodeGapReads(reads));
+}
+
+/** Holds the next credential-lease load until `release`, so a test can act while the confirm says "Checking...". */
+class HeldLeaseStore extends FakeKvDocumentStore {
+  private gate: Promise<void> | null = null;
+  release: () => void = () => undefined;
+  holdLease(): this {
+    this.gate = new Promise<void>((resolve) => {
+      this.release = resolve;
+    });
+    return this;
+  }
+  override async load(key: string) {
+    const gate = key === CREDENTIAL_LEASE_KEY ? this.gate : null;
+    if (gate !== null) {
+      this.gate = null;
+      await gate;
+    }
+    return super.load(key);
+  }
+}
+
+/** Let every queued promise continuation run. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 5; i += 1) await act(async () => Promise.resolve());
 }
 
 function configFor(tenantId: string): AzureConfig {
@@ -421,5 +447,142 @@ describe("5. Focus here", () => {
     expect(document.querySelectorAll('[data-testid^="azo-gap-badge-"]').length).toBe(0);
     fireEvent.click(screen.getByRole("button", { name: "Open All tenants to read it" }));
     expect(allTenantsBody().hidden).toBe(false);
+  });
+});
+
+describe("3b. the switch happens only for the confirm on screen (review round 1)", () => {
+  const openFabrikam = (source = RED_SOURCE!) =>
+    fireEvent.click(screen.getByRole("button", { name: `Switch to Fabrikam and open ${source.title}` }));
+  const confirmGroup = () => screen.queryByRole("group", { name: "Confirm switching the active tenant" });
+
+  it("a Cancel while the lease is read drops the switch: the shell switch is never called", async () => {
+    const store = new HeldLeaseStore().holdLease();
+    const m = mount({ store });
+    expand();
+    openFabrikam();
+    fireEvent.click(screen.getByRole("button", { name: "Switch and open" }));
+    expect(screen.getByRole("button", { name: "Checking..." })).toBeTruthy();
+    fireEvent.click(within(confirmGroup()!).getByRole("button", { name: "Cancel" }));
+    expect(confirmGroup()).toBeNull();
+    store.release();
+    await waitFor(() => expect(store.loads.filter((k) => k === CREDENTIAL_LEASE_KEY).length).toBe(1));
+    await settle();
+    expect(m.switched).toEqual([]);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(confirmGroup()).toBeNull();
+  });
+
+  it("a new Open while the lease is read replaces the confirm, and the earlier one never switches", async () => {
+    const store = new HeldLeaseStore().holdLease();
+    const m = mount({ store });
+    expand();
+    openFabrikam(RED_SOURCE!);
+    fireEvent.click(screen.getByRole("button", { name: "Switch and open" }));
+    openFabrikam(UNKNOWN_SOURCE!);
+    store.release();
+    await waitFor(() => expect(store.loads.filter((k) => k === CREDENTIAL_LEASE_KEY).length).toBe(1));
+    await settle();
+    expect(m.switched).toEqual([]);
+    expect(within(confirmGroup()!).getByText(switchConfirmText("Fabrikam", UNKNOWN_SOURCE!.title))).toBeTruthy();
+    // The new confirm is not stuck on the dropped check.
+    expect(within(confirmGroup()!).getByRole("button", { name: "Switch and open" }).hasAttribute("disabled")).toBe(false);
+  });
+
+  it("a switch made elsewhere while the lease is read drops this one, and says why", async () => {
+    const store = new HeldLeaseStore().holdLease();
+    const m = mount({ store });
+    expand();
+    openFabrikam();
+    fireEvent.click(screen.getByRole("button", { name: "Switch and open" }));
+    // The connection bar switches to Fabrikam meanwhile.
+    m.rerender("pb");
+    store.release();
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(SWITCH_REFUSED_ACTIVE_CHANGED));
+    expect(m.switched).toEqual([]);
+  });
+
+  it("calls the shell's CURRENT switch after the await, never the one from the click's render", async () => {
+    const store = new HeldLeaseStore().holdLease();
+    const m = mount({ store });
+    expand();
+    openFabrikam();
+    fireEvent.click(screen.getByRole("button", { name: "Switch and open" }));
+    const latest: string[] = [];
+    m.rerender("pa", { onSwitchConnection: (id) => latest.push(id) });
+    store.release();
+    await waitFor(() => expect(latest).toEqual(["pb"]));
+    expect(m.switched).toEqual([]);
+  });
+});
+
+describe("3c. a jump is acted on once (review round 1)", () => {
+  it("switching away and back does not repeat an old jump", async () => {
+    const m = mount();
+    expand();
+    await waitFor(() => expect(chooserRow(RED_SOURCE!.id)).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: `Open ${RED_SOURCE!.title} on this page` }));
+    await waitFor(() => expect(document.activeElement).toBe(chooserRow(RED_SOURCE!.id)));
+    m.rerender("pb");
+    await waitFor(() => expect(chooserRow(RED_SOURCE!.id)).not.toBeNull());
+    m.rerender("pa");
+    await waitFor(() => expect(chooserRow(RED_SOURCE!.id)).not.toBeNull());
+    await settle();
+    expect(document.activeElement).not.toBe(chooserRow(RED_SOURCE!.id));
+    expect(document.activeElement).toBe(document.body);
+  });
+});
+
+describe("5b. Focus here on a cancelled read (review round 1)", () => {
+  it("says a cancelled read is incomplete and not saved; a complete one does not", () => {
+    const cache = new TenantGapCache();
+    const row = {
+      profileId: "pa",
+      tenantId: TA,
+      cells: savedCells(),
+      status: { state: "unknown" as const, reason: "Cancelled." },
+      warnings: [],
+      plannedReads: 4,
+      cancelled: true,
+    };
+    cache.set({ readAt: NOW, row });
+    mount({ cache });
+    expect(screen.getByTestId("azo-focus-cancelled").textContent).toBe(FOCUS_CANCELLED_TEXT);
+    expect(FOCUS_CANCELLED_TEXT).toBe(
+      "This read was cancelled before it finished: checks it had not finished are unknown, and it is not saved. " +
+        "Read this tenant again in All tenants for a complete answer.",
+    );
+    cleanup();
+
+    const complete = new TenantGapCache();
+    complete.set({ readAt: NOW, row: { ...row, cancelled: false } });
+    mount({ cache: complete });
+    expect(screen.getByTestId("azo-focus-counts")).toBeTruthy();
+    expect(screen.queryByTestId("azo-focus-cancelled")).toBeNull();
+  });
+});
+
+describe("4b. a save after a failed mount load (review round 1)", () => {
+  it("seeds the other tenants it loaded and drops the mount load's note", async () => {
+    const other = withGapRead(emptyGapReads(), {
+      readAt: NOW - 60_000,
+      row: { profileId: "pb", tenantId: TB, cells: rowUnknown("x"), status: { state: "unknown", reason: "x" }, warnings: [], plannedReads: 0, cancelled: false },
+    });
+    const store = new FakeKvDocumentStore({ [TENANT_GAP_READS_KEY]: JSON.parse(encodeGapReads(other)) }).scriptLoad(
+      TENANT_GAP_READS_KEY,
+      { kind: "unknown", reason: "HTTP 504" },
+    );
+    mount({ store });
+    expand();
+    const failed =
+      "Saved gap reads could not be loaded (HTTP 504), so every tenant shows as not read yet. Reading a tenant again shows its answer, but it is not saved until the saved reads load.";
+    await waitFor(() => expect(screen.getByText(failed)).toBeTruthy());
+    const fabrikam = () => allTenantsBody().querySelector<HTMLElement>('[data-profile="pb"]')!;
+    expect(within(fabrikam()).getByText("Not read yet")).toBeTruthy();
+    store.clearScript();
+    fireEvent.click(screen.getByRole("button", { name: "Read Contoso" }));
+    await waitFor(() => expect(store.saves.filter((x) => x.key === TENANT_GAP_READS_KEY).length).toBe(1));
+    await waitFor(() => expect(screen.queryByText(failed)).toBeNull());
+    expect(within(fabrikam()).getByText(/^Read at .*, 1 minute ago$/)).toBeTruthy();
+    expect(within(fabrikam()).queryByText("Not read yet")).toBeNull();
   });
 });

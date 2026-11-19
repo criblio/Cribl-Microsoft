@@ -134,6 +134,11 @@ export function useSavedGapReads(
           const next = withGapRead(gapReadsFrom(doc), entry);
           await store.save(TENANT_GAP_READS_KEY, encodeGapReads(next));
           reads.current = next;
+          // This load answered where the mount load may not have (review round
+          // 1): seed the other tenants' saved answers it holds, and say what
+          // this load says rather than what a failed mount load said.
+          seed(next, latestProfiles.current);
+          setLoadNote(gapReadsLoadNote(doc));
           setSaveNote(null);
           logger?.info("azure-onboarding: gap read saved", { tenants: Object.keys(next.tenants).length });
         } catch (error) {
@@ -141,7 +146,7 @@ export function useSavedGapReads(
         }
       });
     },
-    [store, logger],
+    [store, logger, seed],
   );
 
   return { note: saveNote ?? loadNote, save };

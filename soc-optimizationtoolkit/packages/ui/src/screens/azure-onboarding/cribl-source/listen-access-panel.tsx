@@ -27,6 +27,7 @@ import { applyListenAccess, planListenAccess, plannedWrites } from "@soc/core";
 import type { ListenAccessApplyResult, ListenAccessPlan, ListenAccessTarget, NamespaceRef } from "@soc/core";
 import { InfoTip } from "../../../components/info-tip";
 import { usePorts } from "../../../ports-context";
+import { useReportBusy } from "../operation-busy";
 import { PickerLine } from "../eventhub-prerequisite-section";
 import {
   applyOutcomeMessage,
@@ -97,6 +98,7 @@ export function ListenAccessPanel({ namespace, hubs, consumerGroup, ruleName, re
   }, [key]);
 
   const busy = phase.kind === "planning" || phase.kind === "applying";
+  useReportBusy("a Listen rule and consumer group create", phase.kind === "applying");
   const plan = phase.kind === "planned" ? phase.plan : null;
   // Armed only for the plan made from the inputs on screen now.
   const armed = phase.kind === "planned" && phase.key === key && plan !== null && plannedWrites(plan).length > 0;

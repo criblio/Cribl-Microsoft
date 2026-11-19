@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 33 in progress, 253 done.**
+**107 in the backlog, 33 in progress, 253 done.**
 
 ## By menu item
 
@@ -36,12 +36,12 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 8 | 13 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 32 | 71 | 3 |
+| Azure Native Source Onboarding | 33 | 71 | 4 |
 | Azure Logging Map | 3 | 2 | 1 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 19 | 6 |
 
-Open work totals 139.
+Open work totals 140.
 
 ## Epics and features
 
@@ -50,7 +50,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 69% (82/118)
+### `AZR` Azure native source onboarding - 69% (82/119)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
 | `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 53/71 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-138, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117, AZR-141, AZR-142, AZR-143, AZR-144, AZR-145 |
-| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 25/28 | AZR-61*, AZR-62*, AZR-63, AZR-64, AZR-65, AZR-90, AZR-91, AZR-125*, AZR-126, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111*, AZR-147, AZR-148 |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 25/29 | AZR-61*, AZR-62*, AZR-63, AZR-64, AZR-65, AZR-90, AZR-91, AZR-125*, AZR-126, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111*, AZR-147, AZR-148, AZR-149 |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -1012,7 +1012,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (12)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1236,6 +1236,21 @@ Next to pick up. Nothing blocks these.
   config-json warning when an imported connectivity value is coerced to full;
   Batch's template-only export is gated on the identity fields, so
   Disconnected cannot reach it from Batch (fallback routing).
+
+- **AZR-149** The connection bar switches the active connection while an onboarding change is running, dropping its result
+  `AZR-F10` `bug` `settled`
+  FOUND 2026-11-19 in review round 1 of [[AZR-147]]. The connection picker in
+  the top bar (App.tsx handleSelectProfile, on every screen including Azure
+  Native Source Onboarding) switches the active connection with no busy check.
+  The onboarding screen is keyed on the active connection, so a switch while a
+  deploy, grant, Cribl source create or removal is running remounts it: the
+  running flow's state and result are dropped part-way, and the stored client
+  secret is cleared under it. AZR-147 refuses this for the switch from All
+  tenants (operation-busy.ts registry, scoped to the page); the connection bar
+  predates it and has the same gap, on main before AZR-147. FIX: lift the
+  operation-busy registry to the shell (or expose the page's) and have the
+  connection bar refuse, or ask, while a change is running, with the change's
+  own words - pin it with a running change and a bar switch.
 
 ---
 
@@ -10567,7 +10582,28 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   red). UNVERIFIED LIVE: nothing ran in Live Preview - the switch from the
   grid (secret clear, switch notice, jump after the remount), the KV save and
   reload of tenant-gap-reads on the real store, the alias from a real deep
-  link, and the layout of the badges and Focus list in both themes.
+  link, and the layout of the badges and Focus list in both themes. REVIEW
+  ROUND 1 2026-11-19 (pins): the switch from All tenants now happens only for
+  the confirm on screen - each check carries a token that a Cancel, a new Open
+  or a later check replaces, so a Cancel or a second Open while the lease is
+  read never switches; a switch made elsewhere meanwhile drops it with a
+  sentence; and it calls the shell's CURRENT handleSelectProfile (a ref),
+  which now reads storeRef rather than its render's store, so a rename or new
+  connection made during the lease read is not written over. Decision 3's
+  'refused while a deploy holds the slot' now covers a change for its WHOLE
+  run: every write flow on the screen (Activity Log, Entra and Defender
+  deploys and removals, the Data Receiver grant and its removal, the Listen
+  rule and consumer group create and removal, the Cribl source create, its
+  removal and pause) reports itself through operation-busy.ts, and the page
+  refuses with that flow's own words - between two requests and for Cribl
+  writes too, which the credential slot cannot see. A jump is cleared once the
+  screen acts on it (onJumped), so switching away and back does not repeat it.
+  Focus here says when the read it shows was cancelled (incomplete, not
+  saved). A save whose own load succeeds after a failed mount load now seeds
+  the other tenants it loaded and replaces the mount load's note.
+  Mutation-checked (10 mutations, each killed). Not pinned: App.tsx
+  handleSelectProfile reading storeRef (no App-level harness; the page-level
+  pin covers the stale closure). Unverified live.
 
 - **AZR-148** The tenant read-in-flight notice says leaving the screen cancels the read; keep-alive keeps it running
   `AZR-F10` `bug` `settled` `verified: pins`

@@ -1159,13 +1159,17 @@ function App() {
   );
 
   // Connection <select>: the EXPLICIT switch. No-op when the selection is
-  // unchanged or blank.
+  // unchanged or blank. It reads storeRef, not this render's store: the All
+  // tenants grid calls it after awaiting the credential lease, and a store from
+  // the click's render would write back over a rename, a new connection or a
+  // switch made meanwhile (AZR-147 review round 1).
   const handleSelectProfile = (nextId: string) => {
-    if (nextId === '' || nextId === store.activeProfileId) {
+    const current = storeRef.current;
+    if (nextId === '' || nextId === current.activeProfileId) {
       return;
     }
-    const prevConfig = getActiveConfig(store);
-    const nextStore = setActiveProfile(store, nextId);
+    const prevConfig = getActiveConfig(current);
+    const nextStore = setActiveProfile(current, nextId);
     applySwitch(prevConfig, getActiveConfig(nextStore), nextId, nextStore);
   };
 

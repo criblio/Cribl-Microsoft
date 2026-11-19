@@ -67,6 +67,7 @@ import type {
   SourceMode,
 } from "@soc/core";
 import { InfoTip } from "../../../components/info-tip";
+import { useReportBusy } from "../operation-busy";
 import { SearchableSelect } from "../../../components/searchable-select";
 import { WorkerGroupField } from "../../../components/worker-group-field";
 import type { WorkerGroupsState } from "../../../components/worker-group-listing";
@@ -304,6 +305,7 @@ function LaneRow({ row, panel }: { readonly row: CriblSourceRow; readonly panel:
       : null;
 
   const busy = state.phase === "planning" || state.phase === "applying";
+  useReportBusy("a Cribl source create", state.phase === "applying");
   const gateReason = createDisabledReason({
     groupId,
     busy,

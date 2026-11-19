@@ -20,7 +20,11 @@
  * moves the app to that connection and the jump happens once the screen has
  * loaded for it. Never without the confirm, and refused with the reason while
  * a Read all, the shell's credential slot (`slotBusyReason`) or another tab's
- * credential lease (read only when the operator confirms) holds the slot.
+ * credential lease (read only when the operator confirms) holds the slot, or
+ * while a change on this page is running (operation-busy.ts: the screen's
+ * write flows report themselves for their whole run). A Cancel or a new Open
+ * while the lease is read drops the earlier confirm's switch, and the switch
+ * calls the shell's CURRENT handler, so it never runs on a stale profile store.
  *
  * MOUNT READS: the onboarding screen's own KV loads, plus ONE load of the
  * saved gap reads (use-saved-gap-reads). No Azure, Graph or Cribl call.
@@ -34,14 +38,17 @@ import { InfoTip } from "../../../components/info-tip";
 import { TenantGapScreen } from "../../tenant-gap/tenant-gap-screen";
 import type { TenantGapCache } from "../../tenant-gap/tenant-gap-state";
 import { AzureOnboardingScreen } from "../azure-onboarding-screen";
+import { OperationBusyContext, createOperationBusyRegistry } from "../operation-busy";
 import type { AzureOnboardingScreenProps } from "../azure-onboarding-screen";
 import { FocusSummary } from "./focus-summary";
 import {
   SWITCH_CONSEQUENCE,
+  SWITCH_REFUSED_ACTIVE_CHANGED,
   SWITCH_REFUSED_READ_ALL,
   SWITCH_UNAVAILABLE,
   switchConfirmText,
   switchRefusedLease,
+  switchRefusedOperation,
   switchRefusedSlot,
 } from "./tenant-switch";
 import { useSavedGapReads } from "./use-saved-gap-reads";
@@ -80,6 +87,8 @@ const ALL_TENANTS_BODY_ID = "azo-all-tenants-body";
 interface PendingSwitch {
   readonly profile: PageProfile;
   readonly sourceId: OnboardingSourceId;
+  /** The connection active when the confirm opened: the switch is dropped if it changed meanwhile. */
+  readonly fromProfileId: string | null;
 }
 
 function errorText(error: unknown): string {
@@ -119,6 +128,15 @@ export function AzureOnboardingPage({
   // The jump the screen performs once it has loaded for the right connection.
   const [jump, setJump] = useState<{ readonly profileId: string; readonly sourceId: OnboardingSourceId; readonly seq: number } | null>(null);
   const jumpSeq = useRef(0);
+  // Bumped by every new confirm, Cancel and switch check: a check that awaited
+  // the lease acts only if it is still the latest (review round 1).
+  const confirmSeq = useRef(0);
+  // The write flows of the screen below report here for their whole run.
+  const [busy] = useState(createOperationBusyRegistry);
+  // The latest props, for code that runs after an await: a render closure
+  // would hold the shell's switch (and its profile store) from the click.
+  const latest = useRef({ onSwitchConnection, slotBusyReason, activeProfileId });
+  latest.current = { onSwitchConnection, slotBusyReason, activeProfileId };
 
   const activeProfile = profiles.find((p) => p.id === activeProfileId) ?? null;
   const activeEntry = activeProfile === null ? null : cache.get(activeProfile);
@@ -128,9 +146,20 @@ export function AzureOnboardingPage({
     setJump({ profileId, sourceId, seq: jumpSeq.current });
   }, []);
 
+  const onJumped = useCallback((seq: number) => {
+    setJump((j) => (j !== null && j.seq === seq ? null : j));
+  }, []);
+
+  const dropConfirm = () => {
+    confirmSeq.current += 1;
+    setChecking(false);
+  };
+
   const onOpen = useCallback(
     (profile: PageProfile, sourceId: OnboardingSourceId) => {
       setSwitchMessage(null);
+      confirmSeq.current += 1;
+      setChecking(false);
       if (profile.id === activeProfileId) {
         setConfirming(null);
         requestJump(profile.id, sourceId);
@@ -141,20 +170,26 @@ export function AzureOnboardingPage({
         setSwitchMessage(SWITCH_UNAVAILABLE);
         return;
       }
-      setConfirming({ profile, sourceId });
+      setConfirming({ profile, sourceId, fromProfileId: activeProfileId });
     },
     [activeProfileId, onSwitchConnection, requestJump],
   );
 
   /** Why the slot cannot change hands right now, or null. Checked again after every await. */
   const slotRefusal = useCallback((): string | null => {
+    const running = busy.current();
+    if (running !== null) return switchRefusedOperation(running);
     if (cache.inFlight() !== null) return SWITCH_REFUSED_READ_ALL;
-    const busy = slotBusyReason?.() ?? null;
-    return busy === null ? null : switchRefusedSlot(busy);
-  }, [cache, slotBusyReason]);
+    const slot = latest.current.slotBusyReason?.() ?? null;
+    return slot === null ? null : switchRefusedSlot(slot);
+  }, [busy, cache]);
 
   const confirmSwitch = async (pending: PendingSwitch): Promise<void> => {
     if (onSwitchConnection === undefined) return;
+    confirmSeq.current += 1;
+    const mine = confirmSeq.current;
+    /** False once a Cancel, a new Open or a later check has replaced this one. */
+    const current = () => confirmSeq.current === mine;
     setChecking(true);
     try {
       const before = slotRefusal();
@@ -169,6 +204,7 @@ export function AzureOnboardingPage({
         } catch (error) {
           verdict = { held: "unknown", reason: errorText(error) };
         }
+        if (!current()) return;
         const leased = switchRefusedLease(verdict);
         if (leased !== null) {
           setSwitchMessage(leased);
@@ -181,12 +217,24 @@ export function AzureOnboardingPage({
         setSwitchMessage(after);
         return;
       }
+      // The connection bar may have switched meanwhile.
+      if (latest.current.activeProfileId !== pending.fromProfileId) {
+        setConfirming(null);
+        setSwitchMessage(SWITCH_REFUSED_ACTIVE_CHANGED);
+        return;
+      }
+      const doSwitch = latest.current.onSwitchConnection;
+      if (doSwitch === undefined) {
+        setConfirming(null);
+        setSwitchMessage(SWITCH_UNAVAILABLE);
+        return;
+      }
       setConfirming(null);
       ports.logger?.info("azure-onboarding: active connection switched from All tenants", {});
-      onSwitchConnection(pending.profile.id);
+      doSwitch(pending.profile.id);
       requestJump(pending.profile.id, pending.sourceId);
     } finally {
-      setChecking(false);
+      if (current()) setChecking(false);
     }
   };
 
@@ -229,6 +277,7 @@ export function AzureOnboardingPage({
                 type="button"
                 className="run-button"
                 onClick={() => {
+                  dropConfirm();
                   setConfirming(null);
                   setSwitchMessage(null);
                 }}
@@ -275,12 +324,15 @@ export function AzureOnboardingPage({
         }}
       />
 
-      <AzureOnboardingScreen
-        key={`azure-onboarding-${activeProfileId ?? "none"}`}
-        {...screenProps}
-        gapSources={gapSourceIds(activeEntry?.row ?? null)}
-        jumpTo={screenJump}
-      />
+      <OperationBusyContext.Provider value={busy}>
+        <AzureOnboardingScreen
+          key={`azure-onboarding-${activeProfileId ?? "none"}`}
+          {...screenProps}
+          gapSources={gapSourceIds(activeEntry?.row ?? null)}
+          jumpTo={screenJump}
+          onJumped={onJumped}
+        />
+      </OperationBusyContext.Provider>
     </>
   );
 }

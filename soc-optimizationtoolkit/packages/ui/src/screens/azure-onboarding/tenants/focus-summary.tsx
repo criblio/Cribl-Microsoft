@@ -43,6 +43,15 @@ function noReadText(tenantName: string): string {
   return `No gap read is saved for ${tenantName} yet, so its gaps are not known.`;
 }
 
+/**
+ * Said above a CANCELLED read (review round 1): the cache keeps a partial row
+ * when no earlier answer exists, and only complete reads are saved, so the
+ * operator must not take it for a finished read that survives a reload.
+ */
+export const FOCUS_CANCELLED_TEXT =
+  "This read was cancelled before it finished: checks it had not finished are unknown, and it is not saved. " +
+  "Read this tenant again in All tenants for a complete answer.";
+
 function stamp(ms: number): string {
   const d = new Date(ms);
   return `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
@@ -86,6 +95,11 @@ function FocusBody({ entry, now, onJump }: { entry: TenantGapEntry; now: number;
         {`Read at ${stamp(entry.readAt)}, ${readAgeText(entry.readAt, now)}.`}{" "}
         <InfoTip text={entry.row.status.reason} label="How this tenant was read" />
       </p>
+      {entry.row.cancelled && (
+        <p className="field-hint" data-testid="azo-focus-cancelled">
+          {FOCUS_CANCELLED_TEXT}
+        </p>
+      )}
       <p className="azo-focus-counts" data-testid="azo-focus-counts">
         {`${gapCount} ${gapCount === 1 ? "source" : "sources"} with a gap, ${unknownCount} not read or unknown, ` +
           `${okCount} configured and onboarded.`}

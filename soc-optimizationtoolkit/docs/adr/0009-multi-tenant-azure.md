@@ -183,9 +183,11 @@ onboarding page, with five decisions:
    each colour are the grid's own (AZURE_WORD, CRIBL_WORD).
 
 What the amendment does not prove: none of it has run in Live Preview. The
-switch's refusal sees only this tab's slot and the lease - not a deploy
-between two of its requests (nothing in flight at that instant), and not
-another tab's ordinary writes. Two tabs saving gap reads at the same instant
+switch's refusal sees this tab's slot, the lease, and (review round 1) every
+write flow on the onboarding screen for its whole run, Azure or Cribl,
+through `operation-busy.ts` - not another tab's ordinary writes, and not a
+change running on another screen. The connection bar's own switch has no
+such refusal (AZR-149). Two tabs saving gap reads at the same instant
 can lose one answer (no compare-and-swap); that costs a re-read, never a
 wrong colour.
 
