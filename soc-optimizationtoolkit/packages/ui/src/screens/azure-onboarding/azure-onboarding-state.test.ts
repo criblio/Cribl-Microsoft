@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  emptyProgress,
   DEFENDER_EXPORT_ITEM_ID,
   DEFENDER_EXPORT_NAME,
   FakeKvDocumentStore,
@@ -20,6 +21,8 @@ import {
   defaultSelection,
   encodeSelection,
   defaultPlanValues,
+  AUTO_HUB_SOURCE_IDS,
+  howToStep,
   laneTopics,
   onboardingSource,
   toListing,
@@ -39,6 +42,7 @@ import type {
   ValidationResult,
 } from "@soc/core";
 import { findHistoryInCopy } from "../../components/copy-rules";
+import { rowChoices } from "./howto/howto-state";
 import * as onboardingState from "./azure-onboarding-state";
 import {
   unmeasuredInventoryMessage,
@@ -70,7 +74,12 @@ import {
   namespaceListMessage,
   planSummary,
   ruleListMessage,
+  MANAGE_RULE_SOURCE_IDS,
+  createRuleLabel,
+  RULE_NOTE_SOURCES_UNKNOWN,
   ruleNote,
+  manageRuleSourcesOf,
+  sourcesNeedingManageRule,
   sendableRules,
   withItem,
 } from "./azure-onboarding-state";
@@ -564,11 +573,160 @@ describe("Event Hub picker messages reuse the shared empty-inventory wording", (
   });
 
   it("notes a Manage rule and the built-in root rule, not a Send-only one", () => {
-    expect(ruleNote({ name: "RootManageSharedAccessKey", rights: ["Listen", "Manage", "Send"] })).toMatch(/safer/);
-    expect(ruleNote({ name: "ops", rights: ["Manage", "Send", "Listen"] })).toMatch(/safer/);
+    expect(ruleNote({ name: "RootManageSharedAccessKey", rights: ["Listen", "Manage", "Send"] })?.text).toMatch(/safer/);
+    expect(ruleNote({ name: "ops", rights: ["Manage", "Send", "Listen"] })?.text).toMatch(/safer/);
     expect(ruleNote({ name: "cribl-send", rights: ["Send"] })).toBeNull();
     // The built-in rule is noted by NAME even when its rights read back without Manage.
-    expect(ruleNote({ name: "RootManageSharedAccessKey", rights: ["Send"] })).toMatch(/safer/);
+    expect(ruleNote({ name: "RootManageSharedAccessKey", rights: ["Send"] })?.text).toMatch(/safer/);
+  });
+
+  // AZR-117: the note never recommends a rule a chosen source's deploy refuses.
+  describe("per source (AZR-117)", () => {
+    const SAFER = "This rule can also manage the namespace. A dedicated rule with only Send rights is safer.";
+    const WHY =
+      "a diagnostic setting streams to an Event Hub only through a rule with Manage, Send and Listen rights";
+    const BUILT_IN =
+      "RootManageSharedAccessKey is the namespace's built-in rule. Use a dedicated rule with Manage, Send and Listen rights instead, " +
+      "so it can be rotated or removed on its own.";
+
+    it("Defender only (no source needs Manage): today's text, and the Send-only create label", () => {
+      expect(sourcesNeedingManageRule([DEFENDER_EXPORT_ITEM_ID])).toEqual([]);
+      expect(ruleNote({ name: "ops", rights: ["Manage", "Send", "Listen"] }, [])).toEqual({ tone: "warning", text: SAFER });
+      expect(ruleNote({ name: "cribl-send", rights: ["Send"] }, [])).toBeNull();
+      expect(createRuleLabel([])).toBe("Create Send-only rule");
+    });
+
+    it("a Manage source with a Send-only rule: warns in the gate's terms, never 'safer'", () => {
+      const sources = sourcesNeedingManageRule([DEFENDER_EXPORT_ITEM_ID, "activityLog"]);
+      expect(sources).toEqual(["Azure Activity Log"]);
+      expect(ruleNote({ name: "cribl-send", rights: ["Send"] }, sources)).toEqual({
+        tone: "warning",
+        text:
+          `The rule cribl-send has Send. Azure Activity Log needs a rule with Manage rights, because ${WHY}. ` +
+          "Choose a rule with Manage rights.",
+      });
+      // The built-in rule's NAME no longer earns a "safer" note: its rights decide.
+      expect(ruleNote({ name: "RootManageSharedAccessKey", rights: ["Send"] }, sources)?.text).not.toMatch(/safer/);
+      expect(createRuleLabel(sources)).toBe("Create Manage rule");
+    });
+
+    it("a Manage source with a Manage rule: says it is what the source needs", () => {
+      const sources = sourcesNeedingManageRule(["entraId", "activityLog"]);
+      // MANAGE_RULE_SOURCE_IDS order, not the chosen order.
+      expect(sources).toEqual(["Azure Activity Log", "Entra ID diagnostics"]);
+      expect(ruleNote({ name: "ops", rights: ["Listen", "Manage", "Send"] }, sources)).toEqual({
+        tone: "info",
+        text: `Azure Activity Log and Entra ID diagnostics need a rule with Manage rights, as this one has, because ${WHY}.`,
+      });
+    });
+
+    it("names exactly the diagnostic-setting sources as needing Manage", () => {
+      expect(MANAGE_RULE_SOURCE_IDS).toEqual([
+        "diagnosticSettingsInitiative",
+        "communityPolicyInitiative",
+        "activityLog",
+        "entraId",
+      ]);
+      // The How-to guide's Manage-rule step (eh-rule-diagnostic) is shown for
+      // exactly these sources; the two lists cannot drift apart.
+      expect([...MANAGE_RULE_SOURCE_IDS]).toEqual([...AUTO_HUB_SOURCE_IDS]);
+      expect([...(howToStep("eh-rule-diagnostic")?.sourceIds ?? [])]).toEqual([...MANAGE_RULE_SOURCE_IDS]);
+    });
+
+    it("a policy initiative alone needs Manage too: warns on a Send-only rule, never 'safer'", () => {
+      const sources = sourcesNeedingManageRule(["diagnosticSettingsInitiative"]);
+      expect(sources).toEqual(["Microsoft Audit diagnostic-settings initiative"]);
+      expect(ruleNote({ name: "cribl-send", rights: ["Send"] }, sources)).toEqual({
+        tone: "warning",
+        text:
+          `The rule cribl-send has Send. Microsoft Audit diagnostic-settings initiative needs a rule with Manage rights, because ${WHY}. ` +
+          "Choose a rule with Manage rights.",
+      });
+      expect(ruleNote({ name: "RootManageSharedAccessKey", rights: ["Listen", "Manage", "Send"] }, sources)).toEqual({
+        tone: "warning",
+        text:
+          `Microsoft Audit diagnostic-settings initiative needs a rule with Manage rights, as this one has, because ${WHY}. ` +
+          BUILT_IN,
+      });
+      expect(ruleNote({ name: "ops", rights: ["Listen", "Manage", "Send"] }, sources)).toEqual({
+        tone: "info",
+        text: `Microsoft Audit diagnostic-settings initiative needs a rule with Manage rights, as this one has, because ${WHY}.`,
+      });
+      expect(createRuleLabel(sources)).toBe("Create Manage rule");
+    });
+
+    it("the community initiative with the Defender export: Manage, named after the initiative", () => {
+      const sources = sourcesNeedingManageRule([DEFENDER_EXPORT_ITEM_ID, "communityPolicyInitiative"]);
+      expect(sources).toEqual(["Community policy initiative"]);
+      expect(ruleNote({ name: "ops", rights: ["Manage", "Send", "Listen"] }, sources)).toEqual({
+        tone: "info",
+        text: `Community policy initiative needs a rule with Manage rights, as this one has, because ${WHY}.`,
+      });
+      expect(createRuleLabel(sources)).toBe("Create Manage rule");
+    });
+
+    // Review round 4: the built-in rule keeps a note of its own when a Manage
+    // source is chosen - a dedicated Manage rule, never Send-only.
+    it("a Manage source with the built-in rule: a warning naming it, advising a dedicated Manage rule", () => {
+      const sources = sourcesNeedingManageRule(["activityLog", "entraId"]);
+      const note = ruleNote({ name: "RootManageSharedAccessKey", rights: ["Listen", "Manage", "Send"] }, sources);
+      expect(note).toEqual({
+        tone: "warning",
+        text:
+          `Azure Activity Log and Entra ID diagnostics need a rule with Manage rights, as this one has, because ${WHY}. ` +
+          BUILT_IN,
+      });
+      expect(note?.text).not.toMatch(/Send-only|only Send|safer/);
+      // The same words as the How-to step the guide shows for these sources.
+      expect(howToStep("eh-rule-diagnostic")?.why).toMatch(/Use a dedicated rule, not the namespace's built-in one, so it can be rotated or removed on its own\./);
+    });
+
+    describe("manageRuleSourcesOf (review round 4)", () => {
+      const chosenA: RowChoice = { kind: "chosen", mode: "automate" };
+      const notChosen: RowChoice = { kind: "not-chosen" };
+      const selUnknown: RowChoice = { kind: "unknown", doc: "selection", cause: "not-read" };
+      const all = (c: RowChoice) => new Map<string, RowChoice>(MANAGE_RULE_SOURCE_IDS.map((id) => [id, c]));
+
+      it("titles of the chosen Manage sources when every Manage row is known", () => {
+        const m = all(notChosen);
+        m.set("activityLog", chosenA);
+        m.set("defenderExport", selUnknown); // not a Manage source: its unknown is irrelevant
+        expect(manageRuleSourcesOf(m)).toEqual(["Azure Activity Log"]);
+        expect(manageRuleSourcesOf(all(notChosen))).toEqual([]);
+      });
+
+      it("null when any Manage source's choice is unknown (the selection unread), or its row is missing", () => {
+        const m = all(notChosen);
+        m.set("entraId", selUnknown);
+        expect(manageRuleSourcesOf(m)).toBeNull();
+        const missing = all(notChosen);
+        missing.delete("communityPolicyInitiative");
+        expect(manageRuleSourcesOf(missing)).toBeNull();
+      });
+
+      it("through rowChoices: progress loaded, selection refused -> null; selection loaded -> the titles", () => {
+        const progress = { status: "absent", progress: emptyProgress() } as const;
+        expect(manageRuleSourcesOf(rowChoices(progress, null, "not-read"))).toBeNull();
+        const selection = { enabled: ["activityLog"], subSelections: {} } as unknown as CoverageSelection;
+        expect(manageRuleSourcesOf(rowChoices(progress, selection, "not-read"))).toEqual(["Azure Activity Log"]);
+      });
+    });
+
+    it("sources not known (null): one neutral note for every rule, and a label naming no kind", () => {
+      const NEUTRAL =
+        "Which sources are chosen is not known yet, so this note cannot say which rule they need. " +
+        "A source that streams through a diagnostic setting needs a rule with Manage rights; " +
+        "the Defender for Cloud alert export alone does not.";
+      expect(RULE_NOTE_SOURCES_UNKNOWN).toBe(NEUTRAL);
+      for (const rule of [
+        { name: "cribl-send", rights: ["Send"] },
+        { name: "ops", rights: ["Listen", "Manage", "Send"] },
+        { name: "RootManageSharedAccessKey", rights: ["Listen", "Manage", "Send"] },
+      ]) {
+        expect(ruleNote(rule, null)).toEqual({ tone: "info", text: NEUTRAL });
+      }
+      expect(createRuleLabel(null)).toBe("Create authorization rule");
+    });
   });
 });
 
@@ -688,7 +846,11 @@ describe("visible copy carries no project history", () => {
     add("state.note", defenderStateNote(state())?.text);
     add("rules.nosend", ruleListMessage(rulesRead([{ name: "l", id: "", rights: ["Listen"], canSend: false }]))?.text);
     add("hubs.truncated", hubListMessage({ ok: true, listing: toListing([{ name: "h" } as never]), truncated: true })?.text);
-    add("rule.note", ruleNote({ name: "r", rights: ["Manage"] }));
+    add("rule.note", ruleNote({ name: "r", rights: ["Manage"] })?.text);
+    add("rule.note.manage-source", ruleNote({ name: "r", rights: ["Send"] }, ["A", "B"])?.text);
+    add("rule.note.manage-source.ok", ruleNote({ name: "r", rights: ["Manage"] }, ["A"])?.text);
+    add("rule.note.manage-source.built-in", ruleNote({ name: "RootManageSharedAccessKey", rights: ["Manage"] }, ["A"])?.text);
+    add("rule.create.label", createRuleLabel(["A"]));
     for (const o of OUTCOMES) add(`outcome.${o.kind}`, deployOutcomeMessage(o).text);
 
     // AZR-60: every banner, deploy caution and row label core's permission view
@@ -703,6 +865,10 @@ describe("visible copy carries no project history", () => {
       }
     }
     verdictSets.push({ "defender-plans.read": "denied", "defender-automation.read": "granted", "defender-automation.write": "granted" });
+    // CAP-10: the Activity Log's subscription diagnostic-settings verdicts.
+    for (const v of ["granted", "denied"] as const) {
+      verdictSets.push({ "subscription-diagnostics.read": "granted", "subscription-diagnostics.write": v, "subscription-diagnostics.delete": "denied" });
+    }
     for (const [id, permissions] of Object.entries(AUTOMATION_PERMISSIONS)) {
       add(`perm.${id}.source`, permissions.sourceTitle);
       add(`perm.${id}.scope`, permissions.measuredScope);

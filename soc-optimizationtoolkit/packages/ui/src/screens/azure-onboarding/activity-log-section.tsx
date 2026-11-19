@@ -12,9 +12,15 @@
  * confirmed, never "none".
  *
  * WHAT IT SAYS ABOUT PERMISSIONS. The banner from core's
- * automationPermissionView over this source's declaration: nothing about it is
- * measured by the permission check yet, and the banner says so instead of
- * staying silent. The needed actions are listed per scope as not measured.
+ * automationPermissionView over this source's declaration and the CACHED
+ * capability set (no Azure call on mount). Since CAP-10 the subscription's
+ * diagnostic-settings read, write and delete are measured by the permission
+ * check, so each is listed with what the last check found; the rule's listKeys
+ * on the namespace is listed as not measured. A measured denial of the read or
+ * write is a CAUTION beside Deploy (also its aria-describedby), never a block:
+ * the audit informs, never forbids, and Azure's answer at the write decides.
+ * The shell's audit key keeps another connection's set from being read as
+ * this one's, and its clock lets a denial say how old the check is.
  *
  * WHAT IT WRITES. One diagnostic setting, create-only, after a TWO-STEP
  * arm/confirm that quotes the setting name, the subscription, the namespace
@@ -66,7 +72,8 @@ import { usePorts } from "../../ports-context";
 import { verifiedNoneInventoryMessage } from "../../capabilities/empty-inventory";
 import { PickerLine } from "./eventhub-prerequisite-section";
 import type { EventHubTarget } from "./eventhub-prerequisite-section";
-import { AutomationPermissionBanner } from "./automation-permission-banner";
+import { AutomationPermissionBanner, MeasuredActionList } from "./automation-permission-banner";
+import { InfoTip } from "../../components/info-tip";
 import type { RowChoice } from "./azure-onboarding-state";
 import {
   activityLogDeployDisabledReason,
@@ -98,7 +105,20 @@ export interface ActivityLogSectionProps {
    * switching the source to How-to mid-deploy must not leave Remove stuck off.
    */
   onRunningChange: (running: boolean) => void;
+  /** The shell's Re-check permissions; absent when the shell wires none. */
+  onRecheckPermissions?: () => void;
+  recheckingPermissions?: boolean;
+  /** The current connection's audit key; a set for another connection is not trusted. */
+  permissionsAuditKey?: string;
+  /** The shell's clock, so a denial says how old the check is. */
+  permissionsNow?: () => string;
 }
+
+/** The (i) over the permissions list. */
+export const ACTIVITY_LOG_PERMISSIONS_TIP =
+  "The Azure actions this section uses, by scope. The subscription ones show what the app's last permission " +
+  "check found: the setting lives on the subscription itself, so a role there is the only one that can grant them. " +
+  "The rule one is not measured, so a missing grant there shows as Azure's refusal at that step.";
 
 export function ActivityLogSection({
   choice,
@@ -110,6 +130,10 @@ export function ActivityLogSection({
   onShowHowto,
   removing,
   onRunningChange,
+  onRecheckPermissions,
+  recheckingPermissions,
+  permissionsAuditKey,
+  permissionsNow,
 }: ActivityLogSectionProps) {
   const { ports, config, capabilities, capabilityContext } = usePorts();
   const subscriptionId = config.subscriptionId;
@@ -117,7 +141,17 @@ export function ActivityLogSection({
   const permissionView =
     permissions === null
       ? null
-      : automationPermissionView({ permissions, capabilities, context: capabilityContext, howtoSection });
+      : automationPermissionView({
+          permissions,
+          capabilities,
+          context: capabilityContext,
+          howtoSection,
+          ...(permissionsAuditKey !== undefined ? { auditKey: permissionsAuditKey } : {}),
+          ...(permissionsNow !== undefined ? { nowIso: permissionsNow() } : {}),
+        });
+  // A measured denial is described beside Deploy, never a reason to disable it.
+  const caution = permissionView?.deployCaution ?? null;
+  const cautionId = useId();
   const reasonId = useId();
 
   const [reading, setReading] = useState(false);
@@ -220,6 +254,8 @@ export function ActivityLogSection({
           view={permissionView}
           sourceTitle={permissions.sourceTitle}
           onShowHowto={onShowHowto}
+          onRecheck={onRecheckPermissions}
+          rechecking={recheckingPermissions}
         />
       )}
 
@@ -318,13 +354,16 @@ export function ActivityLogSection({
         )}
       </div>
 
-      {permissions !== null && permissions.notMeasured.length > 0 && (
+      {permissions !== null && permissionView !== null && (
         <div className="azure-onboarding-subblock">
-          <span className="field-label">Azure permissions this needs</span>
+          <span className="field-label">
+            Azure permissions this needs <InfoTip text={ACTIVITY_LOG_PERMISSIONS_TIP} />
+          </span>
+          {permissions.measured.length > 0 && <MeasuredActionList permissions={permissions} view={permissionView} />}
           {permissions.notMeasured.map((group) => (
             <ActionList key={group.scope} title={group.scope} actions={group.actions} />
           ))}
-          <p className="field-hint">{ACTIVITY_LOG_ACTIONS_NOT_MEASURED}</p>
+          {permissions.notMeasured.length > 0 && <p className="field-hint">{ACTIVITY_LOG_ACTIONS_NOT_MEASURED}</p>}
         </div>
       )}
 
@@ -333,11 +372,19 @@ export function ActivityLogSection({
           type="button"
           className="next-action-button"
           disabled={reason !== null || armed}
-          aria-describedby={reason !== null ? reasonId : undefined}
+          aria-describedby={
+            [reason !== null ? reasonId : "", caution !== null ? cautionId : ""].filter((id) => id !== "").join(" ") ||
+            undefined
+          }
           onClick={() => setArmedFor({ key: armKey, state })}
         >
           {running ? "Deploying..." : "Deploy Activity Log setting"}
         </button>
+        {caution !== null && (
+          <span className="field-hint" id={cautionId}>
+            {caution}
+          </span>
+        )}
         {reason !== null && (
           <span className="field-hint" id={reasonId}>
             {reason}

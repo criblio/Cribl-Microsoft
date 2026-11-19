@@ -15,6 +15,7 @@ import {
   activityLogStateNote,
 } from "./activity-log-state";
 import type { ActivityLogDeployGate } from "./activity-log-state";
+import { ruleNote } from "./azure-onboarding-state";
 
 const SUB = "sub-1";
 const NS = { subscriptionId: SUB, resourceGroup: "rg-eh", name: "ns-a" };
@@ -91,6 +92,21 @@ describe("activityLogDeployDisabledReason", () => {
     expect(activityLogDeployDisabledReason({ ...READY, rule: { name: "SendOnly", rights: ["Send"] } })).toMatch(
       /has Send\. A diagnostic setting needs a rule with Manage rights/,
     );
+  });
+
+  // AZR-117: the Event Hub section's rule note, with the Activity Log chosen,
+  // warns about exactly the rules this gate refuses - never "Send-only is safer".
+  it("agrees with the Event Hub section's rule note for every rights combination", () => {
+    for (const rights of [[], ["Send"], ["Listen"], ["Listen", "Send"], ["Manage"], ["Listen", "Manage", "Send"]]) {
+      const rule = { name: "r", rights };
+      const refused = (activityLogDeployDisabledReason({ ...READY, rule }) ?? "").includes("needs a rule with Manage rights");
+      const note = ruleNote(rule, ["Azure Activity Log"]);
+      expect({ rights, warned: note?.tone === "warning", safer: /safer/.test(note?.text ?? "") }).toEqual({
+        rights,
+        warned: refused,
+        safer: false,
+      });
+    }
   });
 
   it("an unreadable list is its own reason, with Azure's words", () => {

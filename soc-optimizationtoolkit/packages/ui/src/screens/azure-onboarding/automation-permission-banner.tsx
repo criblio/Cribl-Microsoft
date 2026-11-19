@@ -23,7 +23,7 @@
  * Presentational: no IO, no Azure call. Rendering it costs nothing.
  */
 
-import type { AutomationPermissionView } from "@soc/core";
+import type { AutomationPermissionView, AutomationPermissions } from "@soc/core";
 import { InfoTip } from "../../components/info-tip";
 import { refreshLabel } from "../../capabilities/capability-audit-state";
 import { PickerLine } from "./eventhub-prerequisite-section";
@@ -37,6 +37,32 @@ export const PERMISSION_BANNER_TIP =
 
 /** Shown when the shell wires no re-check into the screen. */
 export const RECHECK_IN_BAR_HINT = "Use Re-check permissions in the connection bar to measure again.";
+
+/**
+ * The measured actions, each with what the cached check found for it. Shared
+ * by every section whose source has measured needs (Defender, Activity Log).
+ */
+export function MeasuredActionList({
+  permissions,
+  view,
+}: {
+  permissions: AutomationPermissions;
+  view: AutomationPermissionView;
+}) {
+  return (
+    <div className="azure-onboarding-actions">
+      <span className="field-hint">{permissions.measuredScope}</span>
+      <ul className="perm-list">
+        {view.rows.map((row) => (
+          <li key={row.need.action} data-permission-action={row.need.action} data-state={row.state}>
+            <strong>{row.need.does}</strong>
+            {` - ${row.need.action}: ${row.stateLabel}`}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /** The How-to button's visible name. */
 function howtoLinkLabel(sourceTitle: string): string {

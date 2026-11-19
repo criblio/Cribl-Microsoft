@@ -26,7 +26,15 @@ import {
   FakeLogger,
   LAKE_ROUTE_SOURCES,
 } from "@soc/core";
-import type { ActivityLogState, AzureConfig, AzureManagement, AzureManagementRequest, PortHttpResponse } from "@soc/core";
+import type {
+  ActivityLogState,
+  AzureConfig,
+  AzureManagement,
+  AzureManagementRequest,
+  CapabilitySet,
+  CapabilityVerdict,
+  PortHttpResponse,
+} from "@soc/core";
 import { PortsProvider } from "../../ports-context";
 import type { UiPorts } from "../../ports-context";
 import { AzureOnboardingScreen } from "./azure-onboarding-screen";
@@ -125,10 +133,10 @@ class RoutingAzure implements AzureManagement {
   }
 }
 
-function mount(azure = new RoutingAzure()) {
+function mount(azure = new RoutingAzure(), capabilities?: CapabilitySet) {
   const ports = { azure, logger: new FakeLogger(() => "t"), kvDocuments: new FakeKvDocumentStore() } as unknown as UiPorts;
   render(
-    <PortsProvider ports={ports} config={CONFIG}>
+    <PortsProvider ports={ports} config={CONFIG} capabilities={capabilities}>
       <AzureOnboardingScreen />
     </PortsProvider>,
   );
@@ -192,10 +200,122 @@ describe("Activity Log section - before anything is read", () => {
     expect(within(block()).getByText("Read the subscription's diagnostic settings first.")).toBeTruthy();
     // The Sentinel note is the one the Lake route uses, word for word.
     expect(within(block()).getByText(LAKE_ROUTE_SOURCES.activityLog.nativeConnectorCopy)).toBeTruthy();
-    // The permission banner says nothing is measured, never silence.
-    expect(within(block()).getByTestId("azo-permission-banner").textContent).toContain("does not measure");
+    // CAP-10: with no audit wired, the banner says the check has not run - never silence, never a denial.
+    expect(within(block()).getByTestId("azo-permission-banner").textContent).toContain(
+      "Permissions have not been checked for this connection yet",
+    );
     // Every dropdown on the screen is a SearchableSelect.
     expect(document.querySelectorAll("select")).toHaveLength(0);
+  });
+});
+
+describe("Activity Log section - what the permission check measured (CAP-10)", () => {
+  function audited(read?: CapabilityVerdict, write?: CapabilityVerdict, del?: CapabilityVerdict): CapabilitySet {
+    return {
+      verdicts: {
+        ...(read === undefined ? {} : { "subscription-diagnostics.read": read }),
+        ...(write === undefined ? {} : { "subscription-diagnostics.write": write }),
+        ...(del === undefined ? {} : { "subscription-diagnostics.delete": del }),
+      },
+      auditedAt: "2026-11-18T10:00:00.000Z",
+      connectionId: "c",
+    };
+  }
+  /** Each measured row as action:state, in order. */
+  function rows(): string[] {
+    return [...block().querySelectorAll("[data-permission-action]")].map(
+      (li) => `${li.getAttribute("data-permission-action")}:${li.getAttribute("data-state")}`,
+    );
+  }
+  const READ = "Microsoft.Insights/diagnosticSettings/read";
+  const WRITE = "Microsoft.Insights/diagnosticSettings/write";
+  const DELETE = "Microsoft.Insights/diagnosticSettings/delete";
+
+  it("granted: three measured rows, no banner, and only the rule's listKeys listed as not measured", async () => {
+    mount(new RoutingAzure(), audited("granted", "granted", "granted"));
+    await loaded();
+    expect(rows()).toEqual([`${READ}:granted`, `${WRITE}:granted`, `${DELETE}:granted`]);
+    expect(within(block()).queryByTestId("azo-permission-banner")).toBeNull();
+    expect(within(block()).queryByText("On the subscription")).toBeTruthy();
+    expect(within(block()).getByText("On the Event Hub namespace rule")).toBeTruthy();
+    expect(within(block()).getByText(/Microsoft\.EventHub\/namespaces\/authorizationRules\/listKeys\/action/)).toBeTruthy();
+  });
+
+  it("denied: the error banner and a caution beside Deploy, which stays clickable and still deploys", async () => {
+    const azure = mount(new RoutingAzure(), audited("granted", "denied", "granted"));
+    await loaded();
+    expect(rows()).toEqual([`${READ}:granted`, `${WRITE}:denied`, `${DELETE}:granted`]);
+    const banner = within(block()).getByTestId("azo-permission-banner");
+    expect(banner.textContent).toContain(
+      `found your Azure identity cannot create the Activity Log diagnostic setting (${WRITE}), so Azure will likely refuse`,
+    );
+    await chooseTarget("DiagManage");
+    await readSettings();
+    // The audit informs, never forbids: Deploy is enabled, described by the caution.
+    expect(deployButton().disabled).toBe(false);
+    const caution = within(block()).getByText(/^Azure will likely refuse this deploy:/);
+    expect(deployButton().getAttribute("aria-describedby")).toBe(caution.id);
+    fireEvent.click(deployButton());
+    fireEvent.click(within(screen.getByRole("group", { name: "Confirm Activity Log deploy" })).getByRole("button", { name: "Confirm deploy" }));
+    await waitFor(() => expect(azure.puts()).toHaveLength(1));
+  });
+
+  it("read denied too: the caution beside a DISABLED Deploy never claims the button is available", async () => {
+    // A measured read denial and the section's own 403 on the list meet at the
+    // same button: the gate disables Deploy with its reason, and the caution
+    // beside it must not contradict that.
+    class ForbiddenList extends RoutingAzure {
+      override async request(r: AzureManagementRequest): Promise<PortHttpResponse> {
+        if (r.method === "GET" && r.path === SETTINGS) {
+          this.calls.push(r);
+          return { status: 403, body: { error: { code: "AuthorizationFailed", message: "no" } } } as unknown as PortHttpResponse;
+        }
+        return super.request(r);
+      }
+    }
+    mount(new ForbiddenList(), audited("denied", "denied", "granted"));
+    await loaded();
+    expect(rows()).toEqual([`${READ}:denied`, `${WRITE}:denied`, `${DELETE}:granted`]);
+    const CAUTION =
+      "Azure will likely refuse this deploy: the last permission check found your Azure identity cannot " +
+      `list the subscription's diagnostic settings and create the Activity Log diagnostic setting (${READ}, ${WRITE}). ` +
+      "This check never disables Deploy; Azure's answer decides. " +
+      "Re-check permissions if the role was granted since, or switch it to How-to in section 2.";
+    // Before any read: the gate's reason and the caution, side by side.
+    expect(deployButton().disabled).toBe(true);
+    expect(within(block()).getByText(CAUTION)).toBeTruthy();
+    expect(within(block()).getByText("Read the subscription's diagnostic settings first.")).toBeTruthy();
+    await chooseTarget("DiagManage");
+    fireEvent.click(within(block()).getByRole("button", { name: "Read diagnostic settings" }));
+    const REASON =
+      "The subscription's diagnostic settings could not be read - List the subscription's diagnostic settings: HTTP 403 - no";
+    await waitFor(() => expect(within(block()).getByText(REASON)).toBeTruthy());
+    expect(deployButton().disabled).toBe(true);
+    const caution = within(block()).getByText(CAUTION);
+    const reason = within(block()).getByText(REASON);
+    expect(deployButton().getAttribute("aria-describedby")).toBe(`${reason.id} ${caution.id}`);
+    // No sentence beside the button says it can be pressed.
+    const controls = deployButton().closest(".panel-controls")?.textContent ?? "";
+    expect(controls).not.toMatch(/stays available|stays clickable|still works/);
+  });
+
+  it("unknown: an audit that did not measure them is a soft note, rows say not measured, no caution", async () => {
+    mount(new RoutingAzure(), audited());
+    await loaded();
+    expect(rows()).toEqual([`${READ}:unknown`, `${WRITE}:unknown`, `${DELETE}:unknown`]);
+    const banner = within(block()).getByTestId("azo-permission-banner");
+    expect(banner.textContent).toContain("The last permission check did not measure whether your Azure identity can");
+    expect(banner.textContent).not.toMatch(/\bdenied\b|\brefuse/i);
+    expect(within(block()).queryByText(/^Azure will likely refuse this deploy:/)).toBeNull();
+  });
+
+  it("never checked: no audit for this connection says so, and rows say not checked yet", async () => {
+    mount(new RoutingAzure(), { verdicts: {}, auditedAt: null, connectionId: null });
+    await loaded();
+    expect(rows()).toEqual([`${READ}:never-checked`, `${WRITE}:never-checked`, `${DELETE}:never-checked`]);
+    expect(within(block()).getByTestId("azo-permission-banner").textContent).toContain(
+      "Permissions have not been checked for this connection yet",
+    );
   });
 });
 

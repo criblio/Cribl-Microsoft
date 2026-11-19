@@ -13,6 +13,7 @@ import {
   planRuleRights,
 } from "./entra-setting-state";
 import type { EntraDeployGate } from "./entra-setting-state";
+import { ruleNote } from "./azure-onboarding-state";
 
 const NS = { subscriptionId: "eh-sub", resourceGroup: "eh-rg", name: "ns" };
 const INPUT = { namespace: NS, ruleName: "send", categories: entraCategoriesFor(["Standard"]) };
@@ -139,6 +140,22 @@ describe("entraDeployDisabledReason", () => {
     expect(entraDeployDisabledReason({ ...GATE, ruleRights: ["Send"] })).toBe(
       "The rule send has Send. An Entra ID diagnostic setting needs a rule with Manage rights, because Azure creates one hub per category itself.",
     );
+  });
+});
+
+// AZR-117: the Event Hub section's rule note, with Entra ID chosen, warns about
+// exactly the rules this gate refuses.
+describe("entraDeployDisabledReason and the Event Hub rule note agree", () => {
+  it("for every rights combination", () => {
+    for (const rights of [[], ["Send"], ["Listen"], ["Listen", "Send"], ["Manage"], ["Listen", "Manage", "Send"]]) {
+      const refused = (entraDeployDisabledReason({ ...GATE, ruleRights: rights }) ?? "").includes("needs a rule with Manage rights");
+      const note = ruleNote({ name: "send", rights }, ["Entra ID diagnostics"]);
+      expect({ rights, warned: note?.tone === "warning", safer: /safer/.test(note?.text ?? "") }).toEqual({
+        rights,
+        warned: refused,
+        safer: false,
+      });
+    }
   });
 });
 

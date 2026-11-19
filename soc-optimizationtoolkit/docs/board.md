@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**107 in the backlog, 33 in progress, 247 done.**
+**106 in the backlog, 33 in progress, 249 done.**
 
 ## By menu item
 
@@ -34,15 +34,15 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Labs | 2 | 3 | 1 |
 | Data Volume Inventory | 4 | 22 | 1 |
 | SIEM Migration | 1 | 8 | 1 |
-| Permission Verification | 8 | 12 | 0 |
+| Permission Verification | 8 | 13 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 32 | 63 | 5 |
+| Azure Native Source Onboarding | 31 | 64 | 4 |
 | Azure Logging Map | 3 | 2 | 1 |
 | Tenant Logging Gaps | 1 | 3 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 19 | 6 |
 
-Open work totals 140.
+Open work totals 139.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 68% (77/114)
+### `AZR` Azure native source onboarding - 68% (78/114)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 1/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 50/69 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-138, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117, AZR-141, AZR-142, AZR-143 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 51/69 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-138, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117, AZR-141, AZR-142, AZR-143 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 23/26 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-125*, AZR-126*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -101,13 +101,13 @@ Maintaining a pack after it is built, including a silent data-loss defect
 |---|---|---|---|
 | `PK-F1` Pack maintenance parity | Pack Maintenance | 0/3 | PK-1, PK-2, D-6 |
 
-### `CAP` Capability taxonomy extension _(enabler)_ - 54% (7/13)
+### `CAP` Capability taxonomy extension _(enabler)_ - 57% (8/14)
 
 ENABLER EPIC: exists to unblock other work rather than to deliver on its own. Its capabilities and probes are what the Azure onboarding epic waits on
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `CAP-F1` Capability taxonomy extension | Permission Verification | 7/13 | CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-8, CAP-11, CAP-15, CAP-12, CAP-7, CAP-9, CAP-10 |
+| `CAP-F1` Capability taxonomy extension | Permission Verification | 8/14 | CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-8, CAP-11, CAP-15, CAP-12, CAP-7, CAP-9, CAP-10, CAP-13 |
 
 ### `REL` Ship what is built _(enabler)_ - 0% (0/2)
 
@@ -1013,7 +1013,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (14)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1237,29 +1237,6 @@ Next to pick up. Nothing blocks these.
   config-json warning when an imported connectivity value is coerced to full;
   Batch's template-only export is gated on the identity fields, so
   Disconnected cannot reach it from Batch (fallback routing).
-
-- **AZR-117** The Event Hub rule note recommends a Send-only rule while the Activity Log deploy refuses one
-  `AZR-F9` `bug` `settled`
-  FOUND 2026-11-17 in committed code (AZR-98's KNOWN GAPS, carded at
-  closeout). The shared Event Hub prerequisite shows ruleNote
-  (screens/azure-onboarding/azure-onboarding-state.ts:860-864) beside any
-  Manage-capable rule: 'A dedicated rule with only Send rights is safer.' The
-  Activity Log section on the same screen requires Manage
-  (activity-log-state.ts:134-137, activity-log-section.tsx:316: 'A diagnostic
-  setting needs a namespace rule with Manage rights, because Azure creates the
-  hub itself'). An operator who follows the note makes a Send-only rule in the
-  Azure portal (the app cannot create one: the 'Create Send-only rule' button
-  at eventhub-prerequisite-section.tsx:353-355 is disabled, with
-  CREATE_NOT_AVAILABLE beneath it, and its label repeats the same Send-only
-  advice), picks it in the rule picker, and is then refused by the Activity
-  Log gate. Reproduce through the picker, not the disabled button. SCOPE:
-  ruleNote takes the selected items; when a selected source needs Manage
-  (activityLog today; entraId when AZR-99 lands), the note says that source
-  needs Manage instead of recommending Send-only; the Defender-only case keeps
-  today's text. Pin the three cases with exact strings
-  (azure-onboarding-state.test.ts; azure-onboarding-screen.dom.test.tsx:815
-  keeps its Defender-only case). If [[AZR-116]] measures that Send suffices,
-  the fix is instead to relax the Activity Log gate.
 
 - **AZR-143** Cribl source plan reads 'not cross-checked' when the directory lists the object id under another client id
   `AZR-F9` `bug` `settled`
@@ -2199,31 +2176,27 @@ Settled and unblocked, sequenced behind now.
   (b) at the resource group AZR-22's form supplies, (c) at the chosen
   namespace. dependsOn is now [[AZR-11]], which supplies the namespace.
 
-- **CAP-10** Measure the Activity Log diagnostic-setting write so its section stops reading 'not measured'
+- **CAP-13** Live-verify a measured denial on the Defender and Activity Log sections (CAP-7a, CAP-10)
   `CAP-F1` `enabler` `settled`
-  SPLIT 2026-11-17 from [[AZR-98]] (its KNOWN GAP 2). ACTIVITY_LOG_PERMISSIONS
-  (domain/onboarding-sections/automation-permissions.ts:172-184) has measured:
-  [] because no capability covers Microsoft.Insights/diagnosticSettings/write
-  (and /read) at the subscription, so the section always banners 'not
-  measured'. SCOPE: add capabilities for the subscription-scope
-  Microsoft.Insights/diagnosticSettings read, write and delete (the delete is
-  AZR-105's Remove, activity-log-export/activity-log-permissions.ts:34-40),
-  measured by the same subscription-scope RBAC evaluation as CAP-7a (no
-  probe), and move the subscription row from notMeasured to measured. DECIDED
-  2026-11-17: the write and delete are NOT grant-only. The setting is an
-  extension resource on the subscription itself
-  (/subscriptions/<sub>/providers/Microsoft.Insights/diagnosticSettings/<name>;
-  least-privilege/operations.ts gives scope 'subscription'), so no assignment
-  below the subscription can grant it and the subscription-scope evaluation is
-  authoritative for a denial - unlike the Defender automation write, which
-  lives in a resource group (GRANT_ONLY_AZURE_ACTIONS). Do not add them there;
-  a pin holds that, which is what lets the LIVE CHECK below expect DENIED. The
-  namespace-rule action stays not measured until [[CAP-9]]. Pins as CAP-7a's:
-  granted, denied, unknown and never-checked rows. LIVE CHECK (also covers
-  CAP-7a's unobserved case): an identity lacking
-  Microsoft.Insights/diagnosticSettings/write and
-  Microsoft.Security/automations/read shows the DENIED banner on both sections
-  in Live Preview, with Deploy still clickable.
+  SPLIT 2026-11-18 from [[CAP-10]], which closed on pins with its LIVE CHECK
+  not run; it also carries [[CAP-7]]'s unobserved case (CAP-7a closed on pins
+  and handed its measured-denial observation to CAP-10's live check). A
+  measured Defender or Activity Log denial has never been seen in Live
+  Preview, and that is the case the rule 'audits inform, never forbid' depends
+  on. SCOPE (the LIVE CHECK as CAP-10 wrote it): in Live Preview, with an
+  identity lacking Microsoft.Insights/diagnosticSettings/write and
+  Microsoft.Security/automations/read at the subscription (a role assignment
+  the operator makes or removes by hand, outside the app), run Re-check
+  permissions and confirm (1) the Defender for Cloud alert export section and
+  the Activity Log export section each show the DENIED error banner naming the
+  action, the role and the How-to section; (2) each Deploy button stays
+  clickable, with the caution 'This check never disables Deploy; Azure's
+  answer decides.' beside it and in its aria-describedby; (3) if the identity
+  also lacks diagnosticSettings/read, the Activity Log section's own list read
+  fails and disables its Deploy with that reason, and the caution beside it
+  does not claim the button is available. Nothing needs deploying: the
+  two-step confirm writes only on its second click. Done = verified live, with
+  what was observed recorded here.
 
 - **AZR-142** Live-verify the in-app Data Receiver grant and measure its propagation delay
   `AZR-F9` `enabler` `settled`
@@ -2849,7 +2822,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (247)
+## Done (249)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5558,7 +5531,8 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   CAP-9 instead of this card, because the namespace write it needs is in the
   moved half. Unverified live: a MEASURED DENIAL of a Defender action has
   never been seen in Live Preview (AZR-60's live note: nothing in the lab
-  measures as denied); CAP-10's live check covers it.
+  measures as denied); CAP-10's live check covers it, and since 2026-11-18
+  that check is its own card, [[CAP-13]].
 
 - **DBT-148** listAllPages reads a 2xx page with no `value` array as zero items
   `DBT-F1` `bug` `settled` `verified: pins`
@@ -10268,3 +10242,183 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   (mutation-checked). Live Preview verification is pending. REVIEW FIX: a
   How-to source whose choice is unknown shows the named note, never deploy
   controls (not reachable from rowChoices today; held as a guard).
+
+- **AZR-117** The Event Hub rule note recommends a Send-only rule while the Activity Log deploy refuses one
+  `AZR-F9` `bug` `settled` `verified: pins`
+  FOUND 2026-11-17 in committed code (AZR-98's KNOWN GAPS, carded at
+  closeout). The shared Event Hub prerequisite shows ruleNote
+  (screens/azure-onboarding/azure-onboarding-state.ts:860-864) beside any
+  Manage-capable rule: 'A dedicated rule with only Send rights is safer.' The
+  Activity Log section on the same screen requires Manage
+  (activity-log-state.ts:134-137, activity-log-section.tsx:316: 'A diagnostic
+  setting needs a namespace rule with Manage rights, because Azure creates the
+  hub itself'). An operator who follows the note makes a Send-only rule in the
+  Azure portal (the app cannot create one: the 'Create Send-only rule' button
+  at eventhub-prerequisite-section.tsx:353-355 is disabled, with
+  CREATE_NOT_AVAILABLE beneath it, and its label repeats the same Send-only
+  advice), picks it in the rule picker, and is then refused by the Activity
+  Log gate. Reproduce through the picker, not the disabled button. SCOPE:
+  ruleNote takes the selected items; when a selected source needs Manage
+  (activityLog today; entraId when AZR-99 lands), the note says that source
+  needs Manage instead of recommending Send-only; the Defender-only case keeps
+  today's text. Pin the three cases with exact strings
+  (azure-onboarding-state.test.ts; azure-onboarding-screen.dom.test.tsx:815
+  keeps its Defender-only case). If [[AZR-116]] measures that Send suffices,
+  the fix is instead to relax the Activity Log gate. DONE 2026-11-18 (pins;
+  nothing sent to Azure). DECIDED FROM MICROSOFT'S DOCUMENTATION: the gate is
+  right and the note was wrong.
+  learn.microsoft.com/azure/azure-monitor/data-collection/diagnostic-settings
+  (Destinations table, Azure Event Hubs row, read 2026-11-18): "Streaming to
+  event hubs requires Manage, Send, and Listen permissions. To update the
+  diagnostic setting to include streaming, you must have the ListKey
+  permission on that Event Hubs authorization rule." Not ambiguous, so the
+  Activity Log gate (and Entra ID's, which landed with AZR-99 and has the same
+  refusal) keep requiring Manage and nothing is relaxed. FIX: ruleNote
+  (azure-onboarding-state.ts) now takes the titles of the chosen sources that
+  stream through a diagnostic setting (MANAGE_RULE_SOURCE_IDS = core's
+  AUTO_HUB_SOURCE_IDS, the Event Hub sources whose hubs Azure creates:
+  diagnosticSettingsInitiative, communityPolicyInitiative, activityLog,
+  entraId; sourcesNeedingManageRule over the screen's chosen ids, either mode,
+  because a How-to operator makes the same setting by hand). With one chosen:
+  a rule without Manage gets a WARNING in the gate's terms ('The rule SendOnly
+  has Send. Azure Activity Log needs a rule with Manage rights, because a
+  diagnostic setting streams to an Event Hub only through a rule with Manage,
+  Send and Listen rights. Choose a rule with Manage rights.'), a rule with
+  Manage gets an INFO line saying it is what the source needs, and 'Send-only
+  is safer' is never shown (not even by the built-in rule's name). With none
+  (Defender only, or nothing chosen): today's text, unchanged. The disabled
+  create-rule button reads createRuleLabel: 'Create Manage rule' when such a
+  source is chosen, 'Create Send-only rule' otherwise. activity-log-setting.ts
+  cites the doc instead of 'inferred'. ADR 0005 has an appended addendum.
+  PINS: azure-onboarding-state.test.ts (the three cases with exact strings,
+  the label, MANAGE_RULE_SOURCE_IDS); activity-log-state.test.ts and
+  entra-setting-state.test.ts (for six rights combinations the note warns
+  exactly when that gate refuses, and never says 'safer');
+  azure-onboarding-screen.dom.test.tsx (Activity Log chosen + SendOnly picked
+  through the picker: exact warning, no 'safer', 'Create Manage rule'
+  disabled; then the Manage rule: exact info line). The two Defender-only DOM
+  pins now mount with a Defender-only saved selection - the default selection
+  chooses the Activity Log, which is the bug as shipped. Mutation-checked:
+  note ignoring the sources (4 pins fail), label fixed to Send-only (1),
+  screen not passing the sources (1). UNVERIFIED LIVE: whether Azure actually
+  refuses a Send-only rule for a diagnostic setting (AZR-116 item 1); if it
+  accepts one, the gate and this note relax together. REVIEW ROUND 1
+  (2026-11-18): the first cut listed only activityLog and entraId, so choosing
+  a policy initiative alone (or with the Defender export) still showed
+  'Send-only is safer' and 'Create Send-only rule' while the How-to step
+  eh-rule-diagnostic told the operator to create a Manage rule and its
+  eh-rule-manage check refused a Send-only one - the same contradiction. The
+  list is now derived from the catalog (AUTO_HUB_SOURCE_IDS, exported from
+  core), not retyped. Pins: the list equals AUTO_HUB_SOURCE_IDS and
+  eh-rule-diagnostic's sourceIds; the initiative-only case (exact warning and
+  info strings, 'Create Manage rule') and the community initiative + Defender
+  case. Mutation-checked: list cut back to the two sources (3 pins fail);
+  eh-rule-diagnostic's sources drifting from the list (1). REVIEW ROUND 2
+  (2026-11-18): while the progress document is not loaded (loading,
+  unreadable, foreign, no store) the screen's chosen list is [], which read as
+  'nothing chosen' and brought back 'Send-only is safer' and 'Create Send-only
+  rule' although the saved selection may choose the Activity Log. The screen
+  now passes null for an unknown choice; ruleNote(rule, null) is one neutral
+  info line for every rule ('Which sources are chosen is not known yet, so
+  this note cannot say which rule they need. A source that streams through a
+  diagnostic setting needs a rule with Manage rights; the Defender for Cloud
+  alert export alone does not.') and the button reads 'Create authorization
+  rule'. Pins: azure-onboarding-state.test.ts (null: exact note for three
+  rules, the label); azure-onboarding-screen.dom.test.tsx (progress load
+  refused: exact note for the built-in and the Send-only rule, no 'safer',
+  'Create authorization rule' and neither other label). Mutation-checked: the
+  screen passing the empty list (DOM pin fails), ruleNote treating null as
+  none (2 fail). REVIEW ROUND 4 (2026-11-18): (1) the unknown case covered
+  only the progress document; with progress read but the coverage selection
+  unread (loading, refused, foreign, unreadable) every Automate-mode source
+  read as not chosen - and the Activity Log and Entra ID default to Automate -
+  so the note fell back to 'Send-only is safer' and 'Create Send-only rule'.
+  The screen now derives the sources from the chooser's per-source answer
+  (rowChoices) via manageRuleSourcesOf: null while any Manage source's choice
+  is unknown, from either document. (2) With a Manage source chosen, the
+  built-in RootManageSharedAccessKey had lost its own note and got an info
+  line; it is now a warning that appends 'RootManageSharedAccessKey is the
+  namespace's built-in rule. Use a dedicated rule with Manage, Send and Listen
+  rights instead, so it can be rotated or removed on its own.'
+  (eh-rule-diagnostic's advice; never Send-only). Pins:
+  azure-onboarding-state.test.ts (manageRuleSourcesOf known/unknown/missing
+  and through rowChoices; the built-in warning exact for two source sets; a
+  dedicated Manage rule keeps the info line);
+  azure-onboarding-screen.dom.test.tsx (selection load refused: neutral note
+  for both rules, 'Create authorization rule'; Activity Log chosen + built-in
+  rule: exact warning). Unverified live, as before.
+
+- **CAP-10** Measure the Activity Log diagnostic-setting write so its section stops reading 'not measured'
+  `CAP-F1` `enabler` `settled` `verified: pins`
+  SPLIT 2026-11-17 from [[AZR-98]] (its KNOWN GAP 2). ACTIVITY_LOG_PERMISSIONS
+  (domain/onboarding-sections/automation-permissions.ts:172-184) has measured:
+  [] because no capability covers Microsoft.Insights/diagnosticSettings/write
+  (and /read) at the subscription, so the section always banners 'not
+  measured'. SCOPE: add capabilities for the subscription-scope
+  Microsoft.Insights/diagnosticSettings read, write and delete (the delete is
+  AZR-105's Remove, activity-log-export/activity-log-permissions.ts:34-40),
+  measured by the same subscription-scope RBAC evaluation as CAP-7a (no
+  probe), and move the subscription row from notMeasured to measured. DECIDED
+  2026-11-17: the write and delete are NOT grant-only. The setting is an
+  extension resource on the subscription itself
+  (/subscriptions/<sub>/providers/Microsoft.Insights/diagnosticSettings/<name>;
+  least-privilege/operations.ts gives scope 'subscription'), so no assignment
+  below the subscription can grant it and the subscription-scope evaluation is
+  authoritative for a denial - unlike the Defender automation write, which
+  lives in a resource group (GRANT_ONLY_AZURE_ACTIONS). Do not add them there;
+  a pin holds that, which is what lets the LIVE CHECK below expect DENIED. The
+  namespace-rule action stays not measured until [[CAP-9]]. Pins as CAP-7a's:
+  granted, denied, unknown and never-checked rows. LIVE CHECK (also covers
+  CAP-7a's unobserved case): an identity lacking
+  Microsoft.Insights/diagnosticSettings/write and
+  Microsoft.Security/automations/read shows the DENIED banner on both sections
+  in Live Preview, with Deploy still clickable. DONE 2026-11-18 (pins; no
+  Azure call made). New capabilities subscription-diagnostics.read, .write and
+  .delete (capabilities.ts), mapped from
+  Microsoft.Insights/diagnosticSettings/read, /write and /delete (the registry
+  operations activityLog.diagnosticSettings.read,
+  activityLog.diagnosticSetting.write and .delete, exported as
+  ACTIVITY_LOG_SETTINGS_READ/WRITE/DELETE) in AZURE_ACTION_CAPABILITIES, and
+  measured by the capability audit's existing subscription-scope evaluation
+  (SUBSCRIPTION_AUDIT_ACTIONS gains ACTIVITY_LOG_SUBSCRIPTION_ACTIONS): no new
+  request on any path (the subscription paths reuse the preflight's read;
+  existing-rg and lab-byo-rg the one subscription GET already made), never a
+  probe. TWO-SIDED as decided: none is in GRANT_ONLY_AZURE_ACTIONS (pinned in
+  capability-mapping.test.ts: a subscription miss maps to denied).
+  ACTIVITY_LOG_PERMISSIONS now measures read (core), write (core) and delete
+  (informational: Remove's, which Deploy does not need; its partial banner
+  asks for the role 'to remove it from this app' via a new optional grantFor,
+  Defender's copy unchanged); only the rule's listKeys stays not measured
+  (CAP-9). The Activity Log section gets the Defender section's treatment:
+  banner with Re-check permissions, the shared MeasuredActionList (moved to
+  automation-permission-banner.tsx), and a measured core denial as a caution
+  beside Deploy and in its aria-describedby - Deploy stays clickable (banners
+  only, never a disabled button). Fallbacks (rule 2, 'every write has one'):
+  write -> new kind activity-log-howto-steps (the Activity Log How-to steps),
+  delete -> a role-assignment request that names no role (the app-permissions
+  pin). PINS: capability-mapping.test.ts (mapping, not grant-only, granted /
+  reader / unread, never probed), capability-audit.test.ts (granted, denied,
+  notAction, subscription path with no extra request, unread records nothing),
+  automation-permissions.test.ts (declaration; granted, denied with exact
+  banner and caution, delete-only partial, unknown, never-checked and
+  unreachable rows), activity-log-section.dom.test.tsx (granted / denied with
+  Deploy still clickable and deploying / unknown / never-checked through the
+  real screen). Mutation-checked: write made grant-only in the mapping (7
+  fail), in the declaration (4), audit dropping the actions (6), section
+  dropping the measured list (4), caution disabling Deploy (1). LIVE CHECK
+  STILL OPEN as written above (an identity lacking diagnosticSettings/write
+  and automations/read shows DENIED on both sections with Deploy clickable):
+  not run, no Live Preview in this session. It is now its own card,
+  [[CAP-13]]. REVIEW ROUND 2 (2026-11-18): the live check had no open owner
+  (CAP-7 and this card each pointed at it), so it moved to [[CAP-13]]. The
+  denial caution said 'Deploy stays available because Azure's answer decides.'
+  while a measured read denial goes with the section's own list 403, which
+  disables Deploy with 'could not be read' (and before any read, 'Read the
+  subscription's diagnostic settings first.'), so the two sentences beside one
+  button contradicted each other. It now reads 'This check never disables
+  Deploy; Azure's answer decides.' (automation-permissions.ts; the Defender
+  caution shares it). Pins: automation-permissions.test.ts exact caution;
+  activity-log-section.dom.test.tsx read-denied case (rows, exact caution
+  beside a disabled Deploy before and after a 403 read, the exact
+  could-not-be-read reason, aria-describedby naming both, no 'stays available'
+  text). Mutation-checked: the old wording fails 2 core pins and the DOM pin.

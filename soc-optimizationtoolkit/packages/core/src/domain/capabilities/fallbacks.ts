@@ -33,7 +33,8 @@ export type CapabilityFallbackKind =
   | "role-assignment-request"
   | "app-registration-request"
   | "cribl-pack"
-  | "defender-howto-steps";
+  | "defender-howto-steps"
+  | "activity-log-howto-steps";
 
 /** What the operator gets when an action is blocked. */
 export interface CapabilityFallback {
@@ -139,6 +140,25 @@ export const CAPABILITY_FALLBACKS: Readonly<
     label: "Role-assignment change request",
     action:
       "Send it to whoever administers RBAC, and ask them to add the role that creates managed identities on the identity's resource group - the request does not include it yet.",
+  },
+  // CAP-10. The Activity Log's How-to steps create the same subscription
+  // diagnostic setting the Automated mode PUTs, so they are the artifact for
+  // the write - the Defender kind's reasoning. Naming the role is fine here:
+  // this kind is not the role-assignment request.
+  "subscription-diagnostics.write": {
+    kind: "activity-log-howto-steps",
+    label: "How-to steps for the Activity Log diagnostic setting",
+    action: "Hand them to someone with Monitoring Contributor on the subscription to follow.",
+  },
+  // CAP-10. Remove has no How-to artifact; the handoff is the request or the
+  // portal. No role is named: the request generated today is the setup
+  // path's, which does not include the removal's role (the pin in
+  // app-permissions.test.ts holds every role-assignment offer to that).
+  "subscription-diagnostics.delete": {
+    kind: "role-assignment-request",
+    label: "Role-assignment change request",
+    action:
+      "Send it to whoever administers RBAC, and ask them to add the role that removes the subscription's diagnostic settings - the request does not include it yet - or to remove the setting in the Azure portal.",
   },
 });
 

@@ -265,6 +265,10 @@ describe("persistence", () => {
       expect(result.set.verdicts["policy.assign"]).toBe("denied");
       expect(result.set.verdicts["policy.remediate"]).toBe("denied");
       expect(result.set.verdicts["identity.create"]).toBeUndefined();
+      // CAP-10: Microsoft.Insights/* grants the subscription diagnostic setting.
+      expect(result.set.verdicts["subscription-diagnostics.read"]).toBe("granted");
+      expect(result.set.verdicts["subscription-diagnostics.write"]).toBe("granted");
+      expect(result.set.verdicts["subscription-diagnostics.delete"]).toBe("granted");
     });
 
     it("measures the capability enablers in that same single read (CAP-2, CAP-3)", async () => {
@@ -297,6 +301,10 @@ describe("persistence", () => {
         "Microsoft.Authorization/policyAssignments/write",
         "Microsoft.PolicyInsights/remediations/write",
         "Microsoft.ManagedIdentity/userAssignedIdentities/write",
+        // CAP-10: the Activity Log export's subscription diagnostic setting.
+        "Microsoft.Insights/diagnosticSettings/read",
+        "Microsoft.Insights/diagnosticSettings/write",
+        "Microsoft.Insights/diagnosticSettings/delete",
       ]);
       expect(result.set.verdicts["policy.assign"]).toBe("granted");
       expect(result.set.verdicts["policy.remediate"]).toBe("granted");
@@ -315,6 +323,10 @@ describe("persistence", () => {
       expect(result.set.verdicts["policy.assign"]).toBeUndefined();
       expect(result.set.verdicts["policy.remediate"]).toBeUndefined();
       expect(result.set.verdicts["identity.create"]).toBeUndefined();
+      // Nor the Activity Log setting (CAP-10): unread is unknown, never denied.
+      expect(result.set.verdicts["subscription-diagnostics.read"]).toBeUndefined();
+      expect(result.set.verdicts["subscription-diagnostics.write"]).toBeUndefined();
+      expect(result.set.verdicts["subscription-diagnostics.delete"]).toBeUndefined();
     });
 
     it("adds no request to an existing-subscription audit, which measures them itself", async () => {
@@ -325,6 +337,58 @@ describe("persistence", () => {
         { ...INPUT, setupPath: "existing-subscription" },
       );
       expect(azure.calls.filter((c) => c.path === SUB_PERMISSIONS)).toHaveLength(1);
+    });
+  });
+
+  // CAP-10. Two-sided at the subscription: the setting is an extension
+  // resource on the subscription itself, so a miss there is a denial.
+  describe("the Activity Log diagnostic setting is measured at the subscription (CAP-10)", () => {
+    const SUB_PERMISSIONS = `/subscriptions/${SUB}/providers/Microsoft.Authorization/permissions`;
+    const verdicts = (set: CapabilitySet) => [
+      set.verdicts["subscription-diagnostics.read"],
+      set.verdicts["subscription-diagnostics.write"],
+      set.verdicts["subscription-diagnostics.delete"],
+    ];
+
+    it("granted: Monitoring Contributor's Microsoft.Insights/* at the subscription", async () => {
+      const azure = new FakeAzureManagement();
+      azure.respondWith(permsResponse(OWNER), OK, OK, OK, OK, OK, permsResponse(permSet({ actions: ["Microsoft.Insights/*"] })));
+      const result = await runCapabilityAudit({ azure, cribl: new FakeCriblClient() }, INPUT);
+      expect(azure.calls.filter((c) => c.path === SUB_PERMISSIONS)).toHaveLength(1);
+      expect(verdicts(result.set)).toEqual(["granted", "granted", "granted"]);
+    });
+
+    it("denied: a reader can list but not write or delete, and the miss IS recorded (not grant-only)", async () => {
+      const azure = new FakeAzureManagement();
+      azure.respondWith(permsResponse(OWNER), OK, OK, OK, OK, OK, permsResponse(permSet({ actions: ["*/read"] })));
+      const result = await runCapabilityAudit({ azure, cribl: new FakeCriblClient() }, INPUT);
+      expect(verdicts(result.set)).toEqual(["granted", "denied", "denied"]);
+    });
+
+    it("denied: a notAction carving the write out of Microsoft.Insights/* is honoured", async () => {
+      const azure = new FakeAzureManagement();
+      azure.respondWith(
+        permsResponse(OWNER),
+        OK,
+        OK,
+        OK,
+        OK,
+        OK,
+        permsResponse(permSet({ actions: ["Microsoft.Insights/*"], notActions: ["Microsoft.Insights/diagnosticSettings/write"] })),
+      );
+      const result = await runCapabilityAudit({ azure, cribl: new FakeCriblClient() }, INPUT);
+      expect(verdicts(result.set)).toEqual(["granted", "denied", "granted"]);
+    });
+
+    it("on a subscription setup path, from the preflight's own read with no extra request", async () => {
+      const azure = new FakeAzureManagement();
+      azure.respondWith(permsResponse(permSet({ actions: ["*/read"] })), OK, OK, OK, OK, OK, OK);
+      const result = await runCapabilityAudit(
+        { azure, cribl: new FakeCriblClient() },
+        { ...INPUT, setupPath: "existing-subscription" },
+      );
+      expect(azure.calls.filter((c) => c.path === SUB_PERMISSIONS)).toHaveLength(1);
+      expect(verdicts(result.set)).toEqual(["granted", "denied", "denied"]);
     });
   });
 

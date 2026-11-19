@@ -32,6 +32,7 @@ export function fallbackActionLabel(kind: CapabilityFallbackKind): string {
     case "cribl-pack":
       return "Download the pack (.crbl)";
     case "defender-howto-steps":
+    case "activity-log-howto-steps":
       return "Show the How-to steps";
   }
 }
@@ -53,7 +54,7 @@ export function isInlineArtifact(kind: CapabilityFallbackKind): boolean {
 
 /** One line of context under the offer, or null when the label says enough. */
 export function fallbackHint(kind: CapabilityFallbackKind): string | null {
-  if (kind === "defender-howto-steps") {
+  if (kind === "defender-howto-steps" || kind === "activity-log-howto-steps") {
     // Not a run: the steps are rendered, and rendering them writes nothing.
     return "Written out as steps - showing them makes no live changes.";
   }
@@ -119,6 +120,12 @@ export function fallbackRunPointer(kind: CapabilityFallbackKind): string | null 
         "produces these: set the Defender export to How-to and its steps " +
         "carry the export body the app would create, with the connection " +
         "string left for whoever follows them."
+      );
+    case "activity-log-howto-steps":
+      return (
+        "Azure Native Source Onboarding's How to set it up yourself section " +
+        "produces these: set the Azure Activity Log to How-to and its steps " +
+        "create the same subscription diagnostic setting the app would."
       );
     case "role-assignment-request":
     case "app-registration-request":

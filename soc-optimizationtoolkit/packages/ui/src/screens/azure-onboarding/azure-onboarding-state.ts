@@ -65,8 +65,10 @@
  */
 
 import {
+  AUTO_HUB_SOURCE_IDS,
   DEFAULT_NAMESPACE_RULE,
   DEFENDER_EXPORT_NAME,
+  onboardingSource,
   ONBOARDING_SECTIONS,
   anyStandard,
   decodeSelection,
@@ -864,14 +866,149 @@ export function ruleListMessage(read: EventHubTargetRead<EventHubTargetRule>): P
 }
 
 /**
- * A note beside a chosen rule, or null. A rule with Manage rights (including
- * the namespace's built-in rule) works, but a dedicated Send-only rule is
- * safer. It is never preselected; the operator picks it knowingly.
+ * The sources whose Azure object is a DIAGNOSTIC SETTING streaming through the
+ * rule picked in the Event Hub section, so the rule must have Manage rights.
+ * Microsoft documents it for every diagnostic setting with an Event Hub
+ * destination: "Streaming to event hubs requires Manage, Send, and Listen
+ * permissions" (learn.microsoft.com/azure/azure-monitor/data-collection/
+ * diagnostic-settings, Destinations table). The Activity Log and Entra ID
+ * deploy gates refuse a rule without Manage for that reason
+ * (activity-log-state, entra-setting-state), and the two policy initiatives
+ * deploy diagnostic settings of the same kind (their How-to step
+ * eh-rule-diagnostic creates a Manage rule and checks it). The Defender
+ * export is a continuous export, not a diagnostic setting, and writes with
+ * Send.
+ *
+ * Derived from the catalog, never retyped: these are exactly the Event Hub
+ * sources whose hubs Azure creates itself (core's AUTO_HUB_SOURCE_IDS), the
+ * same list the How-to guide's Manage-rule step is shown for, so a new
+ * auto-hub source cannot get one answer from the guide and another here.
  */
-export function ruleNote(rule: { readonly name: string; readonly rights: readonly string[] }): string | null {
+export const MANAGE_RULE_SOURCE_IDS: readonly OnboardingItemId[] = AUTO_HUB_SOURCE_IDS;
+
+/**
+ * The titles of the CHOSEN sources that need a Manage rule, in
+ * {@link MANAGE_RULE_SOURCE_IDS} order. Chosen in either mode: a How-to
+ * operator creates the same diagnostic setting by hand, and Azure asks the
+ * same of the rule.
+ */
+export function sourcesNeedingManageRule(chosen: readonly string[]): string[] {
+  return MANAGE_RULE_SOURCE_IDS.filter((id) => chosen.includes(id)).map(
+    (id) => onboardingSource(id)?.title ?? id,
+  );
+}
+
+/**
+ * What the rule note is told about the chosen sources, from the chooser's
+ * answer per source ({@link RowChoice}, the same map the method sections
+ * read): the titles of the chosen Manage sources, or NULL while any Manage
+ * source's choice is unknown. Unknown covers BOTH documents: the progress
+ * document (every row), and the coverage selection for a Manage source in
+ * Automate mode - the Activity Log and Entra ID default to Automate, so an
+ * unread selection is not "none chosen" and must not earn Send-only advice.
+ * A missing row is unknown too (the screen's own fallback is unknown).
+ */
+export function manageRuleSourcesOf(choices: ReadonlyMap<string, RowChoice>): string[] | null {
+  const chosen: string[] = [];
+  for (const id of MANAGE_RULE_SOURCE_IDS) {
+    const choice = choices.get(id);
+    if (choice === undefined || choice.kind === "unknown") return null;
+    if (choice.kind === "chosen") chosen.push(id);
+  }
+  return sourcesNeedingManageRule(chosen);
+}
+
+/** "a", "a and b", "a, b and c". */
+function listed(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1] ?? ""}`;
+}
+
+const MANAGE_RULE_WHY =
+  "a diagnostic setting streams to an Event Hub only through a rule with Manage, Send and Listen rights";
+
+/**
+ * The note while WHICH sources are chosen is not known (the progress document
+ * is loading, could not be read, or there is no store): it recommends neither
+ * kind of rule, because either recommendation could be the one a chosen
+ * source's deploy refuses.
+ */
+export const RULE_NOTE_SOURCES_UNKNOWN =
+  "Which sources are chosen is not known yet, so this note cannot say which rule they need. " +
+  "A source that streams through a diagnostic setting needs a rule with Manage rights; " +
+  "the Defender for Cloud alert export alone does not.";
+
+/**
+ * The advice for the namespace's built-in rule when a chosen source needs
+ * Manage: a dedicated rule with the same rights (the How-to step
+ * eh-rule-diagnostic's wording), never Send-only.
+ */
+function builtInRuleAdvice(name: string): string {
+  return (
+    `${name} is the namespace's built-in rule. Use a dedicated rule with Manage, Send and Listen rights instead, ` +
+    "so it can be rotated or removed on its own."
+  );
+}
+
+/**
+ * A note beside a chosen rule, or null. PER SOURCE, so it never recommends a
+ * rule a chosen source's own deploy refuses:
+ *
+ *   - a chosen source needs Manage (`manageSources` non-empty): a rule without
+ *     Manage is warned about in the same terms as that source's deploy gate,
+ *     and a rule with Manage is said to be what it needs - never "Send-only is
+ *     safer". The namespace's built-in rule is still warned about by name,
+ *     with a dedicated Manage, Send and Listen rule as the advice;
+ *   - which sources are chosen is NOT KNOWN (`manageSources` null): a
+ *     neutral note, RULE_NOTE_SOURCES_UNKNOWN, for any rule - never "Send-only
+ *     is safer", which a chosen Manage source would refuse;
+ *   - otherwise (the Defender export alone, or nothing chosen yet): a rule
+ *     with Manage rights (including the namespace's built-in rule, noted by
+ *     name) works, but a dedicated Send-only rule is safer.
+ *
+ * Never preselected; the operator picks the rule knowingly.
+ */
+export function ruleNote(
+  rule: { readonly name: string; readonly rights: readonly string[] },
+  manageSources: readonly string[] | null = [],
+): PickerMessage | null {
+  if (manageSources === null) return { tone: "info", text: RULE_NOTE_SOURCES_UNKNOWN };
   const manages = rule.rights.some((r) => r.toLowerCase() === "manage");
+  if (manageSources.length > 0) {
+    const who = listed(manageSources);
+    const verb = manageSources.length === 1 ? "needs" : "need";
+    if (!manages) {
+      const rights = rule.rights.length > 0 ? rule.rights.join(", ") : "no rights";
+      return {
+        tone: "warning",
+        text:
+          `The rule ${rule.name} has ${rights}. ${who} ${verb} a rule with Manage rights, because ${MANAGE_RULE_WHY}. ` +
+          "Choose a rule with Manage rights.",
+      };
+    }
+    const enough = `${who} ${verb} a rule with Manage rights, as this one has, because ${MANAGE_RULE_WHY}.`;
+    // The built-in rule has the rights but is still named: the How-to step
+    // eh-rule-diagnostic says to use a dedicated rule, not this one.
+    if (rule.name === DEFAULT_NAMESPACE_RULE) {
+      return { tone: "warning", text: `${enough} ${builtInRuleAdvice(rule.name)}` };
+    }
+    return { tone: "info", text: enough };
+  }
   if (!manages && rule.name !== DEFAULT_NAMESPACE_RULE) return null;
-  return "This rule can also manage the namespace. A dedicated rule with only Send rights is safer.";
+  return {
+    tone: "warning",
+    text: "This rule can also manage the namespace. A dedicated rule with only Send rights is safer.",
+  };
+}
+
+/**
+ * The label of the (not yet available) create-rule button: the kind of rule
+ * the chosen sources need, so it never offers what a chosen source refuses.
+ * Null (which sources are chosen is not known) names no kind.
+ */
+export function createRuleLabel(manageSources: readonly string[] | null): string {
+  if (manageSources === null) return "Create authorization rule";
+  return manageSources.length > 0 ? "Create Manage rule" : "Create Send-only rule";
 }
 
 // ---------------------------------------------------------------------------

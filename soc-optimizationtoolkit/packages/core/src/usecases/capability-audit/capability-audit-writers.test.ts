@@ -122,6 +122,10 @@ const AUDIT_ONLY: Readonly<Partial<Record<Capability, string>>> = {
   "policy.assign": "denied",
   "policy.remediate": "denied",
   "identity.create": "granted",
+  // CAP-10: the subscription diagnostic-settings verdicts are audit-only too.
+  "subscription-diagnostics.read": "denied",
+  "subscription-diagnostics.write": "denied",
+  "subscription-diagnostics.delete": "denied",
   "graph-licences.read": "granted",
   "graph-incidents.read": "denied",
 };
