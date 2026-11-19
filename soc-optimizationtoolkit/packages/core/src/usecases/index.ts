@@ -21,6 +21,9 @@ export * from "./defender-export";
 // AZR-98: read the subscription diagnostic settings; create-only Activity Log setting.
 export * from "./activity-log-export";
 export * from "./entra-diagnostic-export";
+// AZR-103: grant the Cribl principal Azure Event Hubs Data Receiver (plan, then confirmed PUT).
+export * from "./cribl-principal";
+export * from "./eventhub-receiver-grant";
 // DBT-301: insert routes into a routing table without touching the others.
 export * from "./route-insert";
 // AZR-35: route an onboarding source to Cribl Lake through the unroll pipeline.

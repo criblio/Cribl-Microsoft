@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**105 in the backlog, 33 in progress, 246 done.**
+**107 in the backlog, 33 in progress, 247 done.**
 
 ## By menu item
 
@@ -36,13 +36,13 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | SIEM Migration | 1 | 8 | 1 |
 | Permission Verification | 8 | 12 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 30 | 62 | 4 |
+| Azure Native Source Onboarding | 32 | 63 | 5 |
 | Azure Logging Map | 3 | 2 | 1 |
 | Tenant Logging Gaps | 1 | 3 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 19 | 6 |
 
-Open work totals 138.
+Open work totals 140.
 
 ## Epics and features
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 68% (76/111)
+### `AZR` Azure native source onboarding - 68% (77/114)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,7 +64,7 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 1/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 49/66 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-138, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117 |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 50/69 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-138, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117, AZR-141, AZR-142, AZR-143 |
 | `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 23/26 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-125*, AZR-126*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
@@ -1013,7 +1013,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (13)
+## Backlog - now (14)
 
 Next to pick up. Nothing blocks these.
 
@@ -1260,6 +1260,22 @@ Next to pick up. Nothing blocks these.
   (azure-onboarding-state.test.ts; azure-onboarding-screen.dom.test.tsx:815
   keeps its Defender-only case). If [[AZR-116]] measures that Send suffices,
   the fix is instead to relax the Activity Log gate.
+
+- **AZR-143** Cribl source plan reads 'not cross-checked' when the directory lists the object id under another client id
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-18 in review round 1 of [[AZR-103]]. crossCheckPrincipal
+  (usecases/cribl-principal, used by plan-cribl-source for an Entra ID Cribl
+  source) only looks for the CLIENT id in the directory listing. When the
+  listing lacks the client id but lists the typed object id under ANOTHER
+  appId, the directory has disproved the pair, yet the plan reads
+  principalCheck 'not-cross-checked' and goes on to read the receive role for
+  that other principal, so its role verdict describes the wrong identity and a
+  source is offered that will fail to read. AZR-103 closed the same gap for
+  the grant (resolveCriblPrincipal refuses principal-mismatch, naming the
+  appId and display name the directory gives); this card applies the same rule
+  to crossCheckPrincipal so both callers agree, with a pin in
+  create-cribl-source.test.ts (graphOf([sp(OBJ, 'other-client')]) refuses
+  principal-mismatch before any Azure or Cribl call).
 
 ---
 
@@ -1920,25 +1936,6 @@ Settled and unblocked, sequenced behind now.
   DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture
   live.
 
-- **AZR-103** Grant the Cribl service principal 'Azure Event Hubs Data Receiver' on the hub or namespace from the app, behind a confirm
-  `AZR-F9` `story` `settled`
-  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
-  Preview (all ten sections walked), asked for by the operator to find what is
-  missing to finish automating the sources. The recommended Entra ID
-  credential ([[AZR-59]]) needs the Cribl principal to hold Azure Event Hubs
-  Data Receiver; today that is only a How-to step ('Give the Cribl principal
-  Azure Event Hubs Data Receiver on the hub ...', 'Not yet confirmed against
-  live Azure'), Validate reads it, and [[AZR-88]] asks for it in a change
-  request. Nothing creates it, so the default credential cannot work without a
-  hand step. Scope: PUT Microsoft.Authorization/roleAssignments at the hub
-  (named-hub lanes) or namespace (auto-created insights-* hubs) with a
-  deterministic GUID name, create-only, refusing when the assignment exists
-  for that principal and role (already-applied) and when the app identity
-  lacks Microsoft.Authorization/roleAssignments/write (name the role needed:
-  User Access Administrator or Role Based Access Control Administrator,
-  ideally constrained to this role). Least-privilege registry and change
-  request updated. Measure the propagation delay before Cribl's first read.
-
 - **AZR-104** Route the remaining onboarding sources (Entra ID, the diagnostic-settings initiatives, XDR, flow logs) from their Cribl source to a destination
   `AZR-F9` `story` `settled` `blocked by AZR-35`
   FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
@@ -2228,9 +2225,24 @@ Settled and unblocked, sequenced behind now.
   Microsoft.Security/automations/read shows the DENIED banner on both sections
   in Live Preview, with Deploy still clickable.
 
+- **AZR-142** Live-verify the in-app Data Receiver grant and measure its propagation delay
+  `AZR-F9` `enabler` `settled`
+  SPLIT 2026-11-18 from [[AZR-103]], closed on pins. In Live Preview with the
+  operator present, on a lab hub: (1) Check the grant resolves the principal
+  (typed and cross-checked, and blank looked up from the client id); (2) the
+  PUT at the hub with the deterministic name succeeds and reads back; a second
+  Check reads already-granted, made by this app; (3) a grant made by hand at
+  the namespace reads as covering; Azure's 409 RoleAssignmentExists body
+  matches the code the app expects; (4) an identity holding only RBAC
+  Administrator on the hub, conditioned to Data Receiver and service
+  principals, can make the write, and one without it gets the 403 message; (5)
+  measure the time from the PUT to the Cribl Event Hubs source reading its
+  first event, and put the number in the success message. Each write is an
+  Azure write: one confirm per write.
+
 ---
 
-## Backlog - later (39)
+## Backlog - later (40)
 
 Settled, gated on something above.
 
@@ -2820,9 +2832,24 @@ Settled, gated on something above.
   only, which AZR-81 made false (NetworkWatcherRG and the Event Grid admin
   step). FIX: move the rows into the table and correct the paragraph.
 
+- **AZR-141** Remove the Data Receiver assignment the app granted, from the teardown panel
+  `AZR-F9` `story` `settled`
+  FOUND 2026-11-18 while building [[AZR-103]]: the app now creates an Azure
+  Event Hubs Data Receiver role assignment for the Cribl principal and records
+  it (progress.receiverGrants), but nothing removes it from the app; the grant
+  panel says an administrator removes it in the portal. Scope: a row in
+  'Remove or pause what this app created' ([[AZR-105]]) per recorded grant,
+  deleting only with all three ownership signals (the record, the
+  deterministic name receiverGrantAssignmentName, the description stamp),
+  behind a confirm quoting scope, role and principal; DELETE by name, GET for
+  the 404, forget the record on removed or already-gone; refuse when the Cribl
+  source still uses Entra ID on that hub unless the operator says so. Needs
+  Microsoft.Authorization/roleAssignments/delete in the least-privilege
+  registry and the change request.
+
 ---
 
-## Done (246)
+## Done (247)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -9371,6 +9398,73 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   fingerprint records the resolved namespace location under the shared key's
   name, so naming the same address explicitly does not stale a tick. Pinned
   and mutation-checked; Live Preview verification is pending.
+
+- **AZR-103** Grant the Cribl service principal 'Azure Event Hubs Data Receiver' on the hub or namespace from the app, behind a confirm
+  `AZR-F9` `story` `settled` `verified: pins`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. The recommended Entra ID
+  credential ([[AZR-59]]) needs the Cribl principal to hold Azure Event Hubs
+  Data Receiver; today that is only a How-to step ('Give the Cribl principal
+  Azure Event Hubs Data Receiver on the hub ...', 'Not yet confirmed against
+  live Azure'), Validate reads it, and [[AZR-88]] asks for it in a change
+  request. Nothing creates it, so the default credential cannot work without a
+  hand step. Scope: PUT Microsoft.Authorization/roleAssignments at the hub
+  (named-hub lanes) or namespace (auto-created insights-* hubs) with a
+  deterministic GUID name, create-only, refusing when the assignment exists
+  for that principal and role (already-applied) and when the app identity
+  lacks Microsoft.Authorization/roleAssignments/write (name the role needed:
+  User Access Administrator or Role Based Access Control Administrator,
+  ideally constrained to this role). Least-privilege registry and change
+  request updated. Measure the propagation delay before Cribl's first read.
+  DONE 2026-11-18, PINS ONLY: nothing was granted in a real tenant; no role
+  assignment has been created by the app live. BUILT: domain/name-based-guid
+  (RFC 4122 version 5 GUIDs, pure SHA-1, pinned to RFC known-answer vectors);
+  domain/eventhub-receiver-grant (the role is EVENT_HUB_RECEIVER_ROLES'
+  built-in GUID a638d3c7-ab3a-418d-83e6-5f17a39d4fde, never a name lookup; the
+  scope is the hub by default and the namespace only by the operator's choice;
+  the assignment name is a v5 GUID of scope, role and principal, case- and
+  slash-insensitive, so a repeat PUT lands on the same name; the description
+  carries the kit ownership stamp); usecases/cribl-principal
+  (crossCheckPrincipal moved here unchanged from plan-cribl-source;
+  resolveCriblPrincipal takes the typed object id cross-checked against the
+  client id, or looks it up from the client id in the directory and refuses
+  anything but exactly one match - no directory, a refused read, none, several
+  - with the reason; never guesses; this app's own registration is refused);
+  usecases/eventhub-receiver-grant (planReceiverGrant is read-only: resolves
+  the principal, reads assignedTo() at the scope, and a covering Data Receiver
+  grant at or above it is already-granted - nothing written, nothing recorded;
+  applyReceiverGrant sends ONE PUT through the existing
+  buildRoleAssignmentRequest (which gained an optional description) and ONE
+  GET back by name; 409 RoleAssignmentExists is already-granted with no
+  record; PrincipalNotFound is said plainly; 403 names RBAC Administrator with
+  the condition). RECORD: progress.receiverGrants (scope, principal,
+  assignment name), written only after Azure accepted the app's own PUT; with
+  the deterministic name and the stamp it is the third ownership signal for a
+  removal ([[AZR-141]]). UI: 'Azure Event Hubs Data Receiver for the Cribl
+  principal' in the Cribl source section: the not-measured permission banner
+  (never a block), a hub/namespace radio (hub default), Check the grant, a
+  What-will-be-created list, Grant then Confirm quoting role and GUID,
+  principal (and how its object id was found), scope id and assignment name;
+  plan and arm drop on any change to the inputs; the recorded grants are
+  listed. LEAST PRIVILEGE: operation eventhub.receiverGrant.write
+  (Microsoft.Authorization/roleAssignments/write, RBAC Administrator at the
+  resource, documented not measured), function eventhub-receiver-grant,
+  FEATURE_ROLES row 'RBAC Administrator (Event Hub)' with the condition only
+  Data Receiver, only service principals; the resource-creation change request
+  (AZR-88 text) offers the in-app grant with the same role and condition. ADR
+  0008 amended. UNVERIFIED LIVE (AZR-142): the PUT and its read-back, the 409
+  and PrincipalNotFound bodies, the conditioned RBAC Administrator actually
+  permitting the write, and the propagation delay before Cribl's first read
+  (not measured; the success message says Azure can take a few minutes).
+  REVIEW ROUND 1 (2026-11-18): a typed object id the directory lists under
+  ANOTHER client id now refuses principal-mismatch instead of reading 'not
+  cross-checked' (the grant would have gone to that application); and an
+  assignment this app provably made at exactly this scope (deterministic name
+  plus stamp) whose record was lost - the PUT succeeded but the KV save behind
+  the record failed before a reload - is offered 'Record it', which writes
+  only the progress document, so the AZR-141 teardown can still list it. Pins
+  only, mutation-checked.
 
 - **AZR-105** Remove (and pause where it applies) every object the onboarding screen creates: Cribl sources, the Lake route objects, the Activity Log diagnostic setting
   `AZR-F9` `story` `settled` `verified: pins`

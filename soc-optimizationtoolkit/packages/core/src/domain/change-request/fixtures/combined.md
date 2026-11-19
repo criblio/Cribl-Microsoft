@@ -221,6 +221,27 @@ one named capability and can be refused independently.
                     subscription, which subscription Reader does not reach.  
     If not granted: Those reads show as could not be read for that namespace.  
                     Nothing is changed in Azure.  
+- RBAC Administrator  [feature]  
+    Scope:          the Event Hub the Cribl principal reads, or its namespace  
+                    when that scope is chosen (skip if a role above already  
+                    covers it)  
+    Needed for:     Grant the Cribl principal Azure Event Hubs Data Receiver  
+    Why:            The Cribl Event Hubs source signs in with Entra ID as a  
+                    service principal dedicated to Cribl, which needs Azure  
+                    Event Hubs Data Receiver on the hub it reads. The  
+                    onboarding screen can make that one assignment itself (PUT  
+                    .../providers/Microsoft.Authorization/roleAssignments/{name}  
+                    on the hub, or on the namespace when chosen), behind a  
+                    confirm. Attach the condition below so this grant cannot  
+                    be used to assign anything else.  
+    If not granted: An administrator assigns Data Receiver to the Cribl  
+                    principal by hand (the How-to step and the  
+                    resource-creation request say how), or the source uses a  
+                    Listen-only shared access rule. Nothing else is affected.  
+    Condition:      Constrain roles and principal types: only Azure Event Hubs  
+                    Data Receiver, only to service principals.  
+    Where:          Azure portal, not the CLI - the condition above cannot be  
+                    set from the CLI.  
 - Reader  [feature]  
     Scope:          /providers/Microsoft.Management/managementGroups/`<management group id>`  
                     (the highest management group the customer will grant, not  
@@ -562,6 +583,27 @@ one named capability and can be refused independently.
                     subscription, which subscription Reader does not reach.  
     If not granted: Those reads show as could not be read for that namespace.  
                     Nothing is changed in Azure.  
+- RBAC Administrator  [feature]  
+    Scope:          the Event Hub the Cribl principal reads, or its namespace  
+                    when that scope is chosen (skip if a role above already  
+                    covers it)  
+    Needed for:     Grant the Cribl principal Azure Event Hubs Data Receiver  
+    Why:            The Cribl Event Hubs source signs in with Entra ID as a  
+                    service principal dedicated to Cribl, which needs Azure  
+                    Event Hubs Data Receiver on the hub it reads. The  
+                    onboarding screen can make that one assignment itself (PUT  
+                    .../providers/Microsoft.Authorization/roleAssignments/{name}  
+                    on the hub, or on the namespace when chosen), behind a  
+                    confirm. Attach the condition below so this grant cannot  
+                    be used to assign anything else.  
+    If not granted: An administrator assigns Data Receiver to the Cribl  
+                    principal by hand (the How-to step and the  
+                    resource-creation request say how), or the source uses a  
+                    Listen-only shared access rule. Nothing else is affected.  
+    Condition:      Constrain roles and principal types: only Azure Event Hubs  
+                    Data Receiver, only to service principals.  
+    Where:          Azure portal, not the CLI - the condition above cannot be  
+                    set from the CLI.  
 - Reader  [feature]  
     Scope:          /providers/Microsoft.Management/managementGroups/`<management group id>`  
                     (the highest management group the customer will grant, not  

@@ -385,7 +385,11 @@ describe("unmeasuredGrantLines (AZR-84)", () => {
     expect(lines).toContain(
       "  [unknown] Security Administrator on the tenant (Entra ID directory role) - Check, deploy and remove the Entra ID diagnostic setting",
     );
-    expect(lines.filter((l) => l.startsWith("  [unknown] "))).toHaveLength(6);
+    // AZR-103: RBAC Administrator on the Event Hub, for the in-app Data Receiver grant.
+    expect(lines).toContain(
+      "  [unknown] RBAC Administrator on the Event Hub the Cribl principal reads, or its namespace when that scope is chosen - Grant the Cribl principal Azure Event Hubs Data Receiver",
+    );
+    expect(lines.filter((l) => l.startsWith("  [unknown] "))).toHaveLength(7);
     expect(lines.join("\n")).not.toMatch(/\[(missing|optional)\]/);
   });
 });

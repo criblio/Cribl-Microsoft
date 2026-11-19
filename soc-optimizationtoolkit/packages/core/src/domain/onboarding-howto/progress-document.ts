@@ -136,6 +136,23 @@ export interface EntraSettingRecord {
   readonly ruleId: string;
 }
 
+/**
+ * An Azure Event Hubs Data Receiver role assignment the app created for the
+ * Cribl principal (AZR-103), recorded so a removal (the AZR-105 teardown
+ * panel) can prove it the app's: this record, the deterministic assignment
+ * name (receiverGrantAssignmentName) and the description stamp are the three
+ * signals. Written only after Azure accepted the app's own PUT - never for a
+ * grant the app found already in place.
+ */
+export interface ReceiverGrantRecord {
+  /** The ARM id the role was assigned at: the hub, or the namespace when chosen. */
+  readonly scopeId: string;
+  /** The Cribl service principal's object id. */
+  readonly principalId: string;
+  /** The assignment's name (a GUID) as the PUT wrote it. */
+  readonly assignmentName: string;
+}
+
 export interface OnboardingProgress {
   readonly sources: Readonly<Partial<Record<OnboardingSourceId, SourceProgress>>>;
   readonly planValues: PlanValues;
@@ -162,6 +179,12 @@ export interface OnboardingProgress {
    * release decodes this key as dropped.
    */
   readonly entraSettings?: readonly EntraSettingRecord[];
+  /**
+   * AZR-103: the Data Receiver grants the app created for the Cribl
+   * principal, one per scope and principal. Optional for the same reason;
+   * absent reads as none, and an older release decodes this key as dropped.
+   */
+  readonly receiverGrants?: readonly ReceiverGrantRecord[];
   /**
    * AZR-36: the Listen rules and consumer groups the app's own PUT created,
    * by resource id, so a removal can prove them the app's. Optional for the
@@ -294,6 +317,13 @@ export function encodeProgress(progress: OnboardingProgress): string {
   const entraSettings = [...(progress.entraSettings ?? [])]
     .map((r) => ({ tenantId: r.tenantId, settingName: r.settingName, ruleId: r.ruleId }))
     .sort((a, b) => (a.tenantId < b.tenantId ? -1 : a.tenantId > b.tenantId ? 1 : 0));
+  const receiverGrants = [...(progress.receiverGrants ?? [])]
+    .map((r) => ({ scopeId: r.scopeId, principalId: r.principalId, assignmentName: r.assignmentName }))
+    .sort((a, b) => {
+      const ka = receiverGrantKey(a);
+      const kb = receiverGrantKey(b);
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
   const eventHubAccess = [...(progress.eventHubAccess ?? [])]
     .map((r) => ({ kind: r.kind, resourceId: r.resourceId, ...(r.createdAt === undefined || r.createdAt === "" ? {} : { createdAt: r.createdAt }) }))
     .sort((a, b) => (a.resourceId < b.resourceId ? -1 : a.resourceId > b.resourceId ? 1 : 0));
@@ -310,6 +340,7 @@ export function encodeProgress(progress: OnboardingProgress): string {
     ...(Object.keys(criblLakeRoutes).length > 0 ? { criblLakeRoutes } : {}),
     ...(activityLogSettings.length > 0 ? { activityLogSettings } : {}),
     ...(entraSettings.length > 0 ? { entraSettings } : {}),
+    ...(receiverGrants.length > 0 ? { receiverGrants } : {}),
     ...(eventHubAccess.length > 0 ? { eventHubAccess } : {}),
     // AZR-102: written only once set, so an older document encodes as before.
     ...(progress.eventHubSource === undefined ? {} : { eventHubSource: progress.eventHubSource }),
@@ -489,6 +520,30 @@ export function decodeProgress(raw: unknown): DecodedProgress {
   } else if (raw["entraSettings"] !== undefined) {
     dropped.push("entraSettings");
   }
+  const receiverGrants: ReceiverGrantRecord[] = [];
+  if (Array.isArray(raw["receiverGrants"])) {
+    raw["receiverGrants"].forEach((v, i) => {
+      const ok =
+        isRecord(v) &&
+        str(v["scopeId"]) !== null &&
+        str(v["principalId"]) !== null &&
+        str(v["assignmentName"]) !== null &&
+        !receiverGrants.some(
+          (r) => receiverGrantKey(r) === receiverGrantKey({ scopeId: String(v["scopeId"]), principalId: String(v["principalId"]) }),
+        );
+      if (!ok) {
+        dropped.push(`receiverGrants[${i}]`);
+        return;
+      }
+      receiverGrants.push({
+        scopeId: v["scopeId"] as string,
+        principalId: v["principalId"] as string,
+        assignmentName: v["assignmentName"] as string,
+      });
+    });
+  } else if (raw["receiverGrants"] !== undefined) {
+    dropped.push("receiverGrants");
+  }
   const eventHubAccess: EventHubAccessRecord[] = [];
   if (Array.isArray(raw["eventHubAccess"])) {
     raw["eventHubAccess"].forEach((v, i) => {
@@ -533,6 +588,7 @@ export function decodeProgress(raw: unknown): DecodedProgress {
         "criblLakeRoutes",
         "activityLogSettings",
         "entraSettings",
+        "receiverGrants",
         "eventHubAccess",
         "eventHubSource",
       ].includes(k)
@@ -551,6 +607,7 @@ export function decodeProgress(raw: unknown): DecodedProgress {
       ...(Object.keys(criblLakeRoutes).length > 0 ? { criblLakeRoutes } : {}),
       ...(activityLogSettings.length > 0 ? { activityLogSettings } : {}),
       ...(entraSettings.length > 0 ? { entraSettings } : {}),
+      ...(receiverGrants.length > 0 ? { receiverGrants } : {}),
       ...(eventHubAccess.length > 0 ? { eventHubAccess } : {}),
       ...(eventHubSource === undefined ? {} : { eventHubSource }),
     },
@@ -807,6 +864,39 @@ export function withoutEntraSetting(p: OnboardingProgress, tenantId: string): On
   const left = (p.entraSettings ?? []).filter((r) => !sameSubscription(r.tenantId, tenantId));
   const { entraSettings: _drop, ...rest } = p;
   return left.length > 0 ? { ...rest, entraSettings: left } : rest;
+}
+
+/**
+ * The key a Data Receiver grant record is held under: scope and principal,
+ * compared as ARM compares them (case-insensitive, no trailing slash).
+ */
+export function receiverGrantKey(r: Pick<ReceiverGrantRecord, "scopeId" | "principalId">): string {
+  return `${r.scopeId.trim().replace(/\/+$/, "").toLowerCase()}|${r.principalId.trim().toLowerCase()}`;
+}
+
+/** The record of the Data Receiver grant the app made at `scopeId` for `principalId`, or null (AZR-103). */
+export function receiverGrantRecord(
+  p: OnboardingProgress,
+  scopeId: string,
+  principalId: string,
+): ReceiverGrantRecord | null {
+  const key = receiverGrantKey({ scopeId, principalId });
+  return (p.receiverGrants ?? []).find((r) => receiverGrantKey(r) === key) ?? null;
+}
+
+/** Record a Data Receiver grant the app created, replacing an earlier record for the same scope and principal (AZR-103). */
+export function withReceiverGrant(p: OnboardingProgress, record: ReceiverGrantRecord): OnboardingProgress {
+  const key = receiverGrantKey(record);
+  const others = (p.receiverGrants ?? []).filter((r) => receiverGrantKey(r) !== key);
+  return { ...p, receiverGrants: [...others, record] };
+}
+
+/** Forget the record of a Data Receiver grant, after it was removed or found gone (AZR-103, for the teardown). */
+export function withoutReceiverGrant(p: OnboardingProgress, scopeId: string, principalId: string): OnboardingProgress {
+  const key = receiverGrantKey({ scopeId, principalId });
+  const left = (p.receiverGrants ?? []).filter((r) => receiverGrantKey(r) !== key);
+  const { receiverGrants: _drop, ...rest } = p;
+  return left.length > 0 ? { ...rest, receiverGrants: left } : rest;
 }
 
 /** Remember the worker group the operator picked. */

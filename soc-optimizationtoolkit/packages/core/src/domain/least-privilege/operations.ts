@@ -922,6 +922,26 @@ const OPERATIONS = {
       "PUT {dcrResourceId}/providers/Microsoft.Authorization/roleAssignments/{assignmentName}",
     ],
   },
+  "eventhub.receiverGrant.write": {
+    id: "eventhub.receiverGrant.write",
+    calls: [
+      // AZR-103: the hub by default, the namespace when the operator chooses it.
+      { method: "PUT", path: "{*}/providers/Microsoft.EventHub/namespaces/{ns}/eventhubs/{hub}/providers/Microsoft.Authorization/roleAssignments/{assignment}", api: "arm" },
+      { method: "PUT", path: "{*}/providers/Microsoft.EventHub/namespaces/{ns}/providers/Microsoft.Authorization/roleAssignments/{assignment}", api: "arm" },
+    ],
+    operation: "Microsoft.Authorization/roleAssignments/write",
+    leastRole: "RBAC Administrator",
+    alsoGrantedBy: ["User Access Administrator", "Owner"],
+    scope: "resource",
+    // The condition (only Data Receiver, only service principals) is the
+    // change request's RECEIVER_GRANT_ADMIN_CONDITION, printed on its own line.
+    scopeNote: "the Event Hub the Cribl principal reads, or its namespace when that scope is chosen",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/privileged",
+    confidence: "high",
+    audit: [],
+    auditGap:
+      "Added after the 2026-11-03 audit (AZR-103): the onboarding screen grants the Cribl principal Azure Event Hubs Data Receiver on the hub or namespace. Documented, not measured - no assignment has been made with a reduced identity.",
+  },
   "lab.roleAssignment.write": {
     id: "lab.roleAssignment.write",
     calls: [
@@ -1080,6 +1100,8 @@ const OPERATIONS = {
     id: "rbac.roleAssignments.read",
     calls: [
       { method: "GET", path: "{*}/providers/Microsoft.Authorization/roleAssignments", api: "arm" },
+      // AZR-103: the Data Receiver grant reads its own assignment back by name.
+      { method: "GET", path: "{*}/providers/Microsoft.Authorization/roleAssignments/{assignment}", api: "arm" },
     ],
     operation: "Microsoft.Authorization/roleAssignments/read",
     leastRole: "Management Group Reader",
