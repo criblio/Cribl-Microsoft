@@ -72,12 +72,17 @@ export * from "./domain/eventhub-discovery";
 // AZR-12: the shared Microsoft.EventHub ARM builders labs, discovery and the
 // Azure onboarding screen all use.
 export * from "./domain/eventhub-arm";
+// AZR-36: the Listen rule and consumer group the Cribl Event Hubs source reads with.
+export * from "./domain/eventhub-listen-access";
 // AZR-3: Defender for Cloud continuous export (plans read-only, create-only).
 export * from "./domain/defender-export";
 // CAP-2 / CAP-3: write actions measured ahead of the Azure Policy feature.
 export * from "./domain/capability-enablers";
 // AZR-98: the subscription Activity Log diagnostic setting (create-only).
 export * from "./domain/activity-log-export";
+// AZR-103: the Cribl principal's Azure Event Hubs Data Receiver grant.
+export * from "./domain/eventhub-receiver-grant";
+export * from "./domain/name-based-guid";
 // AZR-105: Remove and Pause for what the onboarding screen created (pure plan).
 export * from "./domain/onboarding-teardown";
 // AZR-18: the Azure onboarding screen's section layout and item availability.

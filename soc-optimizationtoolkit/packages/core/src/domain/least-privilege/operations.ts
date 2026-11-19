@@ -1,7 +1,9 @@
 /**
  * The least-privilege OPERATIONS, populated from the 2026-11-03 audit
  * (docs/audit/2026-11-03-least-privilege-audit.json) with every skeptic
- * correction applied. One entry per kind of call; see least-privilege.ts for
+ * correction applied, plus the rows of its dated addenda (docs/audit/
+ * 2026-11-18-kv-key-addendum.json, AZR-125), which add to that record rather
+ * than edit it. One entry per kind of call; see least-privilege.ts for
  * what each field means and operations.test.ts for the pin that holds every
  * entry to its audit row.
  *
@@ -146,6 +148,70 @@ const OPERATIONS = {
     audit: [
       "PUT /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.EventHub/namespaces/{ns}/eventhubs/{hub}/consumergroups/{group}",
     ],
+  },
+  "eventhub.rule.read": {
+    id: "eventhub.rule.read",
+    calls: [
+      { method: "GET", path: "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.EventHub/namespaces/{ns}/authorizationRules/{rule}", api: "arm" },
+    ],
+    operation: "Microsoft.EventHub/namespaces/authorizationRules/read",
+    leastRole: "Reader",
+    alsoGrantedBy: ["Monitoring Reader", "Contributor", "Azure Event Hubs Data Owner"],
+    scope: "resource",
+    scopeNote: "the Event Hub namespace that holds the rule",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/permissions/integration",
+    confidence: "high",
+    audit: [],
+    auditGap:
+      "Added with AZR-36: the Listen rule create reads the rule by name first and writes only on a 404, so an existing rule is never replaced. The same action the audited rules list needs; documented, not measured.",
+  },
+  "eventhub.rule.write": {
+    id: "eventhub.rule.write",
+    calls: [
+      { method: "PUT", path: "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.EventHub/namespaces/{ns}/authorizationRules/{rule}", api: "arm" },
+    ],
+    operation: "Microsoft.EventHub/namespaces/authorizationRules/write",
+    leastRole: "Azure Event Hubs Data Owner",
+    alsoGrantedBy: ["Contributor", "Owner"],
+    scope: "resource",
+    scopeNote: "the Event Hub namespace the rule is created on",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/permissions/integration",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added with AZR-36: creates a namespace rule with Listen rights only for the Cribl Event Hubs source. Documented, not measured - CAP-9 is the card that measures it at the namespace.",
+  },
+  "eventhub.rule.delete": {
+    id: "eventhub.rule.delete",
+    calls: [
+      { method: "DELETE", path: "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.EventHub/namespaces/{ns}/authorizationRules/{rule}", api: "arm" },
+    ],
+    operation: "Microsoft.EventHub/namespaces/authorizationRules/delete",
+    leastRole: "Azure Event Hubs Data Owner",
+    alsoGrantedBy: ["Contributor", "Owner"],
+    scope: "resource",
+    scopeNote: "the Event Hub namespace that holds the rule",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/permissions/integration",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added with AZR-36: Remove deletes only the Listen rule this app created and proved its own. Documented, not measured - no delete has been made with a reduced identity.",
+  },
+  "eventhub.consumerGroup.delete": {
+    id: "eventhub.consumerGroup.delete",
+    calls: [
+      { method: "DELETE", path: "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.EventHub/namespaces/{ns}/eventhubs/{hub}/consumergroups/{group}", api: "arm" },
+    ],
+    operation: "Microsoft.EventHub/namespaces/eventHubs/consumergroups/delete",
+    leastRole: "Azure Event Hubs Data Owner",
+    alsoGrantedBy: ["Contributor", "Owner"],
+    scope: "resource",
+    scopeNote: "the event hub",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/permissions/integration",
+    confidence: "medium",
+    audit: [],
+    auditGap:
+      "Added with AZR-36: Remove deletes only the consumer group this app created and stamped. Documented, not measured - no delete has been made with a reduced identity.",
   },
   "eventhub.rules.list": {
     id: "eventhub.rules.list",
@@ -856,6 +922,26 @@ const OPERATIONS = {
       "PUT {dcrResourceId}/providers/Microsoft.Authorization/roleAssignments/{assignmentName}",
     ],
   },
+  "eventhub.receiverGrant.write": {
+    id: "eventhub.receiverGrant.write",
+    calls: [
+      // AZR-103: the hub by default, the namespace when the operator chooses it.
+      { method: "PUT", path: "{*}/providers/Microsoft.EventHub/namespaces/{ns}/eventhubs/{hub}/providers/Microsoft.Authorization/roleAssignments/{assignment}", api: "arm" },
+      { method: "PUT", path: "{*}/providers/Microsoft.EventHub/namespaces/{ns}/providers/Microsoft.Authorization/roleAssignments/{assignment}", api: "arm" },
+    ],
+    operation: "Microsoft.Authorization/roleAssignments/write",
+    leastRole: "RBAC Administrator",
+    alsoGrantedBy: ["User Access Administrator", "Owner"],
+    scope: "resource",
+    // The condition (only Data Receiver, only service principals) is the
+    // change request's RECEIVER_GRANT_ADMIN_CONDITION, printed on its own line.
+    scopeNote: "the Event Hub the Cribl principal reads, or its namespace when that scope is chosen",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/privileged",
+    confidence: "high",
+    audit: [],
+    auditGap:
+      "Added after the 2026-11-03 audit (AZR-103): the onboarding screen grants the Cribl principal Azure Event Hubs Data Receiver on the hub or namespace. Documented, not measured - no assignment has been made with a reduced identity.",
+  },
   "lab.roleAssignment.write": {
     id: "lab.roleAssignment.write",
     calls: [
@@ -1014,6 +1100,8 @@ const OPERATIONS = {
     id: "rbac.roleAssignments.read",
     calls: [
       { method: "GET", path: "{*}/providers/Microsoft.Authorization/roleAssignments", api: "arm" },
+      // AZR-103: the Data Receiver grant reads its own assignment back by name.
+      { method: "GET", path: "{*}/providers/Microsoft.Authorization/roleAssignments/{assignment}", api: "arm" },
     ],
     operation: "Microsoft.Authorization/roleAssignments/read",
     leastRole: "Management Group Reader",
@@ -1833,6 +1921,8 @@ const OPERATIONS = {
     confidence: "high",
     audit: [
       "GET /kvstore/{key} (app-scoped; rewritten to /api/v1/a/{appId}/kvstore/{key}) - azureProfiles, azureConfig, auaAcceptance, setupComplete, appOptions, appTheme, githubPatStatus, diagnosticsWarnLog, azure-coverage-selection, azure-onboarding-progress, content-cache-{hash}, jobs/{id}, jobs-index, tagged-samples-*, pack-builds/*, spike-*",
+      // AZR-125: the dated 2026-11-03 row above omits these; the addendum adds them.
+      "GET /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping, azure-coverage-selection-migrated, azure-onboarding-progress-migrated",
     ],
   },
   "cribl.kv.write": {
@@ -1849,6 +1939,7 @@ const OPERATIONS = {
     confidence: "high",
     audit: [
       "PUT /kvstore/{key} and /kvstore/{key}?encrypted=true (app-scoped) - azureBasic, azureArmToken, azureGraphToken, githubPat (encrypted); azureProfiles, auaAcceptance, setupComplete, appOptions, appTheme, githubPatStatus, diagnosticsWarnLog, content-cache-*, jobs/*, jobs-index, tagged-samples-*, pack-builds/*, azure-coverage-selection, azure-onboarding-progress, spike-*",
+      "PUT /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping, azure-coverage-selection-migrated, azure-onboarding-progress-migrated",
     ],
   },
   "cribl.kv.delete": {

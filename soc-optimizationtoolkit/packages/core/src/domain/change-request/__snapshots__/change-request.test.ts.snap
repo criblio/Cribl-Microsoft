@@ -210,6 +210,27 @@ one named capability and can be refused independently.
                     subscription, which subscription Reader does not reach.
     If not granted: Those reads show as could not be read for that namespace.
                     Nothing is changed in Azure.
+- RBAC Administrator  [feature]
+    Scope:          the Event Hub the Cribl principal reads, or its namespace
+                    when that scope is chosen (skip if a role above already
+                    covers it)
+    Needed for:     Grant the Cribl principal Azure Event Hubs Data Receiver
+    Why:            The Cribl Event Hubs source signs in with Entra ID as a
+                    service principal dedicated to Cribl, which needs Azure
+                    Event Hubs Data Receiver on the hub it reads. The
+                    onboarding screen can make that one assignment itself (PUT
+                    .../providers/Microsoft.Authorization/roleAssignments/{name}
+                    on the hub, or on the namespace when chosen), behind a
+                    confirm. Attach the condition below so this grant cannot
+                    be used to assign anything else.
+    If not granted: An administrator assigns Data Receiver to the Cribl
+                    principal by hand (the How-to step and the
+                    resource-creation request say how), or the source uses a
+                    Listen-only shared access rule. Nothing else is affected.
+    Condition:      Constrain roles and principal types: only Azure Event Hubs
+                    Data Receiver, only to service principals.
+    Where:          Azure portal, not the CLI - the condition above cannot be
+                    set from the CLI.
 - Reader  [feature]
     Scope:          /providers/Microsoft.Management/managementGroups/<management group id>
                     (the highest management group the customer will grant, not
@@ -506,6 +527,8 @@ Assign the following roles to the service principal for Cribl SOC Toolkit (clien
 - Monitoring Contributor at the Azure Monitor Private Link Scope, which may sit in another resource group or subscription (skip if a role above already covers it)  [feature]
 - Monitoring Reader at the DCE, which a DCR may name in another resource group or subscription (skip if a role above already covers it)  [feature]
 - Reader at the Event Hub namespace (skip if a role above already covers it)  [feature]
+- RBAC Administrator at the Event Hub the Cribl principal reads, or its namespace when that scope is chosen (skip if a role above already covers it)  [feature]
+    Condition: Constrain roles and principal types: only Azure Event Hubs Data Receiver, only to service principals.
 - Reader at /providers/Microsoft.Management/managementGroups/<management group id> (the highest management group the customer will grant, not the Tenant Root Group)  [feature]
 - Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab (skip if Microsoft Sentinel is already enabled on the workspace)  [feature]
 - Security Admin at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab (the default; the role is needed on whichever resource group you deploy CriblDefenderExport into in the Defender section)  [feature]
@@ -524,6 +547,7 @@ Justification
 - Monitoring Contributor on the Azure Monitor Private Link Scope, which may sit in another resource group or subscription - skip if a role above already covers it: When the workspace accepts data only over private link, onboarding associates each new DCE with the private link scope (PUT .../privateLinkScopes/{scope}/scopedResources/{name}), a write on the scope itself. The scope may sit in another resource group or subscription.
 - Monitoring Reader on the DCE, which a DCR may name in another resource group or subscription - skip if a role above already covers it: The deployment preview reads the Data Collection Endpoint a DCR names (GET on its resource id) to show where Cribl sends data. A DCR may name a DCE in another resource group or subscription.
 - Reader on the Event Hub namespace - skip if a role above already covers it: Validate, Create Cribl source and the Defender export read the namespace, its shared access rules and its consumer groups. The namespace may sit in another resource group or subscription, which subscription Reader does not reach.
+- RBAC Administrator on the Event Hub the Cribl principal reads, or its namespace when that scope is chosen - skip if a role above already covers it: The Cribl Event Hubs source signs in with Entra ID as a service principal dedicated to Cribl, which needs Azure Event Hubs Data Receiver on the hub it reads. The onboarding screen can make that one assignment itself (PUT .../providers/Microsoft.Authorization/roleAssignments/{name} on the hub, or on the namespace when chosen), behind a confirm. Attach the condition below so this grant cannot be used to assign anything else.
 - Reader at /providers/Microsoft.Management/managementGroups/<management group id> - the highest management group the customer will grant, not the Tenant Root Group: Validate's policy checks and the Logging Map read policy assignments, exemptions, definitions and remediations, and the management group tree, at your management group. Reader there covers all of them; Management Group Reader alone misses remediations and the tree. It reaches every subscription beneath the group. A custom role with only Microsoft.Authorization/policyAssignments/read, Microsoft.Authorization/policyDefinitions/read, Microsoft.Authorization/policyExemptions/read, Microsoft.Management/managementGroups/descendants/read, Microsoft.Management/managementGroups/read, Microsoft.PolicyInsights/remediations/read at the management group is narrower still.
 - Log Analytics Contributor at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab - skip if Microsoft Sentinel is already enabled on the workspace: Enable Sentinel writes the SecurityInsights solution for the workspace, a Microsoft.OperationsManagement/solutions resource in the workspace's resource group rather than under the workspace, so the workspace grant above does not reach it. A custom role with only Microsoft.OperationsManagement/solutions/write and Microsoft.OperationsManagement/solutions/read at the resource group is narrower still.
 - Security Admin at /subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg-soc-lab - the default; the role is needed on whichever resource group you deploy CriblDefenderExport into in the Defender section: The export is a Microsoft.Security/automations resource (CriblDefenderExport) the app creates in the resource group chosen in the Defender section; creating it needs automations/write, which neither Reader nor the Monitoring and Log Analytics roles include.

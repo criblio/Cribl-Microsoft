@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 33 in progress, 243 done.**
+**106 in the backlog, 33 in progress, 249 done.**
 
 ## By menu item
 
@@ -27,20 +27,20 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 7 | 2 |
-| Sentinel Integration | 53 | 103 | 23 |
+| Sentinel Integration | 53 | 104 | 23 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
 | Labs | 2 | 3 | 1 |
 | Data Volume Inventory | 4 | 22 | 1 |
 | SIEM Migration | 1 | 8 | 1 |
-| Permission Verification | 9 | 11 | 0 |
+| Permission Verification | 8 | 13 | 0 |
 | Event Hub Discovery | 0 | 1 | 0 |
-| Azure Native Source Onboarding | 29 | 62 | 3 |
+| Azure Native Source Onboarding | 31 | 64 | 4 |
 | Azure Logging Map | 3 | 2 | 1 |
 | Tenant Logging Gaps | 1 | 3 | 0 |
 | Windows Event analysis (planned) | 5 | 0 | 0 |
-| Cross-cutting | 18 | 18 | 6 |
+| Cross-cutting | 17 | 19 | 6 |
 
 Open work totals 139.
 
@@ -51,7 +51,7 @@ unblock other epics rather than to deliver on its own. Features are
 groupings, not a queue - they carry no score and no order. Priority lives
 on the stories underneath (now / next / later).
 
-### `AZR` Azure native source onboarding - 68% (75/110)
+### `AZR` Azure native source onboarding - 68% (78/114)
 
 The largest unstarted block: every Azure telemetry source, category by category
 
@@ -64,8 +64,8 @@ The largest unstarted block: every Azure telemetry source, category by category
 | `AZR-F6` Blob-only sources - cannot reach Event Hub | Azure Native Source Onboarding | 1/1 | AZR-8 |
 | `AZR-F7` Agent-based - AMA plus DCR | Azure Native Source Onboarding | 0/1 | AZR-9 |
 | `AZR-F8` Dataflow diagrams, one per category | Azure Native Source Onboarding | 1/5 | AZR-10, AZR-19*, AZR-20*, AZR-21*, AZR-29* |
-| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 49/65 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117 |
-| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 22/26 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-125*, AZR-126*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
+| `AZR-F9` Shared onboarding concerns | Azure Native Source Onboarding | 51/69 | AZR-18, AZR-30, AZR-31, AZR-32, AZR-33, AZR-34, AZR-11, AZR-12, AZR-22, AZR-23, AZR-24, AZR-25, AZR-35, AZR-36, AZR-138, AZR-37, AZR-38, AZR-39, AZR-40, AZR-41, AZR-42, AZR-43, AZR-44, AZR-45, AZR-46*, AZR-47, AZR-48, AZR-49, AZR-50, AZR-51, AZR-52, AZR-53, AZR-54, AZR-55, AZR-56, AZR-57, AZR-58, AZR-59, AZR-60, AZR-66, AZR-67, AZR-93, AZR-94, AZR-95, AZR-96, AZR-108, AZR-97, AZR-98, AZR-99, AZR-121, AZR-122, AZR-100, AZR-101, AZR-102, AZR-103, AZR-104, AZR-105, AZR-106, AZR-107, AZR-109, AZR-112, AZR-113, AZR-114, AZR-115, AZR-116, AZR-117, AZR-141, AZR-142, AZR-143 |
+| `AZR-F10` Multi-tenant Azure customers | Azure Native Source Onboarding | 23/26 | AZR-61*, AZR-62*, AZR-63*, AZR-64, AZR-65, AZR-90*, AZR-91*, AZR-125*, AZR-126*, AZR-92, AZR-75*, AZR-76*, AZR-77*, AZR-78*, AZR-79*, AZR-80, AZR-81*, AZR-82*, AZR-83*, AZR-84, AZR-85*, AZR-86*, AZR-87, AZR-88*, AZR-89*, AZR-111* |
 
 ### `WIN` Windows event analysis - 0% (0/5)
 
@@ -101,13 +101,13 @@ Maintaining a pack after it is built, including a silent data-loss defect
 |---|---|---|---|
 | `PK-F1` Pack maintenance parity | Pack Maintenance | 0/3 | PK-1, PK-2, D-6 |
 
-### `CAP` Capability taxonomy extension _(enabler)_ - 46% (6/13)
+### `CAP` Capability taxonomy extension _(enabler)_ - 57% (8/14)
 
 ENABLER EPIC: exists to unblock other work rather than to deliver on its own. Its capabilities and probes are what the Azure onboarding epic waits on
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `CAP-F1` Capability taxonomy extension | Permission Verification | 6/13 | CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-8, CAP-11, CAP-12, CAP-7, CAP-9, CAP-10, CAP-13 |
+| `CAP-F1` Capability taxonomy extension | Permission Verification | 8/14 | CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-8, CAP-11, CAP-15, CAP-12, CAP-7, CAP-9, CAP-10, CAP-13 |
 
 ### `REL` Ship what is built _(enabler)_ - 0% (0/2)
 
@@ -117,13 +117,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 62% (112/182)
+### `DBT` Quality and technical debt _(enabler)_ - 62% (113/183)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 48/98 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-301, DBT-302, DBT-303, DBT-304, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254, DBT-255, DBT-256, DBT-257, DBT-300, DBT-305 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 49/99 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-301, DBT-302, DBT-306, DBT-303, DBT-304, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254, DBT-255, DBT-256, DBT-257, DBT-300, DBT-305 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 52/63 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250, DBT-251, DBT-298, DBT-249 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 10/15 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136, DBT-299 |
@@ -1013,7 +1013,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (12)
+## Backlog - now (13)
 
 Next to pick up. Nothing blocks these.
 
@@ -1238,9 +1238,25 @@ Next to pick up. Nothing blocks these.
   Batch's template-only export is gated on the identity fields, so
   Disconnected cannot reach it from Batch (fallback routing).
 
+- **AZR-143** Cribl source plan reads 'not cross-checked' when the directory lists the object id under another client id
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-18 in review round 1 of [[AZR-103]]. crossCheckPrincipal
+  (usecases/cribl-principal, used by plan-cribl-source for an Entra ID Cribl
+  source) only looks for the CLIENT id in the directory listing. When the
+  listing lacks the client id but lists the typed object id under ANOTHER
+  appId, the directory has disproved the pair, yet the plan reads
+  principalCheck 'not-cross-checked' and goes on to read the receive role for
+  that other principal, so its role verdict describes the wrong identity and a
+  source is offered that will fail to read. AZR-103 closed the same gap for
+  the grant (resolveCriblPrincipal refuses principal-mismatch, naming the
+  appId and display name the directory gives); this card applies the same rule
+  to crossCheckPrincipal so both callers agree, with a pin in
+  create-cribl-source.test.ts (graphOf([sp(OBJ, 'other-client')]) refuses
+  principal-mismatch before any Azure or Cribl call).
+
 ---
 
-## Backlog - next (55)
+## Backlog - next (53)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1277,27 +1293,6 @@ Settled and unblocked, sequenced behind now.
   (CORRECTED 2026-10-21: Event Hub namespace creation is NOT `arm.deploy` -
   that is measured from deployments/write only; namespace write is filed under
   CAP-7.) ---
-
-- **CAP-11** The RBAC preflight panel's cache write drops the audit's subscription and Graph verdicts
-  `CAP-F1` `bug` `settled`
-  Not now because: The loss only ever turns a measured verdict into unknown -
-  it never invents a grant or a denial - so its cost is an annotation, and one
-  manual refresh restores it. No shipped route requires the enabler or Graph
-  capabilities yet; the Defender section's banner is the one surface that
-  shows a dropped verdict, as not measured. The defects where a granted ticket
-  still fails outrank it.
-  FOUND 2026-11-17 while building CAP-2..CAP-5. The RBAC preflight panel saves
-  capabilitiesFromSides(azure, cribl) under the same per-tenant cache key the
-  background audit uses (rbac-preflight-panel.tsx, saveCapabilityAudit). That
-  projection holds only what runAzurePreflight measures, so it carries none of
-  the verdicts runCapabilityAudit adds afterwards: the defender-* capabilities
-  on existing-rg (AZR-86), policy.assign, policy.remediate and identity.create
-  (CAP-2, CAP-3), and graph-licences.read / graph-incidents.read (CAP-5).
-  After a panel run the next launch finds a matching key, skips the audit, and
-  those capabilities read unknown until a manual refresh or a scope change.
-  FIX: have the panel merge its set over the cached one (or re-run the audit's
-  extra measurements) rather than replace it; pin that a panel save keeps a
-  cached defender-plans.read verdict.
 
 - **AZR-29** Logging map: optional Cribl Lakehouse Engine lane as an alternative to Splunk/Elastic
   `AZR-F8` `story` `undecided` `blocked by AZR-19`
@@ -1776,18 +1771,6 @@ Settled and unblocked, sequenced behind now.
   warns rather than re-PUT, where legacy LOG-08 repaired drift on every run
   (ADR 0005 departure 6). This card adds an explicit, confirmed repair.
 
-- **AZR-36** Create a Listen rule and a dedicated consumer group for the Cribl Event Hub source from the app
-  `AZR-F9` `story` `settled`
-  FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-34 requires an
-  EXISTING Listen-capable shared access rule (or a pasted connection string)
-  and defaults the consumer group to `cribl`, which in the How-to path the
-  operator creates by hand. Never `$Default`, which shares partitions with
-  other readers. This card lets the Automated path create both on the
-  namespace or hub (ARM PUT authorizationRules with rights [Listen], PUT
-  consumergroups) behind the screen's confirm, create-only, refusing a
-  differing existing rule or group. It also adds the How-to step text for
-  doing it by hand if AZR-31 has not already covered it.
-
 - **GEN-22** Does a routable pack's output: default deliver to the group route's destination?
   `GEN-F1` `spike` `settled`
   FILED 2026-10-29 from the F2 plan. route-yml.ts records (measured
@@ -1929,25 +1912,6 @@ Settled and unblocked, sequenced behind now.
   apply cleanly to the 1.13.0 head (capture-panel-state.ts changed under
   DBT-228) - rebase, mutation-check, confirm on a Lake query and a capture
   live.
-
-- **AZR-103** Grant the Cribl service principal 'Azure Event Hubs Data Receiver' on the hub or namespace from the app, behind a confirm
-  `AZR-F9` `story` `settled`
-  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
-  Preview (all ten sections walked), asked for by the operator to find what is
-  missing to finish automating the sources. The recommended Entra ID
-  credential ([[AZR-59]]) needs the Cribl principal to hold Azure Event Hubs
-  Data Receiver; today that is only a How-to step ('Give the Cribl principal
-  Azure Event Hubs Data Receiver on the hub ...', 'Not yet confirmed against
-  live Azure'), Validate reads it, and [[AZR-88]] asks for it in a change
-  request. Nothing creates it, so the default credential cannot work without a
-  hand step. Scope: PUT Microsoft.Authorization/roleAssignments at the hub
-  (named-hub lanes) or namespace (auto-created insights-* hubs) with a
-  deterministic GUID name, create-only, refusing when the assignment exists
-  for that principal and role (already-applied) and when the app identity
-  lacks Microsoft.Authorization/roleAssignments/write (name the role needed:
-  User Access Administrator or Role Based Access Control Administrator,
-  ideally constrained to this role). Least-privilege registry and change
-  request updated. Measure the propagation delay before Cribl's first read.
 
 - **AZR-104** Route the remaining onboarding sources (Entra ID, the diagnostic-settings initiatives, XDR, flow logs) from their Cribl source to a destination
   `AZR-F9` `story` `settled` `blocked by AZR-35`
@@ -2234,9 +2198,24 @@ Settled and unblocked, sequenced behind now.
   two-step confirm writes only on its second click. Done = verified live, with
   what was observed recorded here.
 
+- **AZR-142** Live-verify the in-app Data Receiver grant and measure its propagation delay
+  `AZR-F9` `enabler` `settled`
+  SPLIT 2026-11-18 from [[AZR-103]], closed on pins. In Live Preview with the
+  operator present, on a lab hub: (1) Check the grant resolves the principal
+  (typed and cross-checked, and blank looked up from the client id); (2) the
+  PUT at the hub with the deterministic name succeeds and reads back; a second
+  Check reads already-granted, made by this app; (3) a grant made by hand at
+  the namespace reads as covering; Azure's 409 RoleAssignmentExists body
+  matches the code the app expects; (4) an identity holding only RBAC
+  Administrator on the hub, conditioned to Data Receiver and service
+  principals, can make the write, and one without it gets the 403 message; (5)
+  measure the time from the PUT to the Cribl Event Hubs source reading its
+  first event, and put the number in the success message. Each write is an
+  Azure write: one confirm per write.
+
 ---
 
-## Backlog - later (39)
+## Backlog - later (40)
 
 Settled, gated on something above.
 
@@ -2761,6 +2740,21 @@ Settled, gated on something above.
   `CriblDefenderExport` must be deleted by hand, and until then it blocks a
   new deploy with `already-exists`.
 
+- **AZR-138** Offer a hub-scoped Listen rule for a Cribl Event Hubs source that reads one hub
+  `AZR-F9` `story` `settled`
+  FILED 2026-11-18 by [[AZR-36]]. AZR-36 creates the Listen rule on the
+  NAMESPACE, because the connection-string credential path (eventhub-arm
+  buildNamespaceListKeysRequest, AZR-34) can only address a namespace rule;
+  that key can read every hub in the namespace. A rule on the hub itself
+  (.../eventhubs/{hub}/authorizationRules/{rule}, Listen only) is narrower for
+  a source that reads exactly one hub. SCOPE: a hub-level rule create beside
+  the namespace one (create-only, same reuse and refusal rules and ownership
+  proof as AZR-36), and a listKeys builder and picker entry for hub-level
+  rules in the Cribl source panel, with the input body's topic checked against
+  the hub the rule is on. Lanes that read several Azure-created hubs keep the
+  namespace rule. Entra ID (ADR 0008) stays the default and needs no rule at
+  all, which is why this is later.
+
 - **AZR-106** Automate the VNet and NSG flow-log sources on the Azure side: flow log, storage queue and Event Grid subscription
   `AZR-F9` `story` `settled`
   FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
@@ -2777,29 +2771,6 @@ Settled, gated on something above.
   being retired by Microsoft in favour of VNet flow logs - decide whether NSG
   gets automation at all. Later because the permission bugs [[AZR-81]] (Event
   Grid provider registration, NetworkWatcherRG) block it.
-
-- **AZR-125** The least-privilege KV audit lists omit azure-onboarding-flow-last-seen, azure-credential-lease and azure-credential-owner
-  `AZR-F10` `bug` `settled`
-  Not now because: No permission is wrong or missing: the grant is the app's
-  own KV namespace, which the platform gives every App user and which cannot
-  be narrowed per key, so the omission misleads a reader of the inventory but
-  asks for nothing extra and refuses nothing. The fix also needs a decision on
-  amending a dated audit, which should not be made inside a review round.
-  Found in the AZR-37/AZR-90 review round 3 (2026-11-18). The cribl.kv.read
-  and cribl.kv.write operations in
-  packages/core/src/domain/least-privilege/operations.ts name the app KV keys
-  read and written, but not azure-onboarding-flow-last-seen (AZR-37 loads it
-  and PUTs it from the background flow poll) nor azure-credential-lease and
-  azure-credential-owner (the tenant session's; that gap predates AZR-37).
-  Those audit strings are not free text: operations.test.ts matches each
-  against a 'method path' row of
-  docs/audit/2026-11-03-least-privilege-audit.json, so adding a key means
-  amending that dated audit record or adding a later audit row, a decision
-  about how the audit is kept rather than a one-line edit. FIX: add the three
-  keys through whichever route is chosen (a dated addendum row is the honest
-  one) and pin the KV key constants (FLOW_LAST_SEEN_KEY, CREDENTIAL_LEASE_KEY,
-  CREDENTIAL_OWNER_KEY) against both lists so a new key cannot be missed
-  again.
 
 - **AZR-126** Tenant gap grid: the keyboard hint promises arrow keys a screen reader in browse mode keeps
   `AZR-F10` `bug` `settled`
@@ -2834,9 +2805,24 @@ Settled, gated on something above.
   only, which AZR-81 made false (NetworkWatcherRG and the Event Grid admin
   step). FIX: move the rows into the table and correct the paragraph.
 
+- **AZR-141** Remove the Data Receiver assignment the app granted, from the teardown panel
+  `AZR-F9` `story` `settled`
+  FOUND 2026-11-18 while building [[AZR-103]]: the app now creates an Azure
+  Event Hubs Data Receiver role assignment for the Cribl principal and records
+  it (progress.receiverGrants), but nothing removes it from the app; the grant
+  panel says an administrator removes it in the portal. Scope: a row in
+  'Remove or pause what this app created' ([[AZR-105]]) per recorded grant,
+  deleting only with all three ownership signals (the record, the
+  deterministic name receiverGrantAssignmentName, the description stamp),
+  behind a confirm quoting scope, role and principal; DELETE by name, GET for
+  the 404, forget the record on removed or already-gone; refuse when the Cribl
+  source still uses Entra ID on that hub unless the operator says so. Needs
+  Microsoft.Authorization/roleAssignments/delete in the least-privilege
+  registry and the change request.
+
 ---
 
-## Done (243)
+## Done (249)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -2977,6 +2963,94 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   page load). Pinned in adapters.test (fresh slot +
   Authorization_RequestDenied 403: one mint, one GET, reminted true),
   mutation-checked.
+
+- **CAP-11** The RBAC preflight panel's cache write drops the audit's subscription and Graph verdicts
+  `CAP-F1` `bug` `settled` `verified: pins`
+  Not now because: The loss only ever turns a measured verdict into unknown -
+  it never invents a grant or a denial - so its cost is an annotation, and one
+  manual refresh restores it. No shipped route requires the enabler or Graph
+  capabilities yet; the Defender section's banner is the one surface that
+  shows a dropped verdict, as not measured. The defects where a granted ticket
+  still fails outrank it.
+  FOUND 2026-11-17 while building CAP-2..CAP-5. The RBAC preflight panel saves
+  capabilitiesFromSides(azure, cribl) under the same per-tenant cache key the
+  background audit uses (rbac-preflight-panel.tsx, saveCapabilityAudit). That
+  projection holds only what runAzurePreflight measures, so it carries none of
+  the verdicts runCapabilityAudit adds afterwards: the defender-* capabilities
+  on existing-rg (AZR-86), policy.assign, policy.remediate and identity.create
+  (CAP-2, CAP-3), and graph-licences.read / graph-incidents.read (CAP-5).
+  After a panel run the next launch finds a matching key, skips the audit, and
+  those capabilities read unknown until a manual refresh or a scope change.
+  FIX: have the panel merge its set over the cached one (or re-run the audit's
+  extra measurements) rather than replace it; pin that a panel save keeps a
+  cached defender-plans.read verdict. DONE 2026-11-18 (pins):
+  saveCapabilityAudit now MERGES instead of replacing, for both writers (the
+  panel and runCapabilityAudit), through the new pure
+  domain/capabilities/capability-merge.ts mergeCapabilitySets. A writer merges
+  only what it measured; a verdict is replaced only by a newer measurement of
+  the same capability, judged per capability from a new optional
+  CapabilitySet.measuredAt (cached as measuredAt, written only when a verdict
+  is older than the set auditedAt, so single-writer entries keep their old
+  shape); unknown/unreachable never displace granted/denied; a set for another
+  connection key replaces outright and carries nothing; a failed read before
+  the write skips the write rather than erase. The audit returns the merged
+  set, so what renders is what the next launch reads. Pinned by
+  capability-audit-writers.test.ts: audit (mixed granted/denied on all eight
+  audit-only capabilities: defender-plans.read,
+  defender-automation.read/.write, policy.assign, policy.remediate,
+  identity.create, graph-licences.read, graph-incidents.read) then a panel set
+  built as rbac-preflight-panel.tsx builds it; each keeps its exact prior
+  value, and the relaunch reuses them with zero requests. Mutation-checked:
+  with the merge replaced by a plain replace, 3 of the 6 pins fail. NOT
+  VERIFIED LIVE: no Live Preview run; the panel save is unchanged
+  fire-and-forget, and two writers interleaving their read-merge-write inside
+  the same instant can still lose one write (costs an annotation until the
+  next audit). REVIEW ROUND 1 (2026-11-18): the audit no longer merges over
+  its own earlier results. A capability it attempted without a conclusive
+  answer (an empty 200 or an unrecognised 403 from a Graph probe, AZR-111; a
+  probe that rejects; a failed subscription read) used to keep the previous
+  run's verdict while the set's auditedAt moved to now - a stale grant shown
+  as just audited. runCapabilityAudit now saves with saveCapabilityAudit(...,
+  { supersede: true }), which uses the new supersedeCapabilitySet: every
+  stored verdict older than the audit's own time is dropped, measured again or
+  not, and only a measurement strictly newer than the run (a panel that saved
+  meanwhile) survives. The panel still merges, so it keeps the audit-only
+  verdicts. Pins: capability-audit-writers.test.ts adds three (an audit grants
+  graph-incidents.read, then a manual audit whose probe returns an empty 200
+  leaves it unknown - absent from both the returned and the stored set; a
+  rejecting probe plus a 500 subscription read leaves none of the eight
+  audit-only verdicts; a panel between two audits still keeps them) and
+  capability-merge.test.ts three supersede pins. Mutation-checked: saving the
+  audit with merge fails the two retract pins; keeping every stored verdict
+  fails 4, keeping none fails 2 (the out-of-order pin among them), and a
+  non-strict time comparison fails 1. The age chip half of the finding is
+  CAP-15, closed in the same round.
+
+- **CAP-15** The audit-age chip reports the newest write's age over older carried verdicts
+  `CAP-F1` `bug` `settled` `verified: pins`
+  Filed 2026-11-18 from CAP-11, first as a story; RETYPED to a bug in CAP-11
+  review round 1, because the branch that introduced it was still open. Since
+  the two writers merge into one cached set, a set can hold verdicts of
+  different ages: auditedAt is the NEWEST measurement, and a verdict carried
+  from an older run keeps its own time in CapabilitySet.measuredAt. auditAgeMs
+  read auditedAt alone, so after an RBAC panel run the audit-age chip
+  (audit-age-chip.tsx), the describeCapabilityAudit label and the Defender
+  automation-permissions line all reported the panel's age for Defender,
+  enabler and Graph verdicts the earlier audit measured - an audit at 09:00
+  and a panel at 15:00 read as minutes old, though policy.assign was six hours
+  old. DONE 2026-11-18 (pins): auditAgeMs
+  (domain/capabilities/audit-lifecycle.ts) now returns the age of the OLDEST
+  measurement in the set - the earliest of auditedAt and every measuredAt
+  time, an unparseable carried time skipped - so every surface that renders
+  the age (all go through auditAgeMs/describeAuditAge) answers 'is this old
+  enough to refresh?' conservatively. Pinned in audit-lifecycle.test.ts: a set
+  audited 11:59 carrying verdicts from 09:00 and 06:00 reads exactly 6 hours
+  (21600000 ms, '6 hours ago'); an unparseable carried time leaves '1 minute
+  ago'. Mutation-checked: ignoring measuredAt fails the pin. Per-verdict ages
+  on a surface were the original story's wish and are not built; the chip no
+  longer overstates freshness, which was the defect. Since the audit now
+  supersedes rather than merges (CAP-11 review round 1), a manual refresh
+  clears every carried time. NOT VERIFIED LIVE.
 
 - **HON-6** Give the audit's AGE a home and add a manual re-check
   `HON-F1` `story` `settled` `verified: both`
@@ -5534,6 +5608,20 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   bare-id filter; onboard-table and deploy-flowlog-pack keep the old commit
   (DBT-149).
 
+- **DBT-306** Activity Log and Entra ID removal restated one ownership rule twice; the Activity Log copy let a blank subscription match a blank record
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-11-18 by the architecture audit (range fe6f9cee..c97084b6).
+  classifyActivityLogRemoval and classifyEntraSettingRemoval
+  (domain/onboarding-teardown/teardown-plan.ts) were line-for-line copies of
+  the config-plane rule 11 check (name, KV record for this scope, recorded
+  rule). They had already drifted: the Entra copy refused a blank tenant, the
+  Activity Log copy did not, so a blank subscription id against a record with
+  a blank subscription would have proven ownership and allowed a delete. Not
+  observed live; no caller is known to pass a blank subscription. FIXED: both
+  now call one private classifyDiagnosticSettingRemoval, so a blank scope
+  never matches for either; pinned and mutation-checked (removing the blank
+  guard fails the new pin).
+
 - **DBT-303** Dead Cribl write: buildFdrBreakerRequest (POST /lib/breakers) has no caller, yet the least-privilege registry lists it as an operation the app makes
   `DBT-F1` `story` `settled` `verified: pins`
   FOUND 2026-11-12 while fixing AZR-83. usecases/guided-deploy/fdr-breaker.ts
@@ -5795,6 +5883,76 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   unit; each broke a pin. Live check outstanding: None. The task forbids live
   Azure or Cribl calls. The change is pure wording, built from verdicts, and
   is covered by pins; it was not confirmed in Cribl Live Preview.
+
+- **AZR-36** Create a Listen rule and a dedicated consumer group for the Cribl Event Hub source from the app
+  `AZR-F9` `story` `settled` `verified: pins`
+  FILED 2026-10-26 by the AZR-30..34 implementation plan. AZR-34 requires an
+  EXISTING Listen-capable shared access rule (or a pasted connection string)
+  and defaults the consumer group to `cribl`, which in the How-to path the
+  operator creates by hand. Never `$Default`, which shares partitions with
+  other readers. This card lets the Automated path create both on the
+  namespace or hub (ARM PUT authorizationRules with rights [Listen], PUT
+  consumergroups) behind the screen's confirm, create-only, refusing a
+  differing existing rule or group. It also adds the How-to step text for
+  doing it by hand if AZR-31 has not already covered it. DONE 2026-11-18, PINS
+  ONLY: nothing was created or removed in a real Azure namespace. SCOPE CHECK
+  against [[AZR-22]] / [[AZR-23]]: this card creates no namespace, no hub and
+  no Send rule - only a namespace-level Listen rule and a consumer group on
+  hubs that already exist - so neither card's scope was built. [[CAP-9]] (c)
+  measures the namespace rule write; this card does not need that measurement
+  to ship, so the writes are shown as needed, not yet measured, and nothing is
+  disabled by it (inform, never forbid). BUILT: domain/eventhub-listen-access
+  (pure: rule GET/PUT/DELETE and stamped consumer-group PUT/DELETE builders,
+  quoteArmRequest for the confirm, classifyListenRule / classifyConsumerGroup
+  - only a 404 creates; an existing rule that can Listen and cannot Manage, or
+  any existing consumer group, is REUSED as it is; a rule that cannot Listen
+  or can Manage (AZR-58) is refused and left untouched; $Default is never
+  created; a refused or failed read is unknown and creates nothing - and
+  classifyListenAccessRemoval, the AZR-105 proof pattern: KV record + name +
+  the consumer group's userMetadata stamp, or for a rule its rights still
+  exactly Listen, and no recorded Cribl Event Hubs source left that may read
+  with it), usecases/eventhub-listen-access (planListenAccess GETs only;
+  applyListenAccess re-reads each name immediately before its PUT and writes
+  only on a 404, then reads it back; removeListenAccessObject GET, prove,
+  DELETE, GET for the 404), the progress document's eventHubAccess records
+  (resource ids of what the app's own PUT created; reuse is never recorded),
+  and in the Cribl source section a 'Listen rule and consumer group (Azure)'
+  panel (shown for chosen Event Hub lanes in Automate mode only - a How-to
+  lane gets no Azure write; consumer group on every hub those lanes read, on
+  by default; the Listen rule only for the connection-string credentials, off
+  by default because Entra ID needs none; Check what to create, then a confirm
+  quoting each PUT exactly; a newer read or any change disarms) plus one
+  Remove row per recorded object in 'Remove or pause what this app created',
+  its confirm quoting the exact DELETE. Names: the rule is the plan value
+  listenRule, else cribl-listen; the group is the plan value consumerGroup
+  (default cribl). Least-privilege registry: eventhub.rule.read,
+  eventhub.rule.write, eventhub.rule.delete and eventhub.consumerGroup.delete
+  added (documented, not measured; CAP-9 can reuse eventhub.rule.write) under
+  a new function eventhub-listen-access. The How-to steps eh-listen-rule and
+  eh-consumer-group already covered the manual path (AZR-31), so no step text
+  was added; the source plan's consumer-group-missing refusal now points at
+  the new panel. UNVERIFIED LIVE: Azure's answer to each PUT (that a rule PUT
+  with rights [Listen] is accepted as Listen-only, that userMetadata reads
+  back verbatim on the 2021-11-01 api-version), the DELETE answers, and the
+  race window between the re-read and the PUT (ARM PUT is create-or-update;
+  the re-read narrows it, it cannot close it). A hub-scoped Listen rule,
+  narrower than the namespace one, is [[AZR-138]]. REVIEW ROUND 1: the Listen
+  rule's removal proof gained an instance signal - name plus Listen-only
+  rights is also exactly what the How-to eh-listen-rule step builds by hand,
+  so a stale record could have proven a rule someone re-created. Each record
+  now saves the creation time the read-back after the PUT reported
+  (systemData.createdAt, else properties.createdAt), and Remove refuses a rule
+  (not-proven, no DELETE) when the saved time is missing or differs from the
+  current one; a consumer group is checked against it when one was saved. A
+  consumer group's Remove row now names its hub. UNVERIFIED LIVE: that Azure
+  returns systemData.createdAt on an Event Hubs authorization rule GET at
+  2021-11-01 - if it does not, every app-created rule is not-proven and has to
+  be removed in the portal (safe direction). REVIEW ROUND 2: a check whose
+  inputs changed while its GETs were in flight (a hub resolving, a newer read)
+  used to land carrying the old arm key, so the confirm quoted the old target
+  and its button did nothing. The panel now drops such a result with a message
+  to check again, and arms only a plan whose key matches the inputs on screen;
+  DOM-pinned and mutation-checked.
 
 - **AZR-37** Persist when each onboarding source was last seen flowing, beyond the metrics lookback
   `AZR-F9` `story` `settled` `verified: pins`
@@ -9215,6 +9373,73 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   name, so naming the same address explicitly does not stale a tick. Pinned
   and mutation-checked; Live Preview verification is pending.
 
+- **AZR-103** Grant the Cribl service principal 'Azure Event Hubs Data Receiver' on the hub or namespace from the app, behind a confirm
+  `AZR-F9` `story` `settled` `verified: pins`
+  FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
+  Preview (all ten sections walked), asked for by the operator to find what is
+  missing to finish automating the sources. The recommended Entra ID
+  credential ([[AZR-59]]) needs the Cribl principal to hold Azure Event Hubs
+  Data Receiver; today that is only a How-to step ('Give the Cribl principal
+  Azure Event Hubs Data Receiver on the hub ...', 'Not yet confirmed against
+  live Azure'), Validate reads it, and [[AZR-88]] asks for it in a change
+  request. Nothing creates it, so the default credential cannot work without a
+  hand step. Scope: PUT Microsoft.Authorization/roleAssignments at the hub
+  (named-hub lanes) or namespace (auto-created insights-* hubs) with a
+  deterministic GUID name, create-only, refusing when the assignment exists
+  for that principal and role (already-applied) and when the app identity
+  lacks Microsoft.Authorization/roleAssignments/write (name the role needed:
+  User Access Administrator or Role Based Access Control Administrator,
+  ideally constrained to this role). Least-privilege registry and change
+  request updated. Measure the propagation delay before Cribl's first read.
+  DONE 2026-11-18, PINS ONLY: nothing was granted in a real tenant; no role
+  assignment has been created by the app live. BUILT: domain/name-based-guid
+  (RFC 4122 version 5 GUIDs, pure SHA-1, pinned to RFC known-answer vectors);
+  domain/eventhub-receiver-grant (the role is EVENT_HUB_RECEIVER_ROLES'
+  built-in GUID a638d3c7-ab3a-418d-83e6-5f17a39d4fde, never a name lookup; the
+  scope is the hub by default and the namespace only by the operator's choice;
+  the assignment name is a v5 GUID of scope, role and principal, case- and
+  slash-insensitive, so a repeat PUT lands on the same name; the description
+  carries the kit ownership stamp); usecases/cribl-principal
+  (crossCheckPrincipal moved here unchanged from plan-cribl-source;
+  resolveCriblPrincipal takes the typed object id cross-checked against the
+  client id, or looks it up from the client id in the directory and refuses
+  anything but exactly one match - no directory, a refused read, none, several
+  - with the reason; never guesses; this app's own registration is refused);
+  usecases/eventhub-receiver-grant (planReceiverGrant is read-only: resolves
+  the principal, reads assignedTo() at the scope, and a covering Data Receiver
+  grant at or above it is already-granted - nothing written, nothing recorded;
+  applyReceiverGrant sends ONE PUT through the existing
+  buildRoleAssignmentRequest (which gained an optional description) and ONE
+  GET back by name; 409 RoleAssignmentExists is already-granted with no
+  record; PrincipalNotFound is said plainly; 403 names RBAC Administrator with
+  the condition). RECORD: progress.receiverGrants (scope, principal,
+  assignment name), written only after Azure accepted the app's own PUT; with
+  the deterministic name and the stamp it is the third ownership signal for a
+  removal ([[AZR-141]]). UI: 'Azure Event Hubs Data Receiver for the Cribl
+  principal' in the Cribl source section: the not-measured permission banner
+  (never a block), a hub/namespace radio (hub default), Check the grant, a
+  What-will-be-created list, Grant then Confirm quoting role and GUID,
+  principal (and how its object id was found), scope id and assignment name;
+  plan and arm drop on any change to the inputs; the recorded grants are
+  listed. LEAST PRIVILEGE: operation eventhub.receiverGrant.write
+  (Microsoft.Authorization/roleAssignments/write, RBAC Administrator at the
+  resource, documented not measured), function eventhub-receiver-grant,
+  FEATURE_ROLES row 'RBAC Administrator (Event Hub)' with the condition only
+  Data Receiver, only service principals; the resource-creation change request
+  (AZR-88 text) offers the in-app grant with the same role and condition. ADR
+  0008 amended. UNVERIFIED LIVE (AZR-142): the PUT and its read-back, the 409
+  and PrincipalNotFound bodies, the conditioned RBAC Administrator actually
+  permitting the write, and the propagation delay before Cribl's first read
+  (not measured; the success message says Azure can take a few minutes).
+  REVIEW ROUND 1 (2026-11-18): a typed object id the directory lists under
+  ANOTHER client id now refuses principal-mismatch instead of reading 'not
+  cross-checked' (the grant would have gone to that application); and an
+  assignment this app provably made at exactly this scope (deterministic name
+  plus stamp) whose record was lost - the PUT succeeded but the KV save behind
+  the record failed before a reload - is offered 'Record it', which writes
+  only the progress document, so the AZR-141 teardown can still list it. Pins
+  only, mutation-checked.
+
 - **AZR-105** Remove (and pause where it applies) every object the onboarding screen creates: Cribl sources, the Lake route objects, the Activity Log diagnostic setting
   `AZR-F9` `story` `settled` `verified: pins`
   FOUND 2026-11-11 by a UI audit of Azure Native Source Onboarding in Live
@@ -9413,6 +9638,52 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   Preview. Review round 3 (2026-11-18): the hidden hint's arrow-key model may
   not hold for screen readers in browse mode (the table is not a composite
   widget); carried by AZR-126, unverified.
+
+- **AZR-125** The least-privilege KV audit lists omit azure-onboarding-flow-last-seen, azure-credential-lease and azure-credential-owner
+  `AZR-F10` `bug` `settled` `verified: pins`
+  Not now because: No permission is wrong or missing: the grant is the app's
+  own KV namespace, which the platform gives every App user and which cannot
+  be narrowed per key, so the omission misleads a reader of the inventory but
+  asks for nothing extra and refuses nothing. The fix also needs a decision on
+  amending a dated audit, which should not be made inside a review round.
+  Found in the AZR-37/AZR-90 review round 3 (2026-11-18). The cribl.kv.read
+  and cribl.kv.write operations in
+  packages/core/src/domain/least-privilege/operations.ts name the app KV keys
+  read and written, but not azure-onboarding-flow-last-seen (AZR-37 loads it
+  and PUTs it from the background flow poll) nor azure-credential-lease and
+  azure-credential-owner (the tenant session's; that gap predates AZR-37).
+  Those audit strings are not free text: operations.test.ts matches each
+  against a 'method path' row of
+  docs/audit/2026-11-03-least-privilege-audit.json, so adding a key means
+  amending that dated audit record or adding a later audit row, a decision
+  about how the audit is kept rather than a one-line edit. FIX: add the three
+  keys through whichever route is chosen (a dated addendum row is the honest
+  one) and pin the KV key constants (FLOW_LAST_SEEN_KEY, CREDENTIAL_LEASE_KEY,
+  CREDENTIAL_OWNER_KEY) against both lists so a new key cannot be missed
+  again. DONE 2026-11-18 (pins): route chosen is a DATED ADDENDUM,
+  docs/audit/2026-11-18-kv-key-addendum.json (the 2026-11-03 record is not
+  edited). Its GET and PUT rows name azure-onboarding-flow-last-seen,
+  azure-credential-lease, azure-credential-owner and, found while pinning,
+  tenant-cribl-mapping (the Setup mapping document, also missing).
+  cribl.kv.read and cribl.kv.write cite the dated row AND the addendum row;
+  operations.test.ts reads the addendum and holds its rows to every pin (reads
+  exactly two new rows, each referenced). Guard:
+  least-privilege/kv-keys.test.ts derives the document keys from the @soc/core
+  barrel itself (every exported string constant named *_KEY, less three
+  exclusions with reasons) and fails when one is missing from either list; it
+  was red on the four keys before the fix. It cannot see a key spelled inline
+  rather than as an exported *_KEY constant, nor @soc/ui or shell-owned keys.
+  No permission changed; verified none live because nothing live changed.
+  REVIEW ROUND 1 (2026-11-18): two more omitted keys found by review - the
+  tenant-migration claims azure-coverage-selection-migrated and
+  azure-onboarding-progress-migrated (tenantMigrationClaimKey(base) =
+  {base}-migrated, read and written by loadTenantDocument, read by
+  readStrandedLegacyDocument). Added to the addendum's GET and PUT rows, its
+  record line and notes (beside the {key}.{tenantId} remark), and to the
+  cribl.kv.read/write cited strings. kv-keys.test.ts now also derives
+  tenantMigrationClaimKey(k) for the two tenant-scoped base keys and pins the
+  derived set exactly (eight keys). Mutation-checked: removing the two names
+  from the cribl.kv.read row fails the guard on exactly those two.
 
 - **AZR-92** While one tab reads a tenant through the shared credential slot, other tabs' ordinary Azure reads go out as that tenant
   `AZR-F10` `bug` `settled` `verified: pins`
