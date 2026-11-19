@@ -1,8 +1,8 @@
 # Tenant inventory heat map, phase 1 (read-only) Implementation Plan
 
-Status: Proposed - phase 1 of docs/tenant-inventory-heatmap-design.md: a read-only heat map at the
-top of Azure Native Source Onboarding, built from reads the app already makes; not yet started.
-Last-confirmed: 2026-11-11
+Status: Record - IMPLEMENTED 2026-11-11, phase 1 of docs/tenant-inventory-heatmap-design.md shipped as AZR-107 (PR #225,
+1.13.19); kept as the record of how it was built, not as instructions.
+Last-confirmed: 2026-11-18
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

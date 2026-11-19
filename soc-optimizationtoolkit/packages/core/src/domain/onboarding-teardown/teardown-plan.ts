@@ -728,43 +728,68 @@ function sameArmId(a: string, b: string): boolean {
 }
 
 /**
- * May the app delete the Activity Log setting? Three signals, as rule 11 asks:
- * the name is the app's ({@link ACTIVITY_LOG_SETTING_NAME}), the app's KV
- * record names this subscription, and the setting still sends with the rule
- * the record says the app wrote (the stand-in for a description stamp, which
- * a diagnostic setting cannot carry).
+ * The one ownership rule for removing a diagnostic setting the app created
+ * (config-plane rule 11), shared by the Activity Log and Entra ID settings so
+ * the two cannot drift apart. Three signals: the name is the app's, the app's
+ * KV record names THIS scope (subscription or tenant; a blank scope never
+ * matches), and the setting still sends with the rule the record says the app
+ * wrote - the stand-in for a description stamp, which a diagnostic setting
+ * cannot carry.
+ */
+function classifyDiagnosticSettingRemoval(
+  lookup: ActivityLogSettingLookup,
+  rule: {
+    readonly settingName: string;
+    /** The record's scope id, or null when the app has no record. */
+    readonly recordScope: string | null;
+    readonly recordRuleId: string;
+    readonly scope: string;
+    readonly noRecord: string;
+    readonly removeIn: string;
+  },
+): ActivityLogRemovalVerdict {
+  if (lookup.kind === "absent") return { kind: "already-gone" };
+  const missing: string[] = [];
+  if (!sameArmId(lookup.setting.name, rule.settingName)) missing.push(`its name is ${lookup.setting.name}, not ${rule.settingName}`);
+  if (rule.recordScope === null || rule.scope.trim() === "" || !sameArmId(rule.recordScope, rule.scope)) {
+    missing.push(rule.noRecord);
+  } else if (!sameArmId(rule.recordRuleId, lookup.setting.ruleId)) {
+    missing.push(`it now sends with rule ${lookup.setting.ruleId || "(none)"}, not the rule this app wrote (${rule.recordRuleId})`);
+  }
+  if (missing.length > 0) {
+    return {
+      kind: "not-proven",
+      detail: `This app cannot prove it created ${rule.settingName} as it is now (${missing.join("; ")}), so it does not remove it. Remove it in ${rule.removeIn} if it should go.`,
+    };
+  }
+  return { kind: "delete" };
+}
+
+/**
+ * May the app delete the Activity Log setting? The shared rule
+ * ({@link classifyDiagnosticSettingRemoval}) keyed by subscription, under the
+ * app's name {@link ACTIVITY_LOG_SETTING_NAME}.
  */
 export function classifyActivityLogRemoval(
   lookup: ActivityLogSettingLookup,
   record: ActivityLogSettingRecord | null,
   subscriptionId: string,
 ): ActivityLogRemovalVerdict {
-  if (lookup.kind === "absent") return { kind: "already-gone" };
-  const missing: string[] = [];
-  if (!sameArmId(lookup.setting.name, ACTIVITY_LOG_SETTING_NAME)) missing.push(`its name is ${lookup.setting.name}, not ${ACTIVITY_LOG_SETTING_NAME}`);
-  if (record === null || !sameArmId(record.subscriptionId, subscriptionId)) {
-    missing.push("this app has no record of creating it on this subscription (a setting made before removal was built, or by hand, is never removed from here)");
-  } else if (!sameArmId(record.ruleId, lookup.setting.ruleId)) {
-    missing.push(`it now sends with rule ${lookup.setting.ruleId || "(none)"}, not the rule this app wrote (${record.ruleId})`);
-  }
-  if (missing.length > 0) {
-    return {
-      kind: "not-proven",
-      detail: `This app cannot prove it created ${ACTIVITY_LOG_SETTING_NAME} as it is now (${missing.join("; ")}), so it does not remove it. Remove it in the Azure portal if it should go.`,
-    };
-  }
-  return { kind: "delete" };
+  return classifyDiagnosticSettingRemoval(lookup, {
+    settingName: ACTIVITY_LOG_SETTING_NAME,
+    recordScope: record?.subscriptionId ?? null,
+    recordRuleId: record?.ruleId ?? "",
+    scope: subscriptionId,
+    noRecord:
+      "this app has no record of creating it on this subscription (a setting made before removal was built, or by hand, is never removed from here)",
+    removeIn: "the Azure portal",
+  });
 }
 
-// ---------------------------------------------------------------------------
-// The Entra ID tenant diagnostic setting (Azure, AZR-99)
-// ---------------------------------------------------------------------------
-
 /**
- * May the app delete the Entra ID tenant setting? The same three signals as
- * {@link classifyActivityLogRemoval}, keyed by tenant: the name is the app's
- * ({@link ENTRA_SETTING_NAME}), the app's KV record names THIS tenant, and the
- * setting still sends with the rule the record says the app wrote.
+ * May the app delete the Entra ID tenant setting? The shared rule
+ * ({@link classifyDiagnosticSettingRemoval}) keyed by tenant, under the app's
+ * name {@link ENTRA_SETTING_NAME}.
  *
  * The name alone proves nothing here: CriblEntraIDLogs is also the name the
  * How-to step tells an operator to type by hand, so a setting made that way
@@ -775,19 +800,13 @@ export function classifyEntraSettingRemoval(
   record: EntraSettingRecord | null,
   tenantId: string,
 ): ActivityLogRemovalVerdict {
-  if (lookup.kind === "absent") return { kind: "already-gone" };
-  const missing: string[] = [];
-  if (!sameArmId(lookup.setting.name, ENTRA_SETTING_NAME)) missing.push(`its name is ${lookup.setting.name}, not ${ENTRA_SETTING_NAME}`);
-  if (record === null || tenantId.trim() === "" || !sameArmId(record.tenantId, tenantId)) {
-    missing.push("this app has no record of creating it in this tenant (a setting made by hand from the How-to steps, or by another tool, is never removed from here)");
-  } else if (!sameArmId(record.ruleId, lookup.setting.ruleId)) {
-    missing.push(`it now sends with rule ${lookup.setting.ruleId || "(none)"}, not the rule this app wrote (${record.ruleId})`);
-  }
-  if (missing.length > 0) {
-    return {
-      kind: "not-proven",
-      detail: `This app cannot prove it created ${ENTRA_SETTING_NAME} as it is now (${missing.join("; ")}), so it does not remove it. Remove it in the Microsoft Entra admin center if it should go.`,
-    };
-  }
-  return { kind: "delete" };
+  return classifyDiagnosticSettingRemoval(lookup, {
+    settingName: ENTRA_SETTING_NAME,
+    recordScope: record?.tenantId ?? null,
+    recordRuleId: record?.ruleId ?? "",
+    scope: tenantId,
+    noRecord:
+      "this app has no record of creating it in this tenant (a setting made by hand from the How-to steps, or by another tool, is never removed from here)",
+    removeIn: "the Microsoft Entra admin center",
+  });
 }

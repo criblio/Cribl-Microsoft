@@ -1946,6 +1946,19 @@
       "detail": "FOUND 2026-11-11 by the architecture audit (range cac80aa3..61fc6c6b). Two code paths create the same kind of object and can disagree: guided-deploy/wire-source.ts POSTs the non-spec /system/lake/datasets (LAKE_DATASETS_API_PATH, 409 = success), while usecases/onboarding-lake-route POSTs the spec route /products/lake/lakes/default/datasets after a listing GET. The route output form is also built twice: source-wiring.ts:143 and domain/onboarding-lake-route lake-route.ts (lakeOutput), and parsed a third time in live-architecture.ts. Whichever create route is wrong on a real leader fails in only one of the two features. FIX after AZR-35 measures the routes live: one dataset create helper (listing read, create-only, 409 handling) and one cribl_lake:<dataset> builder/parser in domain, used by wire-source, the Lake route and live-architecture; drop the losing route from policies.yml and the least-privilege registry."
     },
     {
+      "id": "DBT-306",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "verified": "pins",
+      "title": "Activity Log and Entra ID removal restated one ownership rule twice; the Activity Log copy let a blank subscription match a blank record",
+      "detail": "FOUND 2026-11-18 by the architecture audit (range fe6f9cee..c97084b6). classifyActivityLogRemoval and classifyEntraSettingRemoval (domain/onboarding-teardown/teardown-plan.ts) were line-for-line copies of the config-plane rule 11 check (name, KV record for this scope, recorded rule). They had already drifted: the Entra copy refused a blank tenant, the Activity Log copy did not, so a blank subscription id against a record with a blank subscription would have proven ownership and allowed a delete. Not observed live; no caller is known to pass a blank subscription. FIXED: both now call one private classifyDiagnosticSettingRemoval, so a blank scope never matches for either; pinned and mutation-checked (removing the blank guard fails the new pin)."
+    },
+    {
       "id": "DBT-303",
       "epic": "DBT",
       "feature": "DBT-F1",
