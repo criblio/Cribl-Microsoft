@@ -7,6 +7,7 @@ export {
   renameProfile,
   serializeProfileStore,
   setActiveProfile,
+  switchedProfileStore,
   updateActiveConfig,
   upsertProfile,
 } from "./azure-profiles";

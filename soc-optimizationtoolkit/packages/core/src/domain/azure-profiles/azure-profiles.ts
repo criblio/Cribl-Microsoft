@@ -230,6 +230,20 @@ export function setActiveProfile(
   return { profiles: store.profiles, activeProfileId: id };
 }
 
+/**
+ * The store after an EXPLICIT switch to `nextId`, or null when the switch
+ * would change nothing: a blank id, the id already active, or an id no
+ * profile has (a connection deleted while a confirm naming it was open).
+ * A caller that switches only on a non-null answer never treats a no-op as
+ * a switch - which would clear the still-active connection's live secret
+ * (AZR-147 review round 3).
+ */
+export function switchedProfileStore(store: ProfileStore, nextId: string): ProfileStore | null {
+  if (nextId === "" || nextId === store.activeProfileId) return null;
+  const next = setActiveProfile(store, nextId);
+  return next === store ? null : next;
+}
+
 /** The active profile, or null when none is selected / found. */
 export function getActiveProfile(store: ProfileStore): ConnectionProfile | null {
   if (store.activeProfileId === null) {

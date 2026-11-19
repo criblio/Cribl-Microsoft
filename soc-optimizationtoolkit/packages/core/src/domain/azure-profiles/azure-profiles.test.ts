@@ -17,6 +17,7 @@ import {
   renameProfile,
   serializeProfileStore,
   setActiveProfile,
+  switchedProfileStore,
   updateActiveConfig,
   upsertProfile,
 } from "./index";
@@ -222,6 +223,18 @@ describe("mutating helpers are pure (return a new store, never mutate)", () => {
     const next = setActiveProfile(TWO_PROFILE_STORE, "ghost");
     expect(next).toEqual(TWO_PROFILE_STORE);
     expect(next.activeProfileId).toBe("id-a");
+  });
+
+  // AZR-147 review round 3: a switch to a deleted connection must not reach
+  // the shell's applySwitch, which would clear the still-active secret.
+  it("switchedProfileStore is null for a blank, the active, or an unknown id, and the new store otherwise", () => {
+    expect(switchedProfileStore(TWO_PROFILE_STORE, "")).toBeNull();
+    expect(switchedProfileStore(TWO_PROFILE_STORE, "id-a")).toBeNull();
+    expect(switchedProfileStore(TWO_PROFILE_STORE, "ghost")).toBeNull();
+    expect(switchedProfileStore(TWO_PROFILE_STORE, "id-b")).toEqual({
+      profiles: TWO_PROFILE_STORE.profiles,
+      activeProfileId: "id-b",
+    });
   });
 });
 

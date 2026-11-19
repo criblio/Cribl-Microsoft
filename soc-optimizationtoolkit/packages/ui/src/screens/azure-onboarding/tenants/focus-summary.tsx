@@ -9,7 +9,10 @@
  *     them into the gaps or into OK (domain/tenant-gap focusSummary).
  *   - Says when the read was taken, and how long ago.
  *   - With no read for the active tenant, says so and offers to open All
- *     tenants to read it - it never shows an empty list as "no gaps".
+ *     tenants to read it - it never shows an empty list as "no gaps". It says
+ *     "none saved" only when the saved reads loaded and were understood; while
+ *     they load, or when they could not be loaded, it says whether one is
+ *     saved is not known (review round 3).
  *
  * The words beside each colour are the grid's own (AZURE_WORD, CRIBL_WORD),
  * so the two cannot drift. Presentational over props; no IO.
@@ -20,12 +23,15 @@ import type { FocusIndicator, OnboardingSourceId } from "@soc/core";
 import { InfoTip } from "../../../components/info-tip";
 import { AZURE_WORD, CRIBL_WORD, readAgeText, type TenantGapEntry } from "../../tenant-gap/tenant-gap-state";
 import { useAgeTick } from "../../tenant-gap/use-age-tick";
+import type { SavedReadsState } from "./use-saved-gap-reads";
 
 export interface FocusSummaryProps {
   /** The active connection's name, or null when there is none. */
   readonly tenantName: string | null;
   /** Its latest gap read, or null when none is saved or cached. */
   readonly entry: TenantGapEntry | null;
+  /** Whether the saved reads were loaded and understood, so a null entry means none is saved. */
+  readonly savedReads: SavedReadsState;
   /** The clock, for the age; read at each render, and the summary ticks itself (review round 2). */
   readonly now: () => number;
   /** Show the source on this page. */
@@ -40,8 +46,16 @@ const FOCUS_TIP =
   "refused, not run, or not proven to be this tenant's) are counted apart, never as a gap and never as fine. " +
   "Read this tenant again in All tenants to bring it up to date.";
 
-function noReadText(tenantName: string): string {
-  return `No gap read is saved for ${tenantName} yet, so its gaps are not known.`;
+/** What Focus here says with no read for the tenant: absence only when it was measured. */
+export function focusNoReadText(tenantName: string, savedReads: SavedReadsState): string {
+  switch (savedReads.kind) {
+    case "known":
+      return `No gap read is saved for ${tenantName} yet, so its gaps are not known.`;
+    case "loading":
+      return `Saved gap reads are still loading, so whether one is saved for ${tenantName} is not known yet.`;
+    case "unknown":
+      return `Whether a gap read is saved for ${tenantName} is unknown: ${savedReads.reason}. Its gaps are not known.`;
+  }
 }
 
 /**
@@ -63,7 +77,7 @@ function sideLabel(i: FocusIndicator): string {
   return `${i.side === "azure" ? "Azure" : "Cribl"}: ${word}`;
 }
 
-export function FocusSummary({ tenantName, entry, now, onJump, onOpenAllTenants }: FocusSummaryProps) {
+export function FocusSummary({ tenantName, entry, savedReads, now, onJump, onOpenAllTenants }: FocusSummaryProps) {
   useAgeTick(tenantName !== null && entry !== null);
   return (
     <section className="panel azo-focus" aria-labelledby="azo-focus-title">
@@ -74,7 +88,7 @@ export function FocusSummary({ tenantName, entry, now, onJump, onOpenAllTenants 
         <p className="field-hint">No Azure connection is active. Choose one on Setup.</p>
       ) : entry === null ? (
         <div className="panel-controls">
-          <p className="field-hint">{noReadText(tenantName)}</p>
+          <p className="field-hint">{focusNoReadText(tenantName, savedReads)}</p>
           <button type="button" className="run-button" onClick={onOpenAllTenants}>
             Open All tenants to read it
           </button>

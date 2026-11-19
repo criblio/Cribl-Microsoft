@@ -36,9 +36,41 @@ import type { TenantGapCache, TenantGapEntry } from "../../tenant-gap/tenant-gap
 export const GAP_READS_NO_STORE =
   "This build of the app has no storage for gap reads, so answers are not saved and are gone after a reload.";
 
+/**
+ * Whether the saved reads say what is saved (review round 3): `known` when the
+ * load answered absent or ours and wholly understood (or no store exists, so
+ * nothing can be saved); `loading` until the one mount load answers; `unknown`
+ * with the reason when it was refused, failed, foreign, newer, or dropped parts
+ * - then a tenant with no entry may still have a saved read.
+ */
+export type SavedReadsState =
+  | { readonly kind: "loading" }
+  | { readonly kind: "known" }
+  | { readonly kind: "unknown"; readonly reason: string };
+
+/** The state a load leaves, from the document it answered. */
+export function savedReadsState(doc: GapReadsDocument): SavedReadsState {
+  switch (doc.status) {
+    case "absent":
+      return { kind: "known" };
+    case "ok":
+      return doc.decoded.dropped.length === 0
+        ? { kind: "known" }
+        : { kind: "unknown", reason: "some saved gap reads could not be understood" };
+    case "read-unknown":
+      return { kind: "unknown", reason: `the saved gap reads could not be loaded (${doc.reason})` };
+    case "foreign":
+      return { kind: "unknown", reason: "the saved gap reads key holds a document this app did not write" };
+    case "unreadable":
+      return { kind: "unknown", reason: "the saved gap reads were written by a newer release of this app" };
+  }
+}
+
 export interface SavedGapReads {
   /** Why saved answers are missing or were not saved, or null. */
   readonly note: string | null;
+  /** Whether a missing entry means none is saved (Focus here words it). */
+  readonly state: SavedReadsState;
   /** Save one complete answer under its tenant. */
   readonly save: (entry: TenantGapEntry) => void;
 }
@@ -75,6 +107,7 @@ export function useSavedGapReads(
 ): SavedGapReads {
   const [loadNote, setLoadNote] = useState<string | null>(store === undefined ? GAP_READS_NO_STORE : null);
   const [saveNote, setSaveNote] = useState<string | null>(null);
+  const [state, setState] = useState<SavedReadsState>(store === undefined ? { kind: "known" } : { kind: "loading" });
   const reads = useRef<TenantGapReads | null>(null);
   const chain = useRef<Promise<void>>(Promise.resolve());
   const latestProfiles = useRef(profiles);
@@ -103,6 +136,7 @@ export function useSavedGapReads(
         reads.current = loaded;
         seed(loaded, latestProfiles.current);
         setLoadNote(gapReadsLoadNote(doc));
+        setState(savedReadsState(doc));
         logger?.info("azure-onboarding: saved gap reads loaded", {
           load: doc.status,
           tenants: Object.keys(loaded.tenants).length,
@@ -139,6 +173,7 @@ export function useSavedGapReads(
           // this load says rather than what a failed mount load said.
           seed(next, latestProfiles.current);
           setLoadNote(gapReadsLoadNote(doc));
+          setState(savedReadsState(doc));
           setSaveNote(null);
           logger?.info("azure-onboarding: gap read saved", { tenants: Object.keys(next.tenants).length });
         } catch (error) {
@@ -149,6 +184,6 @@ export function useSavedGapReads(
     [store, logger, seed],
   );
 
-  return { note: saveNote ?? loadNote, save };
+  return { note: saveNote ?? loadNote, state, save };
 }
 

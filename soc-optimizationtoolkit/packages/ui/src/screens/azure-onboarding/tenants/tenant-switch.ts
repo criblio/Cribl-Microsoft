@@ -23,7 +23,8 @@
  *
  * And the switch happens only for the confirm on screen: a Cancel, or a new
  * Open, while the lease is being read drops the earlier confirm's switch;
- * and a switch made elsewhere meanwhile (the connection bar) drops it too.
+ * and a switch made elsewhere meanwhile (the connection bar), or the named
+ * connection being deleted or re-pointed, drops it too.
  *
  * Pure: no IO, no React.
  */
@@ -52,6 +53,18 @@ export function switchRefusedOperation(label: string): string {
 /** Dropped: the active connection changed (elsewhere) while the switch was being checked. */
 export const SWITCH_REFUSED_ACTIVE_CHANGED =
   "Not switched: the active connection changed while the switch was being checked. Open the source again to switch from the connection now active.";
+
+/**
+ * Dropped: the connection the confirm names was deleted, or now points at a
+ * different tenant, since the confirm opened (review round 3). An A-to-B-to-A
+ * round trip leaves the active connection unchanged, so this is checked on
+ * its own, not inferred from the active id.
+ */
+export function switchRefusedTarget(tenantName: string, why: "gone" | "repointed"): string {
+  return why === "gone"
+    ? `Not switched: ${tenantName} is no longer a connection. Open a source again from the grid.`
+    : `Not switched: ${tenantName} now points at a different tenant than when you were asked. Open the source again to switch to it.`;
+}
 
 /** Refused: the shell cannot switch from here (no handler wired). */
 export const SWITCH_UNAVAILABLE =

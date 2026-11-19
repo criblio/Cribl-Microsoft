@@ -57,8 +57,8 @@ import { READ_AGE_TICK_MS } from "../../tenant-gap/use-age-tick";
 import { howtoRowAnchorId } from "../howto/howto-state";
 import { AzureOnboardingPage } from "./azure-onboarding-page";
 import type { AzureOnboardingPageProps } from "./azure-onboarding-page";
-import { FOCUS_CANCELLED_TEXT } from "./focus-summary";
-import { SWITCH_REFUSED_ACTIVE_CHANGED, SWITCH_REFUSED_READ_ALL, switchConfirmText } from "./tenant-switch";
+import { FOCUS_CANCELLED_TEXT, focusNoReadText } from "./focus-summary";
+import { SWITCH_REFUSED_ACTIVE_CHANGED, SWITCH_REFUSED_READ_ALL, switchConfirmText, switchRefusedTarget } from "./tenant-switch";
 
 afterEach(cleanup);
 
@@ -375,11 +375,23 @@ describe("4. gap reads saved per tenant", () => {
   it("a document this release cannot read seeds nothing - every cell unknown, never green - and says why", async () => {
     const store = new FakeKvDocumentStore({ [TENANT_GAP_READS_KEY]: { kind: "tenant-gap-reads", version: 2, tenants: {} } });
     mount({ store });
-    await waitFor(() => expect(screen.getByText(/written by a newer release/)).toBeTruthy());
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "Saved gap reads were written by a newer release of this app, so every tenant shows as not read yet and nothing is saved over them.",
+        ),
+      ).toBeTruthy(),
+    );
     const states = [...allTenantsBody().querySelectorAll<HTMLElement>("[data-state]")].map((e) => e.dataset.state);
     expect(states.length).toBe(PROFILES.length * GAP_SOURCES.length * 2);
     expect(new Set(states)).toEqual(new Set(["unknown"]));
-    expect(screen.getByText("No gap read is saved for Contoso yet, so its gaps are not known.")).toBeTruthy();
+    // Review round 3: a document this release cannot read is not "none saved".
+    expect(
+      screen.getByText(
+        "Whether a gap read is saved for Contoso is unknown: the saved gap reads were written by a newer release of this app. Its gaps are not known.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText("No gap read is saved for Contoso yet, so its gaps are not known.")).toBeNull();
   });
 
   it("a complete read is saved under its tenant, merged with what is stored", async () => {
@@ -444,7 +456,7 @@ describe("5. Focus here", () => {
   it("with no saved read for the active tenant, says so and offers to open All tenants", async () => {
     const store = new FakeKvDocumentStore({ [TENANT_GAP_READS_KEY]: savedDoc() });
     mount({ store, activeProfileId: "pb" });
-    expect(screen.getByText("No gap read is saved for Fabrikam yet, so its gaps are not known.")).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("No gap read is saved for Fabrikam yet, so its gaps are not known.")).toBeTruthy());
     expect(document.querySelectorAll('[data-testid^="azo-gap-badge-"]').length).toBe(0);
     fireEvent.click(screen.getByRole("button", { name: "Open All tenants to read it" }));
     expect(allTenantsBody().hidden).toBe(false);
@@ -627,5 +639,122 @@ describe("4b. a save after a failed mount load (review round 1)", () => {
     await waitFor(() => expect(screen.queryByText(failed)).toBeNull());
     expect(within(fabrikam()).getByText(/^Read at .*, 1 minute ago$/)).toBeTruthy();
     expect(within(fabrikam()).queryByText("Not read yet")).toBeNull();
+  });
+});
+
+describe("5b. Focus here never states an absence it did not measure (review round 3)", () => {
+  const focusText = () => document.querySelector<HTMLElement>(".azo-focus .field-hint")!.textContent;
+
+  it("says the saved reads are loading until the one KV load answers", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    class HeldReadsStore extends FakeKvDocumentStore {
+      override async load(key: string) {
+        if (key === TENANT_GAP_READS_KEY) await gate;
+        return super.load(key);
+      }
+    }
+    mount({ store: new HeldReadsStore() });
+    expect(focusText()).toBe("Saved gap reads are still loading, so whether one is saved for Contoso is not known yet.");
+    expect(screen.queryByText(/No gap read is saved/)).toBeNull();
+    release();
+    await waitFor(() => expect(focusText()).toBe("No gap read is saved for Contoso yet, so its gaps are not known."));
+  });
+
+  it("a refused load is unknown, with its reason, never none saved", async () => {
+    const store = new FakeKvDocumentStore({ [TENANT_GAP_READS_KEY]: savedDoc() }).scriptLoad(TENANT_GAP_READS_KEY, {
+      kind: "unknown",
+      reason: "HTTP 403",
+    });
+    mount({ store });
+    await waitFor(() =>
+      expect(focusText()).toBe(
+        "Whether a gap read is saved for Contoso is unknown: the saved gap reads could not be loaded (HTTP 403). Its gaps are not known.",
+      ),
+    );
+  });
+
+  it("words each load state exactly", () => {
+    expect(focusNoReadText("Contoso", { kind: "known" })).toBe("No gap read is saved for Contoso yet, so its gaps are not known.");
+    expect(focusNoReadText("Contoso", { kind: "loading" })).toBe(
+      "Saved gap reads are still loading, so whether one is saved for Contoso is not known yet.",
+    );
+    expect(focusNoReadText("Contoso", { kind: "unknown", reason: "some reason" })).toBe(
+      "Whether a gap read is saved for Contoso is unknown: some reason. Its gaps are not known.",
+    );
+  });
+
+  it("a foreign document in the store says unknown on Focus here", async () => {
+    const store = new FakeKvDocumentStore({ [TENANT_GAP_READS_KEY]: { kind: "something-else", tenants: {} } });
+    mount({ store });
+    await waitFor(() =>
+      expect(focusText()).toBe(
+        "Whether a gap read is saved for Contoso is unknown: the saved gap reads key holds a document this app did not write. Its gaps are not known.",
+      ),
+    );
+  });
+});
+
+describe("3d. the confirm follows its target, and is brought to the operator (review round 3)", () => {
+  const openFabrikam = () =>
+    fireEvent.click(screen.getByRole("button", { name: `Switch to Fabrikam and open ${RED_SOURCE!.title}` }));
+  const confirmGroup = () => screen.queryByRole("group", { name: "Confirm switching the active tenant" });
+
+  it("a confirm whose connection was deleted is dropped with the reason, and never switches", async () => {
+    const m = mount();
+    expand();
+    openFabrikam();
+    expect(confirmGroup()).not.toBeNull();
+    m.rerender("pa", { profiles: [PROFILES[0]!] });
+    expect(confirmGroup()).toBeNull();
+    expect(screen.getByRole("alert").textContent).toBe(switchRefusedTarget("Fabrikam", "gone"));
+    expect(switchRefusedTarget("Fabrikam", "gone")).toBe(
+      "Not switched: Fabrikam is no longer a connection. Open a source again from the grid.",
+    );
+    await settle();
+    expect(m.switched).toEqual([]);
+  });
+
+  it("a connection deleted while the lease is read drops the switch (the A to B to A round trip)", async () => {
+    const store = new HeldLeaseStore().holdLease();
+    const m = mount({ store });
+    expand();
+    openFabrikam();
+    fireEvent.click(screen.getByRole("button", { name: "Switch and open" }));
+    // Switch to B, delete B: A is active again, B is gone.
+    m.rerender("pb");
+    m.rerender("pa", { profiles: [PROFILES[0]!] });
+    store.release();
+    await waitFor(() => expect(store.loads.filter((k) => k === CREDENTIAL_LEASE_KEY).length).toBe(1));
+    await settle();
+    expect(m.switched).toEqual([]);
+    expect(confirmGroup()).toBeNull();
+  });
+
+  it("a confirm whose connection now points at another tenant is dropped with the reason", async () => {
+    const m = mount();
+    expand();
+    openFabrikam();
+    const repointed = { ...PROFILES[1]!, config: { ...PROFILES[1]!.config, tenantId: "cccccccc-0000-0000-0000-000000000003" } };
+    m.rerender("pa", { profiles: [PROFILES[0]!, repointed] });
+    expect(confirmGroup()).toBeNull();
+    expect(screen.getByRole("alert").textContent).toBe(switchRefusedTarget("Fabrikam", "repointed"));
+    expect(switchRefusedTarget("Fabrikam", "repointed")).toBe(
+      "Not switched: Fabrikam now points at a different tenant than when you were asked. Open the source again to switch to it.",
+    );
+    await settle();
+    expect(m.switched).toEqual([]);
+  });
+
+  it("focuses Switch and open when the confirm appears, and Cancel returns focus to the Open that raised it", () => {
+    mount();
+    expand();
+    const opener = screen.getByRole("button", { name: `Switch to Fabrikam and open ${RED_SOURCE!.title}` });
+    opener.focus();
+    fireEvent.click(opener);
+    const group = confirmGroup()!;
+    expect(document.activeElement).toBe(within(group).getByRole("button", { name: "Switch and open" }));
+    fireEvent.click(within(group).getByRole("button", { name: "Cancel" }));
+    expect(document.activeElement).toBe(opener);
   });
 });

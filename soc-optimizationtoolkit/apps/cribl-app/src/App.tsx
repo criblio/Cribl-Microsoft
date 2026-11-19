@@ -95,6 +95,7 @@ import {
   serializeSetupRecord,
   serializeProfileStore,
   setActiveProfile,
+  switchedProfileStore,
   updateActiveConfig,
   upsertProfile,
   addTenantProfiles,
@@ -1162,15 +1163,17 @@ function App() {
   // unchanged or blank. It reads storeRef, not this render's store: the All
   // tenants grid calls it after awaiting the credential lease, and a store from
   // the click's render would write back over a rename, a new connection or a
-  // switch made meanwhile (AZR-147 review round 1).
+  // switch made meanwhile (AZR-147 review round 1). An id no connection has
+  // (deleted while a confirm naming it was open) switches nothing: it must not
+  // reach applySwitch, which would clear the still-active connection's secret
+  // and say it switched (review round 3).
   const handleSelectProfile = (nextId: string) => {
     const current = storeRef.current;
-    if (nextId === '' || nextId === current.activeProfileId) {
+    const nextStore = switchedProfileStore(current, nextId);
+    if (nextStore === null) {
       return;
     }
-    const prevConfig = getActiveConfig(current);
-    const nextStore = setActiveProfile(current, nextId);
-    applySwitch(prevConfig, getActiveConfig(nextStore), nextId, nextStore);
+    applySwitch(getActiveConfig(current), getActiveConfig(nextStore), nextId, nextStore);
   };
 
   // New connection: a fresh blank profile with a shell-minted id, made active.

@@ -10614,7 +10614,15 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   the All tenants grid) re-reads the clock once a minute while one is shown
   (use-age-tick.ts, the AuditAgeChip pattern), so 'just now' no longer stays
   'just now' on a kept-alive page. Mutation-checked (5 mutations, each
-  killed). Unverified live.
+  killed). Unverified live. REVIEW ROUND 3: a switch confirm is dropped with
+  the reason the moment its connection is deleted or re-pointed or the active
+  connection changes (an A-to-B-to-A round trip included), and the shell
+  switch (switchedProfileStore) treats an id no connection has as no switch,
+  so it never clears the still-active secret; Focus here says none saved only
+  when the saved reads loaded and were understood, and says loading or unknown
+  with the reason otherwise; the confirm is scrolled into view with Switch and
+  open focused, and Cancel returns focus to the Open that raised it.
+  Mutation-checked (5 mutations, each killed). Unverified live.
 
 - **AZR-148** The tenant read-in-flight notice says leaving the screen cancels the read; keep-alive keeps it running
   `AZR-F10` `bug` `settled` `verified: pins`
