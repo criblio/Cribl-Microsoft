@@ -128,6 +128,67 @@ tenant's. Reads happen only when asked (per tenant or all), through the tenant
 session, paced inside the shared request budget; mounting the screen makes no
 Azure call. Every tile carries an (i).
 
+**Amendment (2026-11-19, AZR-147): the dashboard folds into Azure Native
+Source Onboarding.** The operator asked to fold Tenant Logging Gaps into the
+onboarding page, with five decisions:
+
+1. **All tenants opens the page.** A collapsible "All tenants" section, above
+   Focus here and the onboarding sections, holds the grid described above -
+   moved, not rewritten (`packages/ui/src/screens/tenant-gap/`, composed by
+   `screens/azure-onboarding/tenants/azure-onboarding-page.tsx`). Its read,
+   cancel, lease and slot (AZR-90), keyboard (AZR-91) and honesty rules are
+   unchanged. The active connection's row is highlighted and labelled.
+   Collapsing hides the grid; it does not unmount it, so a Read all keeps
+   running.
+2. **No nav item.** Tenant Logging Gaps leaves the nav and the board's menus.
+   Its route id `tenant-gaps` survives as an AppFrame route ALIAS onto
+   `azure-onboarding` that opens All tenants, so a bookmark or a
+   `nav.navigate('tenant-gaps')` still lands on the grid.
+3. **Following a gap.** Each cell carries an Open link (a third stop in the
+   grid's roving tabindex) and a click in a cell does the same. For the
+   active tenant it focuses that source's row in Choose what to onboard. For
+   another tenant a confirm names the tenant and the source first ("Switch the
+   active tenant to <name> and open <source>?"), then Setup's own switch
+   (App.tsx `handleSelectProfile`, with its secret and token clears) runs and
+   the page jumps once the screen has loaded for the new connection. Never
+   without the confirm. Refused, with the reason, while a Read all is in
+   flight, while the tab's credential slot is held exclusively (a tenant
+   session or Save and connect) or has an Azure write in flight
+   (`AzureCredentialSlot.busyReason`), or while another tab holds the
+   credential lease or the lease cannot be read (read when the operator
+   confirms, never on mount).
+4. **Gap reads are saved per tenant.** One app KV document,
+   `tenant-gap-reads` (`domain/tenant-gap/saved-reads.ts`), maps each
+   normalized tenant id to its latest complete row and the time it was read.
+   Versioned (`kind`, `version` exactly 1) with the progress document's gate:
+   absent and ours-readable allow a write; foreign, newer and refused reads
+   block it. Decode is tolerant and reports what it dropped. A saved row
+   seeds a connection only while that connection still names the tenant and
+   is the connection it was read through. Loading it is the page's ONE mount
+   read (the "mount reads nothing" rule above still holds for Azure, Graph
+   and Cribl); each save loads it again and merges one tenant. A cancelled
+   row is never saved. A saved answer shows its age; a missing or
+   undecodable document seeds nothing, so every cell reads "not read yet"
+   (unknown), never green. The in-memory cache still holds the read in
+   flight and seeds keep the newer answer. The key is in the least-privilege
+   KV lists through the dated addendum
+   `docs/audit/2026-11-19-tenant-gap-reads-addendum.json` (AZR-125 guard).
+5. **Focus here.** Below All tenants, the ACTIVE tenant's latest read: each
+   source with a red Azure or Cribl indicator, with the indicator's reason
+   sentence and a jump link; unknown sources counted apart ("N not read or
+   unknown"), never as gaps or OK (`domain/tenant-gap/focus.ts`); when the
+   read was taken and how long ago. With no read for the active tenant it
+   says so and offers to open All tenants. Each red source's row in Choose
+   what to onboard carries a small "Gap" badge with an (i). The words beside
+   each colour are the grid's own (AZURE_WORD, CRIBL_WORD).
+
+What the amendment does not prove: none of it has run in Live Preview. The
+switch's refusal sees only this tab's slot and the lease - not a deploy
+between two of its requests (nothing in flight at that instant), and not
+another tab's ordinary writes. Two tabs saving gap reads at the same instant
+can lose one answer (no compare-and-swap); that costs a re-read, never a
+wrong colour.
+
 ## Unverified
 
 - **Inferred:** swapping `azureBasic` and re-minting the token takes effect on

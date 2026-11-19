@@ -58,6 +58,27 @@ export interface GapCell {
   readonly cribl: GapIndicator;
 }
 
+/** One tenant's row: what usecases/scan-tenant-gap answers, and what the saved-reads document keeps. */
+export interface TenantGapRow {
+  readonly profileId: string;
+  readonly tenantId: string;
+  readonly cells: readonly GapCell[];
+  /**
+   * Whether the Azure side was read and proven to be this tenant's: green when
+   * it was, unknown with the reason otherwise. Never red.
+   */
+  readonly status: GapIndicator;
+  /** Things the operator should know that are not about one cell. */
+  readonly warnings: readonly string[];
+  /** The Azure reads Validate planned for this tenant (first pages), for the (i). */
+  readonly plannedReads: number;
+  /**
+   * True when the signal aborted before the scan finished: some answers are
+   * missing, so this row must not replace an earlier complete one.
+   */
+  readonly cancelled: boolean;
+}
+
 /** One Validate check of a source, as the indicator needs it. */
 export interface GapCheck {
   readonly kind: CheckKind;

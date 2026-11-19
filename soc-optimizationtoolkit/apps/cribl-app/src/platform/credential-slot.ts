@@ -211,6 +211,8 @@ export class AzureCredentialSlot implements CredentialSlot {
   private pendingExclusive = 0;
   private exclusiveTail: Promise<void> = Promise.resolve();
   private readonly inFlight = new Set<Promise<unknown>>();
+  /** Admitted ordinary WRITES not yet settled (AZR-147: a connection switch waits for none). */
+  private writesInFlight = 0;
   /** The tenant whose ordinary requests the slot admits right now. */
   private owner: string | null = null;
   /** A tenant waiting for the owner's requests to drain; later owner requests queue behind it. */
@@ -372,9 +374,11 @@ export class AzureCredentialSlot implements CredentialSlot {
     // run, so a session of this tab waits for its after-read too.
     const p = this.checked(identity, access, fn);
     this.inFlight.add(p);
+    if (access === 'write') this.writesInFlight += 1;
     try {
       return await p;
     } finally {
+      if (access === 'write') this.writesInFlight -= 1;
       this.inFlight.delete(p);
       if (this.inFlight.size === 0) {
         const waiters = this.drainWaiters;
@@ -382,6 +386,27 @@ export class AzureCredentialSlot implements CredentialSlot {
         for (const wake of waiters) wake();
       }
     }
+  }
+
+  /**
+   * Why the active connection must not be switched right now, or null
+   * (AZR-147: the All tenants grid switches with Setup's own switch, which
+   * clears the slot). A tenant session or a Save and connect holds - or is
+   * queued for - the exclusive section, or an Azure write this tab admitted
+   * has not settled. Ordinary reads do not block it: a switch rewrites the
+   * owner record, so a read in flight across it is discarded as unknown by its
+   * own after-read (AZR-92). What this cannot see: a deploy BETWEEN two of its
+   * requests (nothing in flight at that instant), and other tabs - the
+   * credential lease covers their sessions, and nothing covers their writes.
+   */
+  busyReason(): string | null {
+    if (this.pendingExclusive > 0) {
+      return 'a tenant read or a Save and connect holds the Azure credential slot in this tab';
+    }
+    if (this.writesInFlight > 0) {
+      return `${this.writesInFlight === 1 ? 'an Azure change is' : `${this.writesInFlight} Azure changes are`} being sent from this tab`;
+    }
+    return null;
   }
 
   // -- the owner check (AZR-92) ----------------------------------------------

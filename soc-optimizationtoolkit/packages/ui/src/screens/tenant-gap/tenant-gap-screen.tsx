@@ -24,6 +24,18 @@
  *     of starting a second run that would collide with the first's lease.
  *   - The colours and words come from @soc/core (domain/tenant-gap); this file
  *     only lays them out.
+ *
+ * WHERE IT LIVES (AZR-147, ADR 0009 decision 6 amendment 2026-11-19). The
+ * grid is no longer a page of its own: it is the "All tenants" section at the
+ * top of Azure Native Source Onboarding (azure-onboarding/tenants/), moved
+ * as it was. The page adds three things through props, none of which changes
+ * the rules above: the ACTIVE connection's row is highlighted (`activeProfileId`);
+ * with `onOpen`, each cell gains an Open link, a third stop in the roving
+ * tabindex, that asks the page to show that source (switching the active
+ * connection first, after a confirm, when the row is another tenant's); and
+ * with `onRead`, every complete answer this grid reads is handed to the page,
+ * which saves it per tenant in the app KV store. Saved answers come back
+ * through the cache (TenantGapCache.seed), so this file still loads nothing.
  */
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -33,6 +45,7 @@ import type {
   BatchPacing,
   ExistingRead,
   GapIndicator,
+  OnboardingSourceId,
   TenantGapProfile,
   TenantGapRow,
   TenantSession,
@@ -45,6 +58,7 @@ import {
   CRIBL_WORD,
   moveGridFocus,
   progressLine,
+  readAgeText,
   type GridPos,
   stateCounts,
   type ScanProgress,
@@ -63,6 +77,15 @@ export interface TenantGapScreenProps {
   readonly pacing?: BatchPacing;
   /** Epoch ms for the "read at" stamp; Date.now by default. */
   readonly now?: () => number;
+  /** The active connection's id: its row is highlighted and named as active (AZR-147). */
+  readonly activeProfileId?: string | null;
+  /**
+   * Show `sourceId` on the page for this connection (AZR-147). Present, every
+   * cell gains an Open link; the page decides whether a confirm comes first.
+   */
+  readonly onOpen?: (profile: TenantGapProfile & { readonly name: string }, sourceId: OnboardingSourceId) => void;
+  /** Told of every COMPLETE answer this grid reads, so the page can save it (AZR-147). */
+  readonly onRead?: (entry: TenantGapEntry) => void;
 }
 
 const PANEL_TIP =
@@ -110,16 +133,18 @@ export const RESTORE_FAILED =
   "The active connection's credential could not be put back after reading. Save and connect on Setup before using other screens.";
 
 /**
- * The shell-wide notice while a Read all holds the Azure slot (AZR-90). It
- * shows on other screens only after the operator left Tenant Logging Gaps,
- * and leaving already cancelled the run (the unmount abort), so it must not
- * send them back to a Cancel button that is no longer there (review round 3).
+ * The shell-wide notice while a Read all holds the Azure slot (AZR-90). The
+ * grid lives in the All tenants section of Azure Native Source Onboarding
+ * (AZR-147), and the app keeps a visited screen MOUNTED when the operator
+ * moves to another, so leaving does NOT cancel the read: it runs until it ends
+ * or is cancelled there (AZR-148 - the earlier wording said leaving cancels it,
+ * which the keep-alive frame made untrue).
  */
 export const TENANT_READ_IN_FLIGHT =
   "A tenant gap read is running or finishing. From the first tenant it reads through Azure until it ends, it holds " +
-  "the app's Azure credential slot, and Azure reads on every screen of this tab wait. Cancel on Tenant Logging Gaps " +
-  "stops it, and leaving that screen cancels it too; the slot frees once its current request returns and the active " +
-  "connection's credential is back.";
+  "the app's Azure credential slot, and Azure reads on every screen of this tab wait. It keeps running when you " +
+  "move to another screen; Cancel in the All tenants section of Azure Native Source Onboarding stops it. The slot " +
+  "frees once its current request returns and the active connection's credential is back.";
 
 /**
  * The shell's notice while a Read all is in flight, on whatever screen is
@@ -135,6 +160,9 @@ export function TenantReadInFlightNotice({ cache }: { readonly cache: TenantGapC
   ) : null;
 }
 
+// Shown only after the grid was UNMOUNTED mid-read - the unmount abort did
+// cancel that run, so this sentence holds (AZR-148 is about the shell notice,
+// which shows while the grid is merely hidden).
 const EARLIER_RUN =
   "An earlier read is still finishing: leaving this screen cancelled it, and it stops once its current request " +
   "returns and the active connection's credential is back. Reads can start again once it has.";
@@ -144,6 +172,26 @@ const GRID_HINT_ID = "tgap-grid-keys";
 const GRID_HINT =
   "Arrow keys move between indicators, Home and End to the first and last in the row, Control with Home or End to " +
   "the first and last in the grid. Enter or Space shows or hides the reason.";
+/** The same hint when each cell also has an Open link (AZR-147). */
+const GRID_HINT_WITH_OPEN =
+  "Arrow keys move between indicators and Open links, Home and End to the first and last in the row, Control with " +
+  "Home or End to the first and last in the grid. Enter or Space shows or hides a reason, or follows an Open link.";
+
+/** Per source: the Azure tip, the Cribl tip, and (with onOpen) the Open link. */
+function stopsPerSource(withOpen: boolean): number {
+  return withOpen ? 3 : 2;
+}
+
+/** The roving element at a grid position: a tip, or an Open link. */
+function rovingAt(body: HTMLElement | null, pos: GridPos): HTMLElement | null {
+  const cell = body?.querySelector<HTMLElement>(`[data-row="${pos.row}"][data-col="${pos.col}"]`) ?? null;
+  return cell?.querySelector<HTMLElement>('[role="button"], button') ?? null;
+}
+
+/** Whether an element is one of the grid's roving stops. */
+function isRovingStop(el: HTMLElement): boolean {
+  return el.getAttribute("role") === "button" || el.tagName === "BUTTON";
+}
 
 function Indicator(props: {
   side: "azure" | "cribl";
@@ -182,19 +230,27 @@ function Indicator(props: {
 
 const NOT_READ: GapIndicator = { state: "unknown", reason: NOT_READ_REASON };
 
-export function TenantGapScreen({ profiles, cache, session, pacing, now = () => Date.now() }: TenantGapScreenProps) {
+export function TenantGapScreen({
+  profiles,
+  cache,
+  session,
+  pacing,
+  now = () => Date.now(),
+  activeProfileId = null,
+  onOpen,
+  onRead,
+}: TenantGapScreenProps) {
   const { ports } = usePorts();
   const store = ports.kvDocuments;
   const logger = ports.logger;
-  // Seeded from the cache only: no read on mount.
-  const [entries, setEntries] = useState<Readonly<Record<string, TenantGapEntry>>>(() => {
-    const out: Record<string, TenantGapEntry> = {};
-    for (const p of profiles) {
-      const e = cache.get(p);
-      if (e !== null) out[p.id] = e;
-    }
-    return out;
-  });
+  // Read from the cache on every change of it: no read on mount, and a saved
+  // answer the page seeds after its one KV load shows up without a copy here.
+  useSyncExternalStore(cache.subscribe, cache.version);
+  const entries: Readonly<Record<string, TenantGapEntry>> = {};
+  for (const p of profiles) {
+    const e = cache.get(p);
+    if (e !== null) (entries as Record<string, TenantGapEntry>)[p.id] = e;
+  }
   const [progress, setProgress] = useState<ScanProgress | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -206,15 +262,15 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
   // next tenant's Read button.
   const [stop, setStop] = useState<GridPos>({ row: 0, col: 0 });
   const gridBody = useRef<HTMLTableSectionElement>(null);
-  const gridCols = GAP_SOURCES.length * 2;
+  const perSource = stopsPerSource(onOpen !== undefined);
+  const gridCols = GAP_SOURCES.length * perSource;
   const stopAt: GridPos = {
     row: Math.min(stop.row, Math.max(0, profiles.length - 1)),
     col: Math.min(stop.col, gridCols - 1),
   };
-  const tipAt = (pos: GridPos): HTMLElement | null =>
-    gridBody.current?.querySelector<HTMLElement>(`[data-row="${pos.row}"][data-col="${pos.col}"] [role="button"]`) ?? null;
+  const tipAt = (pos: GridPos): HTMLElement | null => rovingAt(gridBody.current, pos);
   const posOf = (target: EventTarget): GridPos | null => {
-    if (!(target instanceof HTMLElement) || target.getAttribute("role") !== "button") return null;
+    if (!(target instanceof HTMLElement) || !isRovingStop(target)) return null;
     const ind = target.closest<HTMLElement>("[data-col]");
     if (ind === null) return null;
     return { row: Number(ind.dataset.row), col: Number(ind.dataset.col) };
@@ -238,19 +294,13 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
 
   // Wait out an earlier visit's read, then show what it cached. Mount only:
   // a later run is this screen's own.
-  const mountProfiles = useRef(profiles);
   useEffect(() => {
     const pending = cache.inFlight();
     if (pending === null) return;
     let live = true;
+    // What it cached shows through the cache subscription above.
     void pending.then(() => {
       if (!live) return;
-      const out: Record<string, TenantGapEntry> = {};
-      for (const p of mountProfiles.current) {
-        const e = cache.get(p);
-        if (e !== null) out[p.id] = e;
-      }
-      setEntries(out);
       setEarlierRun(false);
     });
     return () => {
@@ -302,8 +352,10 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
           if (row.cancelled) interrupted = profile.name;
           // The cache keeps an earlier complete answer over a cancelled one.
           cache.set({ row, readAt: now() });
+          // AZR-147: a COMPLETE answer goes to the page to be saved per tenant;
+          // a cancelled one is never saved.
           const kept = cache.get(profile);
-          if (kept !== null) setEntries((prev) => ({ ...prev, [profile.id]: kept }));
+          if (kept !== null && kept.row === row && !row.cancelled) onRead?.(kept);
           logger?.info("tenant-gap: tenant read", { status: row.status.state, cancelled: row.cancelled });
         }
       };
@@ -338,7 +390,7 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
       cache.track(inFlight);
       await inFlight;
     },
-    [session, pacing, store, ports.cribl, logger, cache, now],
+    [session, pacing, store, ports.cribl, logger, cache, now, onRead],
   );
 
   const readRows = profiles.map((p) => entries[p.id]?.row).filter((r): r is TenantGapRow => r !== undefined);
@@ -405,7 +457,7 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
         </div>
       </div>
       <p id={GRID_HINT_ID} hidden>
-        {GRID_HINT}
+        {onOpen === undefined ? GRID_HINT : GRID_HINT_WITH_OPEN}
       </p>
       <div className="tgap-scroll">
         <table className="tgap-grid">
@@ -431,13 +483,21 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
             {profiles.map((p, rowIndex) => {
               const entry = entries[p.id];
               const row = entry?.row;
+              const active = activeProfileId !== null && p.id === activeProfileId;
               return (
-                <tr key={p.id} data-profile={p.id}>
+                <tr
+                  key={p.id}
+                  data-profile={p.id}
+                  data-active={active ? "true" : undefined}
+                  className={active ? "tgap-row-active" : undefined}
+                >
                   <th scope="row" className="tgap-tenant">
                     <span className="tgap-tenant-name">{p.name}</span>
+                    {/* A word, not the highlight alone, says which row is active. */}
+                    {active && <span className="tgap-active-tag">Active connection</span>}
                     <span className="tgap-tenant-id">{p.config.tenantId.trim() === "" ? "no tenant id" : p.config.tenantId}</span>
                     <span className="tgap-tenant-status">
-                      {entry === undefined ? "Not read yet" : `Read at ${stamp(entry.readAt)}`}
+                      {entry === undefined ? "Not read yet" : `Read at ${stamp(entry.readAt)}, ${readAgeText(entry.readAt, now())}`}
                       {row !== undefined && <InfoTip text={row.status.reason} label={`${p.name}: how it was read`} />}
                     </span>
                     {row?.warnings.map((w) => (
@@ -458,12 +518,43 @@ export function TenantGapScreen({ profiles, cache, session, pacing, now = () => 
                   {GAP_SOURCES.map((s, sourceIndex) => {
                     const cell = row?.cells.find((c) => c.sourceId === s.id);
                     const where = `${p.name}, ${s.title}`;
-                    const pos = (side: 0 | 1): GridPos => ({ row: rowIndex, col: sourceIndex * 2 + side });
-                    const isStop = (side: 0 | 1) => stopAt.row === rowIndex && stopAt.col === sourceIndex * 2 + side;
+                    const pos = (side: 0 | 1 | 2): GridPos => ({ row: rowIndex, col: sourceIndex * perSource + side });
+                    const isStop = (side: 0 | 1 | 2) =>
+                      stopAt.row === rowIndex && stopAt.col === sourceIndex * perSource + side;
                     return (
-                      <td key={s.id} className="tgap-cell">
+                      <td
+                        key={s.id}
+                        className={onOpen === undefined ? "tgap-cell" : "tgap-cell tgap-cell-open"}
+                        // A click anywhere in the cell but a tip or the link
+                        // follows the link (AZR-147: "click a gap cell").
+                        onClick={
+                          onOpen === undefined
+                            ? undefined
+                            : (event) => {
+                                const t = event.target;
+                                if (t instanceof HTMLElement && t.closest('[role="button"], button') !== null) return;
+                                onOpen(p, s.id);
+                              }
+                        }
+                      >
                         <Indicator side="azure" sourceId={s.id} where={where} indicator={cell?.azure ?? NOT_READ} pos={pos(0)} stop={isStop(0)} />
                         <Indicator side="cribl" sourceId={s.id} where={where} indicator={cell?.cribl ?? NOT_READ} pos={pos(1)} stop={isStop(1)} />
+                        {onOpen !== undefined && (
+                          <span className="tgap-open" data-row={pos(2).row} data-col={pos(2).col} data-source={s.id}>
+                            <button
+                              type="button"
+                              className="link-button"
+                              tabIndex={isStop(2) ? 0 : -1}
+                              aria-describedby={GRID_HINT_ID}
+                              aria-label={
+                                active ? `Open ${s.title} on this page` : `Switch to ${p.name} and open ${s.title}`
+                              }
+                              onClick={() => onOpen(p, s.id)}
+                            >
+                              Open
+                            </button>
+                          </span>
+                        )}
                       </td>
                     );
                   })}

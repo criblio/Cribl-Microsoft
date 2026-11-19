@@ -120,7 +120,8 @@ The mockups the operator reacted to are a record of the conversation, not a spec
   and How-to step generation take a log-type subset.
 - **The log-type list EXTENDS `ONBOARDING_SOURCES`** (each source gains child log types); it does
   not replace it, so stored How-to progress, `ITEM_AVAILABILITY` and the dataflow lanes keep their
-  keys. Tenant Logging Gaps is later rebuilt on the inventory so two screens cannot answer "is X
+  keys. The tenant gap grid (since AZR-147 the All tenants section of this same screen, no longer
+  a page of its own) is later rebuilt on the inventory so two sections cannot answer "is X
   collected" differently; until then its own (i) says it covers only what the app created.
 - **Phased delivery:** (1) read-only heat map from today's reads, unbuilt categories blue with the
   reason "not checked yet" (distinct from refused or failed), existing sections still reachable;

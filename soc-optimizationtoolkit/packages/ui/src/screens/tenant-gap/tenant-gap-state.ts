@@ -18,11 +18,26 @@ export interface TenantGapEntry {
   readonly readAt: number;
 }
 
-/** The app-lifetime cache of tenant answers, keyed by connection. */
+/**
+ * The app-lifetime cache of tenant answers, keyed by connection.
+ *
+ * Since AZR-147 it is also SEEDED from the saved gap reads (one KV document,
+ * loaded when Azure Native Source Onboarding mounts): {@link seed} keeps
+ * whichever answer is newer, so a read made this session is never replaced by
+ * an older saved one. The read in flight lives here only - it is never saved.
+ */
 export class TenantGapCache {
   private readonly entries = new Map<string, TenantGapEntry>();
   private running: Promise<void> | null = null;
   private readonly listeners = new Set<() => void>();
+  private changes = 0;
+
+  /**
+   * A number that changes whenever an answer or the read in flight does - the
+   * snapshot for useSyncExternalStore, so every view of the cache re-renders
+   * from it rather than holding a copy.
+   */
+  readonly version = (): number => this.changes;
 
   /**
    * The read still in flight, if any. It outlives the screen like the answers
@@ -60,6 +75,7 @@ export class TenantGapCache {
   };
 
   private notify(): void {
+    this.changes += 1;
     for (const listener of [...this.listeners]) listener();
   }
 
@@ -78,7 +94,35 @@ export class TenantGapCache {
   set(entry: TenantGapEntry): void {
     if (entry.row.cancelled && this.entries.has(entry.row.profileId)) return;
     this.entries.set(entry.row.profileId, entry);
+    this.notify();
   }
+
+  /**
+   * Seed a SAVED answer (AZR-147): kept only when the cache holds nothing for
+   * that connection, or holds an older answer. Returns whether it was kept.
+   */
+  seed(entry: TenantGapEntry): boolean {
+    const held = this.entries.get(entry.row.profileId);
+    if (held !== undefined && held.readAt >= entry.readAt) return false;
+    this.entries.set(entry.row.profileId, entry);
+    this.notify();
+    return true;
+  }
+}
+
+/**
+ * How old an answer is, in words, for the "Read at" line (AZR-147: a saved
+ * answer shows its age). A clock behind the stamp reads "just now".
+ */
+export function readAgeText(readAt: number, now: number): string {
+  const seconds = Math.max(0, Math.floor((now - readAt) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} ${days === 1 ? "day" : "days"} ago`;
 }
 
 /** The word beside each colour, so the grid never relies on colour alone. */

@@ -86,7 +86,7 @@ const CORRECTED = correctedRows();
  * below exactly as the corrected rows are. They are kept out of CORRECTED so
  * the count pin still notices a re-run of the dated audit itself.
  */
-const ADDENDA = ["2026-11-18-kv-key-addendum.json"].flatMap((file) =>
+const ADDENDA = ["2026-11-18-kv-key-addendum.json", "2026-11-19-tenant-gap-reads-addendum.json"].flatMap((file) =>
   (
     JSON.parse(
       readFileSync(new URL(`../../../../../docs/audit/${file}`, import.meta.url), "utf8"),
@@ -238,6 +238,8 @@ describe("least-privilege operations against the audit", () => {
     expect(ADDENDA.map(keyOf)).toEqual([
       "GET /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping, azure-coverage-selection-migrated, azure-onboarding-progress-migrated",
       "PUT /kvstore/{key} (app-scoped; addendum 2026-11-18) - azure-onboarding-flow-last-seen, azure-credential-lease, azure-credential-owner, tenant-cribl-mapping, azure-coverage-selection-migrated, azure-onboarding-progress-migrated",
+      "GET /kvstore/{key} (app-scoped; addendum 2026-11-19) - tenant-gap-reads",
+      "PUT /kvstore/{key} (app-scoped; addendum 2026-11-19) - tenant-gap-reads",
     ]);
     const dated = new Set(CORRECTED.map(keyOf));
     expect(ADDENDA.map(keyOf).filter((key) => dated.has(key))).toEqual([]);

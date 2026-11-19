@@ -141,6 +141,23 @@ describe('azure-onboarding (AZR-18)', () => {
   });
 });
 
+// AZR-147: Tenant Logging Gaps folded into Azure Native Source Onboarding.
+// Its nav item and board menu are gone; its route id survives as an AppFrame
+// alias onto azure-onboarding, so a bookmark or nav.navigate still lands.
+describe('tenant-gaps (retired by AZR-147)', () => {
+  it('is no longer a route, a menu or a label', () => {
+    expect(routeIds).not.toContain('tenant-gaps');
+    expect(MENUS).not.toContain('tenant-gaps');
+    expect(Object.hasOwn(MENU_LABELS, 'tenant-gaps')).toBe(false);
+  });
+
+  it('is aliased onto azure-onboarding, which opens All tenants', () => {
+    const alias = appTsx.match(/'tenant-gaps':\s*\{\s*to:\s*'([^']+)',\s*onArrive:\s*\(\)\s*=>\s*setOpenAllTenants\(/);
+    expect(alias?.[1]).toBe('azure-onboarding');
+    expect(appTsx).toContain('routeAliases={ROUTE_ALIASES}');
+  });
+});
+
 describe('data-volume-inventory (MIG-10)', () => {
   it('is a tools-section route labelled as the board labels it', () => {
     const row = rows.find((r) => r.id === 'data-volume-inventory');

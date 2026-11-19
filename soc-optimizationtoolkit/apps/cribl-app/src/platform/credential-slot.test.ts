@@ -869,3 +869,46 @@ describe("AZR-92 - every ordinary Azure batch checks the slot's owner before sen
     });
   });
 });
+
+// AZR-147: the All tenants grid switches the active connection with Setup's
+// own switch, which clears the slot; it asks the slot first and is refused
+// while a session or connect holds it, or an Azure write is in flight.
+describe("AzureCredentialSlot.busyReason (AZR-147)", () => {
+  function gate() {
+    let open: () => void = () => undefined;
+    const promise = new Promise<void>((r) => {
+      open = r;
+    });
+    return { promise, open };
+  }
+
+  it("is null when nothing holds the slot", () => {
+    expect(newSlot().busyReason()).toBeNull();
+  });
+
+  it("names a session or connect while the exclusive section is held, and clears after", async () => {
+    const slot = newSlot();
+    const g = gate();
+    const held = slot.exclusive(() => g.promise);
+    expect(slot.busyReason()).toBe("a tenant read or a Save and connect holds the Azure credential slot in this tab");
+    g.open();
+    await held;
+    expect(slot.busyReason()).toBeNull();
+  });
+
+  it("names an Azure write in flight, counts several, and ignores reads", async () => {
+    const slot = newSlot();
+    const w = gate();
+    const r = gate();
+    const read = slot.shared(A, "read", () => r.promise);
+    await vi.waitFor(() => expect(slot.busyReason()).toBeNull());
+    const write1 = slot.shared(A, "write", () => w.promise);
+    const write2 = slot.shared(A, "write", () => w.promise);
+    await vi.waitFor(() => expect(slot.busyReason()).toBe("2 Azure changes are being sent from this tab"));
+    w.open();
+    await Promise.all([write1, write2]);
+    expect(slot.busyReason()).toBeNull();
+    r.open();
+    await read;
+  });
+});

@@ -65,7 +65,9 @@ const TYPES = ['story', 'enabler', 'spike', 'bug', 'decision'];
  *
  * (azure-onboarding was PLANNED until AZR-18 shipped its route; it now sits in
  * the development section after eventhub-discovery, its prerequisite screen.
- * scripts/board-menus-routes.test.mjs holds this list to App.tsx.)
+ * scripts/board-menus-routes.test.mjs holds this list to App.tsx. tenant-gaps
+ * was a menu until AZR-147 folded Tenant Logging Gaps into azure-onboarding;
+ * its route id survives only as an AppFrame alias, which has no nav item.)
  *
  * And one is the honest escape hatch:
  *
@@ -94,7 +96,6 @@ export const MENUS = [
   'azure-onboarding',
   'mapping-catalog',
   'azure-logging-map',
-  'tenant-gaps',
   // diagnostics
   'harness',
   // planned - no route exists yet
@@ -119,7 +120,6 @@ export const MENU_LABELS = {
   'eventhub-discovery': 'Event Hub Discovery',
   'mapping-catalog': 'Mapping Catalog',
   'azure-logging-map': 'Azure Logging Map',
-  'tenant-gaps': 'Tenant Logging Gaps',
   harness: 'Diagnostics',
   'azure-onboarding': 'Azure Native Source Onboarding',
   'windows-events': 'Windows Event analysis (planned)',

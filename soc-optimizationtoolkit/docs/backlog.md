@@ -1537,6 +1537,21 @@ The hidden keyboard hint describes the focus-mode model; screen readers in
 browse mode keep the arrow keys, because the table is not a composite widget.
 Unverified with a screen reader; AZR-126 carries it.
 
+AZR-147 (2026-11-19, operator request "fold the Tenant Logging Gaps into the
+Azure native source onboarding page"): the grid is now the collapsible All
+tenants section at the top of Azure Native Source Onboarding, followed by a
+Focus here summary of the active tenant's red sources; the nav item is gone
+and `tenant-gaps` survives as a route alias that opens All tenants. A gap's
+Open link jumps to the source; for another tenant it asks first and then uses
+Setup's own connection switch, refused while a Read all, the tab's credential
+slot or another tab's lease holds the slot. Each tenant's latest read is saved
+in one KV document (`tenant-gap-reads`) and seeds the grid after a reload. The
+five decisions and what they do not prove are ADR 0009's 2026-11-19
+amendment to decision 6; all five were the operator's. AZR-148, found on the way: the shell
+notice said leaving the screen cancels a Read all, but the frame keeps a
+visited screen mounted, so it does not; the notice now says it keeps running
+and where Cancel is.
+
 ## 7. Verification gaps
 
 **First-run wizard as a genuine first run. VERIFIED 2026-08-06, twice.** Walked

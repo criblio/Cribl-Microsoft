@@ -76,6 +76,7 @@ import {
   type GapCell,
   type GapIndicator,
   type LegacyCriblEvidence,
+  type TenantGapRow,
 } from "../../domain/tenant-gap";
 import { criblRequestFor } from "../../kit/cribl-request";
 import { readInputs } from "../create-cribl-source/plan-cribl-source";
@@ -123,26 +124,11 @@ export interface ScanTenantGapOptions {
   readonly onProgress?: (done: number, total: number) => void;
 }
 
-/** One tenant's row. */
-export interface TenantGapRow {
-  readonly profileId: string;
-  readonly tenantId: string;
-  readonly cells: readonly GapCell[];
-  /**
-   * Whether the Azure side was read and proven to be this tenant's: green when
-   * it was, unknown with the reason otherwise. Never red.
-   */
-  readonly status: GapIndicator;
-  /** Things the operator should know that are not about one cell. */
-  readonly warnings: readonly string[];
-  /** The Azure reads Validate planned for this tenant (first pages), for the (i). */
-  readonly plannedReads: number;
-  /**
-   * True when the signal aborted before the scan finished: some answers are
-   * missing, so this row must not replace an earlier complete one.
-   */
-  readonly cancelled: boolean;
-}
+/**
+ * One tenant's row. The type lives in domain/tenant-gap since AZR-147, so the
+ * saved-reads document can decode it without the domain importing a usecase.
+ */
+export type { TenantGapRow };
 
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

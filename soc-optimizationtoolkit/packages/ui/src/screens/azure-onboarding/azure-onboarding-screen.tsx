@@ -72,6 +72,14 @@
  * measured for another connection never blocks Deploy, and its clock, so a
  * blocking denial says how old it is.
  *
+ * THE TENANT GAPS ABOVE IT (AZR-147). The shell renders this screen inside
+ * tenants/azure-onboarding-page.tsx, under All tenants (the tenant gap grid)
+ * and Focus here. Two props come down from there and add no read: `gapSources`
+ * badges each source the active tenant's latest gap read measured red, and
+ * `jumpTo` focuses a source's row in Choose what to onboard once the saved
+ * choices have answered. The page's own mount read (the saved gap reads) is
+ * its own; this screen's mount loads are unchanged.
+ *
  * Logging goes through ports.logger with the `azure-onboarding:` prefix and
  * never carries a secret.
  */
@@ -363,6 +371,19 @@ export interface AzureOnboardingScreenProps {
   readonly permissionsAuditKey?: string;
   /** The shell's clock, so a blocking denial says how old the check is. */
   readonly permissionsNow?: () => string;
+  /**
+   * The sources the active tenant's latest gap read measured RED on either
+   * side (AZR-147): each one's row in Choose what to onboard carries a gap
+   * badge. Absent or empty: no badges - never a claim that nothing is missing.
+   */
+  readonly gapSources?: ReadonlySet<OnboardingSourceId>;
+  /**
+   * Show this source's row in Choose what to onboard (AZR-147, following a gap
+   * from All tenants or Focus here). Each new `seq` jumps once, as soon as the
+   * saved choices have answered, so a jump asked before a connection switch
+   * lands after the screen has loaded for the new connection.
+   */
+  readonly jumpTo?: { readonly sourceId: OnboardingSourceId; readonly seq: number } | null;
 }
 
 /** The How-to section's wrapper. */
@@ -401,12 +422,25 @@ function showHowto(id: OnboardingSourceId): void {
   el.focus({ preventScroll: true });
 }
 
+/**
+ * Scroll to and focus a source's row in Choose what to onboard (AZR-147), or
+ * the chooser itself when the row is not rendered. DOM only.
+ */
+function showSource(id: OnboardingSourceId): void {
+  const el = document.getElementById(howtoRowAnchorId(id)) ?? document.getElementById(CHOOSER_ANCHOR_ID);
+  if (el === null) return;
+  if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "center", behavior: "smooth" });
+  el.focus({ preventScroll: true });
+}
+
 export function AzureOnboardingScreen({
   pacing,
   onRecheckPermissions,
   recheckingPermissions,
   permissionsAuditKey,
   permissionsNow,
+  gapSources,
+  jumpTo = null,
 }: AzureOnboardingScreenProps = {}) {
   const { ports, config } = usePorts();
   const store = ports.kvDocuments;
@@ -590,6 +624,16 @@ export function AzureOnboardingScreen({
     },
     [],
   );
+
+  // AZR-147: follow a gap to its source - once per request, and only once the
+  // saved choices have answered, so the row (or the chooser) is there to focus.
+  const jumpedSeq = useRef(0);
+  const progressSettled = progressLoad.status !== "loading";
+  useEffect(() => {
+    if (jumpTo === null || jumpTo.seq === jumpedSeq.current || !progressSettled) return;
+    jumpedSeq.current = jumpTo.seq;
+    showSource(jumpTo.sourceId);
+  }, [jumpTo, progressSettled]);
 
   // Tenant inventory heat map: the last read, kept in state only.
   const [inventory, setInventory] = useState<TenantInventory | null>(null);
@@ -1462,6 +1506,7 @@ export function AzureOnboardingScreen({
             selectionCause={selectionCause}
             onSetMode={onSetMode}
             onSetChosen={onSetChosen}
+            {...(gapSources !== undefined ? { gapSources } : {})}
           />
         </div>
       </NumberedSection>
