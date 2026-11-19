@@ -51,6 +51,7 @@ import {
   SWITCH_REFUSED_READ_ALL,
   SWITCH_UNAVAILABLE,
   switchConfirmText,
+  switchDroppedActiveChanged,
   switchRefusedLease,
   switchRefusedOperation,
   switchRefusedSlot,
@@ -184,8 +185,10 @@ export function AzureOnboardingPage({
   useEffect(() => {
     if (confirming === null) return;
     let message: string | null = null;
-    if (activeProfileId !== confirming.fromProfileId) message = SWITCH_REFUSED_ACTIVE_CHANGED;
-    else {
+    if (activeProfileId !== confirming.fromProfileId) {
+      // Only a requested switch was being checked (review round 4).
+      message = checking ? SWITCH_REFUSED_ACTIVE_CHANGED : switchDroppedActiveChanged(confirming.profile.name);
+    } else {
       const change = targetChange(confirming, profiles);
       if (change !== null) message = switchRefusedTarget(confirming.profile.name, change);
     }
@@ -194,8 +197,14 @@ export function AzureOnboardingPage({
     setChecking(false);
     setConfirming(null);
     setSwitchMessage(message);
-    returnFocus();
-  }, [confirming, profiles, activeProfileId]);
+    // The change came from outside, most often the connection bar: take focus
+    // back only from the confirm that is going away, or when it was already
+    // lost; otherwise leave the operator where they are (review round 4).
+    const focused = document.activeElement;
+    const inConfirm = focused !== null && confirmGroupRef.current?.contains(focused) === true;
+    if (inConfirm || focused === null || focused === document.body) returnFocus();
+    else opener.current = null;
+  }, [confirming, profiles, activeProfileId, checking]);
 
   // Bring a new confirm to the operator: it renders above the grid, so a click
   // low in the grid would otherwise seem to do nothing (review round 3).

@@ -10622,7 +10622,16 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   when the saved reads loaded and were understood, and says loading or unknown
   with the reason otherwise; the confirm is scrolled into view with Switch and
   open focused, and Cancel returns focus to the Open that raised it.
-  Mutation-checked (5 mutations, each killed). Unverified live.
+  Mutation-checked (5 mutations, each killed). Unverified live. Review round 4
+  (2026-11-19): a confirm dropped because the active connection changed or its
+  connection was deleted or re-pointed now takes focus back to the Open only
+  when focus was still inside the confirm or had been lost to the page body,
+  so an operator working in the connection bar keeps their place. An active
+  change with no switch requested says the switch was dropped (new wording);
+  the "while the switch was being checked" wording is kept for a change during
+  a requested check. Pinned with exact strings and focus targets, each
+  mutation-checked. Focus with a real screen reader and the live connection
+  bar is unverified live.
 
 - **AZR-148** The tenant read-in-flight notice says leaving the screen cancels the read; keep-alive keeps it running
   `AZR-F10` `bug` `settled` `verified: pins`

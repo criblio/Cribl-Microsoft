@@ -58,7 +58,13 @@ import { howtoRowAnchorId } from "../howto/howto-state";
 import { AzureOnboardingPage } from "./azure-onboarding-page";
 import type { AzureOnboardingPageProps } from "./azure-onboarding-page";
 import { FOCUS_CANCELLED_TEXT, focusNoReadText } from "./focus-summary";
-import { SWITCH_REFUSED_ACTIVE_CHANGED, SWITCH_REFUSED_READ_ALL, switchConfirmText, switchRefusedTarget } from "./tenant-switch";
+import {
+  SWITCH_REFUSED_ACTIVE_CHANGED,
+  SWITCH_REFUSED_READ_ALL,
+  switchConfirmText,
+  switchDroppedActiveChanged,
+  switchRefusedTarget,
+} from "./tenant-switch";
 
 afterEach(cleanup);
 
@@ -756,5 +762,85 @@ describe("3d. the confirm follows its target, and is brought to the operator (re
     expect(document.activeElement).toBe(within(group).getByRole("button", { name: "Switch and open" }));
     fireEvent.click(within(group).getByRole("button", { name: "Cancel" }));
     expect(document.activeElement).toBe(opener);
+  });
+});
+
+describe("3e. a confirm dropped from outside (review round 4)", () => {
+  const openFabrikam = () =>
+    fireEvent.click(screen.getByRole("button", { name: `Switch to Fabrikam and open ${RED_SOURCE!.title}` }));
+  const confirmGroup = () => screen.queryByRole("group", { name: "Confirm switching the active tenant" });
+
+  /** A stand-in for the connection bar, which the shell renders outside this page. */
+  function connectionBarButton(): { readonly el: HTMLButtonElement; readonly remove: () => void } {
+    const el = document.createElement("button");
+    el.textContent = "New connection";
+    document.body.appendChild(el);
+    return { el, remove: () => el.remove() };
+  }
+
+  it("leaves focus where the operator is when the active connection changes from the connection bar", () => {
+    const bar = connectionBarButton();
+    try {
+      const m = mount();
+      expand();
+      const opener = screen.getByRole("button", { name: `Switch to Fabrikam and open ${RED_SOURCE!.title}` });
+      opener.focus();
+      fireEvent.click(opener);
+      expect(document.activeElement).toBe(within(confirmGroup()!).getByRole("button", { name: "Switch and open" }));
+      bar.el.focus();
+      m.rerender("pb");
+      expect(confirmGroup()).toBeNull();
+      expect(document.activeElement).toBe(bar.el);
+    } finally {
+      bar.remove();
+    }
+  });
+
+  it("leaves focus where the operator is when the confirm's connection is re-pointed from the connection bar", () => {
+    const bar = connectionBarButton();
+    try {
+      const m = mount();
+      expand();
+      const opener = screen.getByRole("button", { name: `Switch to Fabrikam and open ${RED_SOURCE!.title}` });
+      opener.focus();
+      fireEvent.click(opener);
+      bar.el.focus();
+      const repointed = { ...PROFILES[1]!, config: { ...PROFILES[1]!.config, tenantId: "cccccccc-0000-0000-0000-000000000003" } };
+      m.rerender("pa", { profiles: [PROFILES[0]!, repointed] });
+      expect(confirmGroup()).toBeNull();
+      expect(document.activeElement).toBe(bar.el);
+    } finally {
+      bar.remove();
+    }
+  });
+
+  it("returns focus to the Open when focus was still inside the confirm", () => {
+    const m = mount();
+    expand();
+    const opener = screen.getByRole("button", { name: `Switch to Fabrikam and open ${RED_SOURCE!.title}` });
+    opener.focus();
+    fireEvent.click(opener);
+    expect(document.activeElement).toBe(within(confirmGroup()!).getByRole("button", { name: "Switch and open" }));
+    const repointed = { ...PROFILES[1]!, config: { ...PROFILES[1]!.config, tenantId: "cccccccc-0000-0000-0000-000000000003" } };
+    m.rerender("pa", { profiles: [PROFILES[0]!, repointed] });
+    expect(confirmGroup()).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("an active change with no switch requested says the switch was dropped, not that it was being checked", async () => {
+    const m = mount();
+    expand();
+    openFabrikam();
+    m.rerender("pb");
+    expect(confirmGroup()).toBeNull();
+    expect(screen.getByRole("alert").textContent).toBe(switchDroppedActiveChanged("Fabrikam"));
+    expect(switchDroppedActiveChanged("Fabrikam")).toBe(
+      "The active connection changed, so the switch to Fabrikam was dropped. Open the source again to switch from the connection now active.",
+    );
+    expect(SWITCH_REFUSED_ACTIVE_CHANGED).toBe(
+      "Not switched: the active connection changed while the switch was being checked. Open the source again to switch from the connection now active.",
+    );
+    await settle();
+    expect(m.switched).toEqual([]);
   });
 });

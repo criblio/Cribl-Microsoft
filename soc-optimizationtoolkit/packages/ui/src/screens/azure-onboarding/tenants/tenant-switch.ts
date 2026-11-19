@@ -55,6 +55,14 @@ export const SWITCH_REFUSED_ACTIVE_CHANGED =
   "Not switched: the active connection changed while the switch was being checked. Open the source again to switch from the connection now active.";
 
 /**
+ * Dropped: the active connection changed while the confirm was on screen and
+ * no switch had been requested, so no check ran (review round 4).
+ */
+export function switchDroppedActiveChanged(tenantName: string): string {
+  return `The active connection changed, so the switch to ${tenantName} was dropped. Open the source again to switch from the connection now active.`;
+}
+
+/**
  * Dropped: the connection the confirm names was deleted, or now points at a
  * different tenant, since the confirm opened (review round 3). An A-to-B-to-A
  * round trip leaves the active connection unchanged, so this is checked on
