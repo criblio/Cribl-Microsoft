@@ -827,6 +827,22 @@ describe("3e. a confirm dropped from outside (review round 4)", () => {
     expect(document.activeElement).toBe(opener);
   });
 
+  it("returns focus to the Open when focus was lost to the page body (the bar's own button unmounted)", () => {
+    const bar = connectionBarButton();
+    const m = mount();
+    expand();
+    const opener = screen.getByRole("button", { name: `Switch to Fabrikam and open ${RED_SOURCE!.title}` });
+    opener.focus();
+    fireEvent.click(opener);
+    bar.el.focus();
+    bar.remove();
+    expect(document.activeElement).toBe(document.body);
+    const repointed = { ...PROFILES[1]!, config: { ...PROFILES[1]!.config, tenantId: "cccccccc-0000-0000-0000-000000000003" } };
+    m.rerender("pa", { profiles: [PROFILES[0]!, repointed] });
+    expect(confirmGroup()).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
   it("an active change with no switch requested says the switch was dropped, not that it was being checked", async () => {
     const m = mount();
     expand();
