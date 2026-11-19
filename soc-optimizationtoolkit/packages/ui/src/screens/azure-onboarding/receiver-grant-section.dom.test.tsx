@@ -165,6 +165,49 @@ describe("ReceiverGrantSection (AZR-103)", () => {
     expect(recorded).toEqual([{ scopeId: HUB_ID, principalId: P, assignmentName: name }]);
   });
 
+  // AZR-141: a grant and the teardown panel's Remove never run at once.
+  it("a running Remove drops an armed grant and turns Check off; a grant reports itself running", async () => {
+    const azure = new RoutingAzure();
+    const ports = { azure, logger: new FakeLogger(() => "t") } as unknown as UiPorts;
+    const running: boolean[] = [];
+    const view = (removing: boolean) => (
+      <PortsProvider ports={ports} config={CONFIG}>
+        <ReceiverGrantSection
+          values={values()}
+          readSeq={0}
+          records={[]}
+          onGranted={() => true}
+          howtoSection={2}
+          onShowHowto={() => undefined}
+          removing={removing}
+          onRunningChange={(r) => running.push(r)}
+        />
+      </PortsProvider>
+    );
+    const { rerender } = render(view(false));
+    const block = screen.getByTestId("azo-receiver-grant");
+    await check(block);
+    fireEvent.click(within(block).getByRole("button", { name: "Grant Data Receiver" }));
+    expect(within(block).getByRole("group", { name: "Confirm the Data Receiver grant" })).toBeTruthy();
+
+    rerender(view(true));
+    expect(within(block).queryByRole("group", { name: "Confirm the Data Receiver grant" })).toBeNull();
+    expect(within(block).queryByRole("button", { name: "Grant Data Receiver" })).toBeNull();
+    expect((within(block).getByRole("button", { name: "Check the grant" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      within(block).getByText("A removal of a Data Receiver assignment is running. Check and Grant are off until it finishes."),
+    ).toBeTruthy();
+
+    // The Remove finishing does not bring the old arm back.
+    rerender(view(false));
+    expect(within(block).queryByRole("group", { name: "Confirm the Data Receiver grant" })).toBeNull();
+    await check(block);
+    fireEvent.click(within(block).getByRole("button", { name: "Grant Data Receiver" }));
+    fireEvent.click(within(block).getByRole("button", { name: "Confirm grant" }));
+    await waitFor(() => expect(running).toEqual([true, false]));
+    expect(azure.writes()).toHaveLength(1);
+  });
+
   it("writes at the namespace when the operator chooses it", async () => {
     const azure = new RoutingAzure();
     const { recorded, block } = mount(azure);

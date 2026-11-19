@@ -14,6 +14,11 @@ import {
   receiverGrantPlanMessages,
   receiverGrantScopeOptions,
   receiverGrantToRerecord,
+  receiverGrantOverrideConfirmText,
+  receiverGrantRecordTitle,
+  receiverGrantRemoveConfirmText,
+  receiverGrantRemoveDisabledReason,
+  receiverGrantRemoveMessage,
 } from "./receiver-grant-state";
 
 const NS = "/subscriptions/s/resourceGroups/rg/providers/Microsoft.EventHub/namespaces/ns1";
@@ -165,5 +170,63 @@ describe("receiverGrantToRerecord", () => {
     expect(receiverGrantToRerecord(made({ scope: NS }), [])).toBeNull();
     expect(receiverGrantToRerecord(made({ madeByThisApp: false }), [])).toBeNull();
     expect(receiverGrantToRerecord({ kind: "ready", ready: ready() }, [])).toBeNull();
+  });
+});
+
+// AZR-141: the removal rows.
+describe("receiver grant removal copy", () => {
+  const NAME = "9b1c0f2e-1111-5222-8333-444444444444";
+  const RECORD = { scopeId: HUB, principalId: P, assignmentName: NAME };
+
+  it("titles a hub grant and a namespace grant by where they sit", () => {
+    expect(receiverGrantRecordTitle(RECORD)).toBe(`Azure Event Hubs Data Receiver for object ID ${P} on hub hub1 in namespace ns1 (Azure)`);
+    expect(receiverGrantRecordTitle({ ...RECORD, scopeId: NS })).toBe(`Azure Event Hubs Data Receiver for object ID ${P} on namespace ns1 (Azure)`);
+  });
+
+  it("the confirm quotes the exact DELETE; a record naming no grant scope sends nothing", () => {
+    expect(receiverGrantRemoveConfirmText(RECORD)).toBe(
+      `Remove the role Azure Event Hubs Data Receiver (role definition a638d3c7-ab3a-418d-83e6-5f17a39d4fde) from the service principal ` +
+        `with object ID ${P}, at scope ${HUB}? Remove sends DELETE ${HUB}/providers/Microsoft.Authorization/roleAssignments/${NAME}?api-version=2022-04-01 - ` +
+        "the assignment is read first and removed only if this app's record names it, its name is the one this app gives this grant, " +
+        "and its description carries this app's stamp. A Cribl source that signs in as this principal stops reading this hub.",
+    );
+    expect(receiverGrantRemoveConfirmText({ ...RECORD, scopeId: "/subscriptions/s" })).toBe(
+      "This record does not name a role assignment this app creates; nothing will be sent.",
+    );
+  });
+
+  it("the second confirm names every source that stops", () => {
+    expect(receiverGrantOverrideConfirmText(RECORD, ["a", "b"])).toBe(
+      `Remove it anyway? The Cribl sources a, b this app created are still recorded and may sign in with Entra ID as object ID ${P}. ` +
+        `Once the assignment is gone, Azure refuses their reads at ${HUB} and they stop receiving events. ` +
+        "The same checks still apply: nothing is removed unless this app can prove it made the assignment.",
+    );
+  });
+
+  it("says, per outcome, whether the record is forgotten or kept", () => {
+    expect(receiverGrantRemoveMessage({ kind: "already-gone", record: RECORD })).toEqual({
+      tone: "info",
+      text: `The Azure Event Hubs Data Receiver assignment ${NAME} is no longer in Azure, so nothing was sent. This app has forgotten it.`,
+    });
+    expect(receiverGrantRemoveMessage({ kind: "removed-not-confirmed", record: RECORD, reason: "still there" })).toEqual({
+      tone: "warning",
+      text: `Azure accepted the removal of ${NAME}, but it could not be confirmed gone (still there). The record is kept; try Remove again.`,
+    });
+    expect(receiverGrantRemoveMessage({ kind: "not-proven", record: RECORD, detail: "Why." })).toEqual({
+      tone: "warning",
+      text: "Nothing was removed. Why.",
+    });
+    expect(receiverGrantRemoveMessage({ kind: "failed", record: RECORD, step: "delete", message: "Remove: HTTP 500." })).toEqual({
+      tone: "error",
+      text: "The removal stopped: Remove: HTTP 500. The record is kept.",
+    });
+  });
+
+  it("Remove and a grant never run at once", () => {
+    expect(receiverGrantRemoveDisabledReason({ granting: false, removing: false })).toBeNull();
+    expect(receiverGrantRemoveDisabledReason({ granting: true, removing: false })).toBe(
+      "A Data Receiver grant is running. Remove is off until it finishes.",
+    );
+    expect(receiverGrantRemoveDisabledReason({ granting: false, removing: true })).toBe("A removal is already running.");
   });
 });
