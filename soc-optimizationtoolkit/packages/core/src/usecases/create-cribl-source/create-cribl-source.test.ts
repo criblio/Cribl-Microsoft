@@ -1087,6 +1087,25 @@ describe("planCriblSource with Entra ID", () => {
     expect(graph.calls).toBe(1);
   });
 
+  // AZR-143: the listing lacks the client id but lists the typed object id
+  // under ANOTHER application - the directory has disproved the pair, so the
+  // role must not be read for that other principal.
+  it("refuses principal-mismatch when the directory lists the object id under another client id, before any Azure or Cribl call", async () => {
+    const h = harness();
+    const graph = graphOf([sp(OBJ, "other-client")]);
+    const plan = await planCriblSource({ ...h.ports, graph }, entraInput());
+    expect(plan).toEqual({
+      kind: "refused",
+      reason: "principal-mismatch",
+      detail:
+        `Object ID ${OBJ} is the service principal of client ID other-client (other-client), not of client ID c1. ` +
+        "The role would be read for, or granted to, that application while the source signs in as another. " +
+        "Set the Cribl principal object ID in the plan values to the one that matches the client ID.",
+    });
+    expect(h.log).toEqual([]);
+    expect(graph.calls).toBe(1);
+  });
+
   it("marks the principal matched when the directory ties the client id to the object id", async () => {
     const h = harness();
     scriptAzureEntra(h, ok({ value: [ra(NS_PATH)] }));

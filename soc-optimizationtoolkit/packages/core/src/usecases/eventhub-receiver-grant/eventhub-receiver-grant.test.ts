@@ -215,7 +215,7 @@ describe("planReceiverGrant - the principal is resolved, never guessed", () => {
       reason: "principal-mismatch",
       detail:
         `Object ID ${PRINCIPAL} is the service principal of client ID b0b0b0b0-1111-4222-8333-444444444444 (Some Other App), ` +
-        `not of client ID ${CRIBL_CLIENT}. The role would go to that application while the source signs in as another. ` +
+        `not of client ID ${CRIBL_CLIENT}. The role would be read for, or granted to, that application while the source signs in as another. ` +
         "Set the Cribl principal object ID in the plan values to the one that matches the client ID.",
     });
     expect(azure.calls).toHaveLength(0);
