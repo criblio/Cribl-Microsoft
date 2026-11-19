@@ -218,12 +218,15 @@ one named capability and can be refused independently.
                     onboarding screen can make that one assignment itself (PUT  
                     .../providers/Microsoft.Authorization/roleAssignments/{name}  
                     on the hub, or on the namespace when chosen), behind a  
-                    confirm. Attach the condition below so this grant cannot  
-                    be used to assign anything else.  
+                    confirm, and later remove the one it made (DELETE of the  
+                    same name, from Remove or pause what this app created).  
+                    Attach the condition below so this grant cannot be used to  
+                    assign or remove anything else.  
     If not granted: An administrator assigns Data Receiver to the Cribl  
                     principal by hand (the How-to step and the  
                     resource-creation request say how), or the source uses a  
-                    Listen-only shared access rule. Nothing else is affected.  
+                    Listen-only shared access rule; the assignment is then  
+                    removed by hand too. Nothing else is affected.  
     Condition:      Constrain roles and principal types: only Azure Event Hubs  
                     Data Receiver, only to service principals.  
     Where:          Azure portal, not the CLI - the condition above cannot be  

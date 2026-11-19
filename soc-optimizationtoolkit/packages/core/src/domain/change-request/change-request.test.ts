@@ -380,14 +380,18 @@ describe("resourceCreationRequest", () => {
     const lines = out.split("\n");
     const at = lines.findIndex((l) => l.includes("make this assignment itself, behind a confirm:"));
     expect(at).toBeGreaterThan(0);
-    expect(lines.slice(at + 1, at + 4)).toEqual([
+    expect(lines.slice(at + 1, at + 6)).toEqual([
       "  grant its identity RBAC Administrator on the hub or namespace",
       "  with this condition:",
       "  Constrain roles and principal types: only Azure Event Hubs Data Receiver, only to service principals.",
+      // AZR-141: the removal's delete, under the same role and condition.
+      "  The same role lets it remove that assignment later, behind a confirm",
+      "  (Microsoft.Authorization/roleAssignments/delete); nothing else is removed.",
     ]);
-    // The ticket's role is the registry's least role for the write, and the
-    // condition is the one the app-registration request prints.
+    // The ticket's role is the registry's least role for the write and the
+    // delete, and the condition is the one the app-registration request prints.
     expect(privilegeOperation("eventhub.receiverGrant.write").leastRole).toBe("RBAC Administrator");
+    expect(privilegeOperation("eventhub.receiverGrant.delete").leastRole).toBe("RBAC Administrator");
   });
 
   it("renders placeholders for a blank context", () => {

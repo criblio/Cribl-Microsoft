@@ -10,17 +10,25 @@ export {
   RECEIVER_GRANT_ROLE,
   hasReceiverGrantStamp,
   armScopeKey,
+  classifyReceiverGrantRemoval,
+  isReceiverGrantScope,
   parseReceiverAssignmentRow,
   receiverGrantAssignmentName,
   receiverGrantDescription,
   receiverGrantReadBackDiffs,
   receiverGrantScopeId,
 } from "./receiver-grant";
-export type { ReceiverAssignmentRow, ReceiverGrantScopeChoice } from "./receiver-grant";
+export type {
+  ReceiverAssignmentRow,
+  ReceiverGrantRemovalRecord,
+  ReceiverGrantRemovalVerdict,
+  ReceiverGrantScopeChoice,
+} from "./receiver-grant";
 export {
   RECEIVER_GRANT_ACTIONS_NOT_MEASURED,
   RECEIVER_GRANT_ADMIN_CONDITION,
   RECEIVER_GRANT_ADMIN_ROLE,
+  RECEIVER_GRANT_DELETE_ACTION,
   RECEIVER_GRANT_PERMISSIONS,
   RECEIVER_GRANT_SCOPE_ACTIONS,
 } from "./receiver-grant-permissions";

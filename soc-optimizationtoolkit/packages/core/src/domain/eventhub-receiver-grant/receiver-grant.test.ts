@@ -10,7 +10,8 @@ import {
   receiverGrantReadBackDiffs,
   receiverGrantScopeId,
 } from "./receiver-grant";
-import { RECEIVER_GRANT_PERMISSIONS, RECEIVER_GRANT_SCOPE_ACTIONS } from "./receiver-grant-permissions";
+import { RECEIVER_GRANT_DELETE_ACTION, RECEIVER_GRANT_PERMISSIONS, RECEIVER_GRANT_SCOPE_ACTIONS } from "./receiver-grant-permissions";
+import { operationsForCall } from "../least-privilege";
 import { automationPermissionView } from "../onboarding-sections/automation-permissions";
 
 const NS = { subscriptionId: "sub-1", resourceGroup: "rg-eh", name: "ns1" };
@@ -127,13 +128,21 @@ describe("parseReceiverAssignmentRow and receiverGrantReadBackDiffs", () => {
 });
 
 describe("the permissions banner", () => {
-  it("lists the read and the write from the registry, and measures neither", () => {
+  it("lists the read, the write and (AZR-141) the delete from the registry, and measures none", () => {
     expect(RECEIVER_GRANT_SCOPE_ACTIONS.map((a) => a.action)).toEqual([
       "Microsoft.Authorization/roleAssignments/read",
       "Microsoft.Authorization/roleAssignments/write",
+      "Microsoft.Authorization/roleAssignments/delete",
     ]);
+    expect(RECEIVER_GRANT_DELETE_ACTION).toBe("Microsoft.Authorization/roleAssignments/delete");
     expect(RECEIVER_GRANT_SCOPE_ACTIONS.every((a) => a.necessity === "feature")).toBe(true);
     expect(RECEIVER_GRANT_PERMISSIONS.measured).toEqual([]);
+    // The removal's DELETE maps to its own registry row, least role RBAC Administrator.
+    const del = operationsForCall("DELETE", `${HUB_SCOPE}/providers/Microsoft.Authorization/roleAssignments/x`).map((op) => [op.id, op.leastRole]);
+    expect(del).toEqual([["eventhub.receiverGrant.delete", "RBAC Administrator"]]);
+    expect(operationsForCall("DELETE", `${NS_SCOPE}/providers/Microsoft.Authorization/roleAssignments/x`).map((op) => op.id)).toEqual([
+      "eventhub.receiverGrant.delete",
+    ]);
   });
 
   it("renders as a not-measured note, never a denial, and never cautions Deploy", () => {

@@ -21,6 +21,14 @@
  * this app's, when the record was lost (the save behind it failed and the page
  * reloaded). That is offered as "Record it", which writes no Azure state.
  *
+ * REMOVAL (AZR-141) is in "Remove or pause what this app created"
+ * (receiver-grant-remove-panel.tsx), from the records. The two never run at
+ * once: `removing` turns Check and Grant off, and `onRunningChange` reports a
+ * running Check or grant so the screen turns Remove off. A Check counts too
+ * (review round 1): a plan read before a DELETE and landing after it would
+ * otherwise show the removed assignment as still in place, and offer to
+ * record it again.
+ *
  * PERMISSIONS. roleAssignments/write at the scope is not measured: a banner
  * says so and lists the actions. Never a block - Azure's answer decides.
  */
@@ -71,9 +79,29 @@ export interface ReceiverGrantSectionProps {
   howtoSection: number;
   /** Scroll to the How-to steps (the manual path for this grant). */
   onShowHowto: () => void;
+  /**
+   * AZR-141: the teardown panel's Remove of a recorded grant is running.
+   * Check and Grant are off meanwhile, and a plan or armed confirm made
+   * before it is dropped: it described the assignments as they were.
+   */
+  removing?: boolean;
+  /**
+   * Told when a Check's reads or a grant's PUT start and finish, so the
+   * screen keeps the teardown panel's Remove off meanwhile.
+   */
+  onRunningChange?: (running: boolean) => void;
 }
 
-export function ReceiverGrantSection({ values, readSeq, records, onGranted, howtoSection, onShowHowto }: ReceiverGrantSectionProps) {
+export function ReceiverGrantSection({
+  values,
+  readSeq,
+  records,
+  onGranted,
+  howtoSection,
+  onShowHowto,
+  removing = false,
+  onRunningChange,
+}: ReceiverGrantSectionProps) {
   const { ports, config, capabilities, capabilityContext } = usePorts();
   const permissionView = automationPermissionView({
     permissions: RECEIVER_GRANT_PERMISSIONS,
@@ -93,7 +121,8 @@ export function ReceiverGrantSection({ values, readSeq, records, onGranted, howt
   const [outcome, setOutcome] = useState<{ outcome: ApplyReceiverGrantOutcome; recorded: boolean } | null>(null);
   const [rerecorded, setRerecorded] = useState<{ key: string; recorded: boolean } | null>(null);
 
-  const key = receiverGrantArmKey(scope, values, readSeq);
+  // `removing` is in the key so a Remove drops a plan and an armed Grant outright.
+  const key = `${receiverGrantArmKey(scope, values, readSeq)}|${removing ? "removing" : ""}`;
   const current = plan !== null && plan.key === key ? plan.result : null;
   const ready = current?.kind === "ready" ? current.ready : null;
   const armed = ready !== null && armedFor === key && !running;
@@ -105,11 +134,18 @@ export function ReceiverGrantSection({ values, readSeq, records, onGranted, howt
 
   const azure = ports.azure;
   const checkReason =
-    azure === undefined ? "The grant cannot be checked: there is no Azure connection configured." : planning || running ? "Working..." : null;
+    azure === undefined
+      ? "The grant cannot be checked: there is no Azure connection configured."
+      : planning || running
+        ? "Working..."
+        : removing
+          ? "A removal of a Data Receiver assignment is running. Check and Grant are off until it finishes."
+          : null;
 
   async function check(): Promise<void> {
-    if (azure === undefined || planning || running) return;
+    if (azure === undefined || planning || running || removing) return;
     setPlanning(true);
+    onRunningChange?.(true);
     setPlanError("");
     setOutcome(null);
     setArmedFor(null);
@@ -127,13 +163,15 @@ export function ReceiverGrantSection({ values, readSeq, records, onGranted, howt
       ports.logger?.error("azure-onboarding: receiver grant plan threw", { error: message });
     } finally {
       setPlanning(false);
+      onRunningChange?.(false);
     }
   }
 
   async function confirm(): Promise<void> {
-    if (azure === undefined || ready === null || running) return;
+    if (azure === undefined || ready === null || running || removing) return;
     setArmedFor(null);
     setRunning(true);
+    onRunningChange?.(true);
     setOutcome(null);
     try {
       const result = await applyReceiverGrant(
@@ -150,6 +188,7 @@ export function ReceiverGrantSection({ values, readSeq, records, onGranted, howt
       ports.logger?.error("azure-onboarding: receiver grant apply threw", { error: message });
     } finally {
       setRunning(false);
+      onRunningChange?.(false);
     }
   }
 
@@ -243,7 +282,7 @@ export function ReceiverGrantSection({ values, readSeq, records, onGranted, howt
             <li>{`Assignment name: ${ready.assignmentName}`}</li>
           </ul>
           <div className="panel-controls">
-            <button type="button" className="next-action-button" disabled={armed || running} onClick={() => setArmedFor(key)}>
+            <button type="button" className="next-action-button" disabled={armed || running || removing} onClick={() => setArmedFor(key)}>
               {running ? "Granting..." : "Grant Data Receiver"}
             </button>
           </div>
@@ -293,8 +332,8 @@ export function ReceiverGrantSection({ values, readSeq, records, onGranted, howt
             ))}
           </ul>
           <p className="field-hint">
-            Removing an assignment is not offered here yet; an administrator removes it in the Azure portal (Access control
-            (IAM) on the hub or namespace).
+            Remove one from Remove or pause what this app created, below. An assignment this app did not make is removed in
+            the Azure portal (Access control (IAM) on the hub or namespace).
           </p>
         </div>
       )}

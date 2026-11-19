@@ -7,7 +7,8 @@ import {
   receiverGrantAssignmentName,
   receiverGrantDescription,
 } from "../../domain/eventhub-receiver-grant/receiver-grant";
-import { applyReceiverGrant, planReceiverGrant } from "./eventhub-receiver-grant";
+import { applyReceiverGrant, planReceiverGrant, receiverGrantRemoveRequests, removeReceiverGrant } from "./eventhub-receiver-grant";
+import type { ReceiverGrantRecord } from "../../domain/onboarding-howto/progress-document";
 import type { PlanReceiverGrantInput, ReadyReceiverGrant } from "./eventhub-receiver-grant";
 
 const SUB = "sub-1";
@@ -215,7 +216,7 @@ describe("planReceiverGrant - the principal is resolved, never guessed", () => {
       reason: "principal-mismatch",
       detail:
         `Object ID ${PRINCIPAL} is the service principal of client ID b0b0b0b0-1111-4222-8333-444444444444 (Some Other App), ` +
-        `not of client ID ${CRIBL_CLIENT}. The role would go to that application while the source signs in as another. ` +
+        `not of client ID ${CRIBL_CLIENT}. The role would be read for, or granted to, that application while the source signs in as another. ` +
         "Set the Cribl principal object ID in the plan values to the one that matches the client ID.",
     });
     expect(azure.calls).toHaveLength(0);
@@ -451,6 +452,203 @@ describe("applyReceiverGrant", () => {
       status: null,
       code: "",
       message: `Assign Azure Event Hubs Data Receiver at ${HUB_SCOPE}: socket hang up`,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AZR-141: removeReceiverGrant
+// ---------------------------------------------------------------------------
+
+describe("removeReceiverGrant (AZR-141)", () => {
+  const NAME = receiverGrantAssignmentName(HUB_SCOPE, PRINCIPAL);
+  const RECORD: ReceiverGrantRecord = { scopeId: HUB_SCOPE, principalId: PRINCIPAL, assignmentName: NAME };
+  const PATH = `${HUB_SCOPE}/providers/Microsoft.Authorization/roleAssignments/${NAME}`;
+  const ours = (over: { description?: string; principal?: string; role?: string } = {}) => ({
+    status: 200,
+    body: assignment({ scope: HUB_SCOPE, name: NAME, description: receiverGrantDescription(), ...over }),
+  });
+  const gone = { status: 404, body: { error: { code: "RoleAssignmentNotFound", message: "not found" } } };
+  const base = { record: RECORD, recorded: [RECORD], inUseBy: [] as string[], override: false };
+
+  it("reads by name, deletes by name, and confirms the 404 - exactly three calls", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(ours(), { status: 200, body: {} }, gone);
+    const outcome = await removeReceiverGrant(azure, base);
+    expect(outcome).toEqual({ kind: "removed", record: RECORD });
+    expect(azure.calls).toEqual([
+      { method: "GET", path: PATH, apiVersion: "2022-04-01" },
+      { method: "DELETE", path: PATH, apiVersion: "2022-04-01" },
+      { method: "GET", path: PATH, apiVersion: "2022-04-01" },
+    ]);
+  });
+
+  it("quotes for the confirm exactly the requests it sends", () => {
+    expect(receiverGrantRemoveRequests(RECORD)).toEqual({
+      get: { method: "GET", path: PATH, apiVersion: "2022-04-01" },
+      del: { method: "DELETE", path: PATH, apiVersion: "2022-04-01" },
+    });
+  });
+
+  it("is already gone on a 404 read, and sends nothing else", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(gone);
+    expect(await removeReceiverGrant(azure, base)).toEqual({ kind: "already-gone", record: RECORD });
+    expect(azure.calls.map((c) => c.method)).toEqual(["GET"]);
+  });
+
+  it("refuses without the description stamp, naming it, and sends no DELETE", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(ours({ description: "made by hand" }));
+    const outcome = await removeReceiverGrant(azure, base);
+    expect(outcome).toEqual({
+      kind: "not-proven",
+      record: RECORD,
+      detail:
+        `This app cannot prove it created role assignment ${NAME} as it is now (its description does not carry this app's stamp), so it does not remove it. ` +
+        "An administrator can remove it in the Azure portal (Access control (IAM) on the hub or namespace) if it should go.",
+    });
+    expect(azure.calls.map((c) => c.method)).toEqual(["GET"]);
+  });
+
+  it("refuses without the record, and with a name that is not the deterministic one", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(ours());
+    const noRecord = await removeReceiverGrant(azure, { ...base, recorded: [] });
+    expect(noRecord.kind).toBe("not-proven");
+    expect(noRecord.kind === "not-proven" && noRecord.detail).toContain("(this app has no record of creating it)");
+
+    const other = "11111111-2222-4333-8444-555555555555";
+    const odd: ReceiverGrantRecord = { ...RECORD, assignmentName: other };
+    const azure2 = new FakeAzureManagement();
+    azure2.respondWith({ status: 200, body: assignment({ scope: HUB_SCOPE, name: other, description: receiverGrantDescription() }) });
+    const wrongName = await removeReceiverGrant(azure2, { ...base, record: odd, recorded: [odd] });
+    expect(wrongName.kind === "not-proven" && wrongName.detail).toContain(
+      `its name ${other} is not the one this app gives this role for this principal at this scope (${NAME})`,
+    );
+    expect(azure.calls.map((c) => c.method)).toEqual(["GET"]);
+    expect(azure2.calls.map((c) => c.method)).toEqual(["GET"]);
+  });
+
+  it("refuses an assignment under the name that now names another role or principal", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(ours({ principal: "99999999-2222-4333-8444-555555555555", role: OWNER_DEF }));
+    const outcome = await removeReceiverGrant(azure, base);
+    expect(outcome.kind === "not-proven" && outcome.detail).toContain(
+      `it names role definition ${OWNER_DEF}, not Azure Event Hubs Data Receiver; it is assigned to 99999999-2222-4333-8444-555555555555, not ${PRINCIPAL}`,
+    );
+    expect(azure.calls.map((c) => c.method)).toEqual(["GET"]);
+  });
+
+  it("refuses while a recorded Cribl Event Hubs source may read with it, and deletes with the override", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(ours());
+    const refused = await removeReceiverGrant(azure, { ...base, inUseBy: ["in_eh_a", "in_eh_b"] });
+    expect(refused).toEqual({
+      kind: "in-use",
+      record: RECORD,
+      detail:
+        `The Cribl sources in_eh_a, in_eh_b this app created may sign in with Entra ID as principal ${PRINCIPAL} and read under this assignment; ` +
+        "removing it stops those sources reading. Remove them first (Remove or pause what this app created), or remove the assignment anyway after a second confirm.",
+    });
+    expect(azure.calls.map((c) => c.method)).toEqual(["GET"]);
+
+    const azure2 = new FakeAzureManagement();
+    azure2.respondWith(ours(), { status: 204, body: null }, gone);
+    expect(await removeReceiverGrant(azure2, { ...base, inUseBy: ["in_eh_a"], override: true })).toEqual({ kind: "removed", record: RECORD });
+    expect(azure2.calls.map((c) => c.method)).toEqual(["GET", "DELETE", "GET"]);
+  });
+
+  it("the override never bypasses the ownership proof", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(ours({ description: "" }));
+    const outcome = await removeReceiverGrant(azure, { ...base, inUseBy: ["in_eh_a"], override: true });
+    expect(outcome.kind).toBe("not-proven");
+    expect(azure.calls.map((c) => c.method)).toEqual(["GET"]);
+  });
+
+  it("an unreadable read keeps the record: denied at the read step, no DELETE", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(forbidden);
+    const outcome = await removeReceiverGrant(azure, base);
+    expect(outcome).toEqual({
+      kind: "denied",
+      record: RECORD,
+      step: "read",
+      message: `Read role assignment ${NAME}: HTTP 403 - no`,
+    });
+    expect(azure.calls.map((c) => c.method)).toEqual(["GET"]);
+  });
+
+  it("names the delete action and the role when Azure refuses the DELETE", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(ours(), forbidden);
+    const outcome = await removeReceiverGrant(azure, base);
+    expect(outcome).toEqual({
+      kind: "denied",
+      record: RECORD,
+      step: "delete",
+      message:
+        `Remove role assignment ${NAME}: HTTP 403 - no. Your Azure identity cannot remove role assignments there ` +
+        "(Microsoft.Authorization/roleAssignments/delete). An administrator can grant RBAC Administrator on the hub or namespace, " +
+        "narrowed with the condition: Constrain roles and principal types: only Azure Event Hubs Data Receiver, only to service principals. " +
+        "Or they can remove the assignment in the Azure portal (Access control (IAM) on the hub or namespace).",
+    });
+  });
+
+  it("is removed-not-confirmed when it still reads back, or the read after fails", async () => {
+    const azure = new FakeAzureManagement();
+    azure.respondWith(ours(), { status: 200, body: {} }, ours());
+    expect(await removeReceiverGrant(azure, base)).toEqual({
+      kind: "removed-not-confirmed",
+      record: RECORD,
+      reason: "Azure accepted the removal, but the assignment still reads back.",
+    });
+    const azure2 = new FakeAzureManagement();
+    azure2.respondWith(ours(), { status: 200, body: {} }, forbidden);
+    expect(await removeReceiverGrant(azure2, base)).toEqual({
+      kind: "removed-not-confirmed",
+      record: RECORD,
+      reason: "Read it after the removal: HTTP 403 - no",
+    });
+  });
+
+  it("sends nothing for a record naming no Event Hub scope or no GUID name", async () => {
+    for (const record of [
+      { ...RECORD, scopeId: "/subscriptions/sub-1/resourceGroups/rg-eh" },
+      { ...RECORD, scopeId: `${HUB_SCOPE}/consumergroups/cg` },
+      { ...RECORD, assignmentName: "../../x" },
+    ]) {
+      const azure = new FakeAzureManagement();
+      expect(await removeReceiverGrant(azure, { ...base, record, recorded: [record] })).toEqual({ kind: "invalid-record", record });
+      expect(azure.calls).toEqual([]);
+    }
+  });
+
+  it("removes a namespace-scope grant at the namespace", async () => {
+    const name = receiverGrantAssignmentName(NS_SCOPE, PRINCIPAL);
+    const record: ReceiverGrantRecord = { scopeId: NS_SCOPE, principalId: PRINCIPAL, assignmentName: name };
+    const azure = new FakeAzureManagement();
+    azure.respondWith(
+      { status: 200, body: assignment({ scope: NS_SCOPE, name, description: receiverGrantDescription() }) },
+      { status: 200, body: {} },
+      gone,
+    );
+    expect(await removeReceiverGrant(azure, { ...base, record, recorded: [record] })).toEqual({ kind: "removed", record });
+    expect(azure.calls[1]).toEqual({
+      method: "DELETE",
+      path: `${NS_SCOPE}/providers/Microsoft.Authorization/roleAssignments/${name}`,
+      apiVersion: "2022-04-01",
+    });
+  });
+
+  it("never throws when the transport rejects", async () => {
+    const azure = { request: () => Promise.reject(new Error("socket hang up")) };
+    expect(await removeReceiverGrant(azure, base)).toEqual({
+      kind: "failed",
+      record: RECORD,
+      step: "read",
+      message: `Read role assignment ${NAME}: socket hang up`,
     });
   });
 });

@@ -140,12 +140,34 @@ RoleAssignmentExists, reads as already granted and is never recorded. Only
 an assignment Azure accepted from the app's PUT is recorded in the progress
 document (receiverGrants), and it carries the app's description stamp:
 record, name and stamp are the three ownership signals a removal checks.
-Removing it from the app is not built (AZR-141). Permission:
+Removing it from the app is built by AZR-141 (see the amendment below). Permission:
 Microsoft.Authorization/roleAssignments/write at the scope, not measured,
 shown as a banner; the change request asks for RBAC Administrator there,
 conditioned to this one role and service principals. Unverified live: the
 PUT and read-back, the 409 and PrincipalNotFound answers, and how long the
 assignment takes to reach the Kafka endpoint.
+
+**Amendment (2026-11-19, AZR-141, AZR-143): removing the grant, and one
+principal rule.** "Remove or pause what this app created" lists one row per
+recorded grant. Remove is two clicks; the confirm quotes the exact DELETE,
+the scope, the role and the principal. The removal GETs the assignment by
+its recorded name and deletes it, by name, only when all three ownership
+signals hold - the record, the deterministic name, the description stamp -
+and the read is still Data Receiver for that principal at that scope; then
+it GETs for the 404. Removed or already gone forgets the record; anything
+else (an unreadable read, a refused DELETE, a removal not confirmed) keeps
+it and says so. While the progress document records any Cribl Event Hubs
+source, the removal is refused: the source record holds neither the
+credential nor the hub, so any of them may read under the grant. The
+operator can override with a second, separately worded confirm naming those
+sources; the ownership proof is never overridden. A grant and a removal
+never run at once. Permission: Microsoft.Authorization/roleAssignments/delete
+at the scope, held by the same RBAC Administrator (whose role-and-principal
+condition narrows delete alike), not measured, shown as a note. Separately,
+the Cribl source plan's cross-check now refuses principal-mismatch when the
+directory lists the typed object id under another client id, the same rule
+the grant applies - one function, both callers (AZR-143). Unverified live:
+the DELETE, its 403 under a reduced identity, and the 404 read after it.
 
 ## Unverified (measured by AZR-115)
 

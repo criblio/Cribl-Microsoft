@@ -27,9 +27,17 @@ import type {
   ReadyReceiverGrant,
   ReceiverGrantPrincipal,
   ReceiverGrantRecord,
+  ReceiverGrantRemoveOutcome,
   ReceiverGrantScopeChoice,
 } from "@soc/core";
-import { receiverGrantKey } from "@soc/core";
+import {
+  RECEIVER_GRANT_ADMIN_ROLE,
+  RECEIVER_GRANT_DELETE_ACTION,
+  RECEIVER_GRANT_ROLE,
+  quoteArmRequest,
+  receiverGrantKey,
+  receiverGrantRemoveRequests,
+} from "@soc/core";
 import type { PickerMessage } from "./azure-onboarding-state";
 
 /** One scope the operator can pick. */
@@ -203,6 +211,92 @@ export function receiverGrantToRerecord(
   const key = receiverGrantKey(record);
   if (receiverGrantKey({ scopeId: result.existing.scope, principalId: record.principalId }) !== key) return null;
   return records.some((r) => receiverGrantKey(r) === key) ? null : record;
+}
+
+// ---------------------------------------------------------------------------
+// Removal (AZR-141): the rows in "Remove or pause what this app created"
+// ---------------------------------------------------------------------------
+
+/** Where a recorded grant sits, in words: the hub in its namespace, or the namespace. */
+function scopeWords(scopeId: string): string {
+  const s = scopeId.split("/").filter((x) => x !== "");
+  const ns = s[7] ?? "";
+  return s.length === 10 ? `hub ${s[9] ?? ""} in namespace ${ns}` : `namespace ${ns}`;
+}
+
+/** The removal row's title. */
+export function receiverGrantRecordTitle(record: ReceiverGrantRecord): string {
+  return `${RECEIVER_GRANT_ROLE.roleName} for object ID ${record.principalId} on ${scopeWords(record.scopeId)} (Azure)`;
+}
+
+/** The removal confirm: the exact DELETE, the scope, the role and the principal, and what is checked first. */
+export function receiverGrantRemoveConfirmText(record: ReceiverGrantRecord): string {
+  const requests = receiverGrantRemoveRequests(record);
+  if (requests === null) return "This record does not name a role assignment this app creates; nothing will be sent.";
+  return (
+    `Remove the role ${RECEIVER_GRANT_ROLE.roleName} (role definition ${RECEIVER_GRANT_ROLE.guid}) from the service principal ` +
+    `with object ID ${record.principalId}, at scope ${record.scopeId}? Remove sends ${quoteArmRequest(requests.del)} - ` +
+    "the assignment is read first and removed only if this app's record names it, its name is the one this app gives this grant, " +
+    "and its description carries this app's stamp. A Cribl source that signs in as this principal stops reading this hub."
+  );
+}
+
+/**
+ * The SECOND confirm, offered only after the removal was refused because a
+ * recorded Cribl Event Hubs source may still read with the grant. Says what
+ * stops, by name.
+ */
+export function receiverGrantOverrideConfirmText(record: ReceiverGrantRecord, inUseBy: readonly string[]): string {
+  const one = inUseBy.length === 1;
+  return (
+    `Remove it anyway? The Cribl source${one ? "" : "s"} ${inUseBy.join(", ")} this app created ` +
+    `${one ? "is" : "are"} still recorded and may sign in with Entra ID as object ID ${record.principalId}. ` +
+    `Once the assignment is gone, Azure refuses ${one ? "its" : "their"} reads at ${record.scopeId} and ` +
+    `${one ? "it stops" : "they stop"} receiving events. The same checks still apply: nothing is removed unless this app can prove it made the assignment.`
+  );
+}
+
+/** Why Remove is off, or null. A running Check or grant and a running removal never overlap. */
+export function receiverGrantRemoveDisabledReason(gate: { readonly granting: boolean; readonly removing: boolean }): string | null {
+  if (gate.removing) return "A removal is already running.";
+  if (gate.granting) return "A Data Receiver check or grant is running. Remove is off until it finishes.";
+  return null;
+}
+
+/** The permission the removal needs: shown as a note, never a block. */
+export const RECEIVER_GRANT_REMOVE_PERMISSION_NOTE =
+  `Needs ${RECEIVER_GRANT_DELETE_ACTION} on the hub or namespace, not yet measured; ${RECEIVER_GRANT_ADMIN_ROLE} holds it. ` +
+  "If it is missing, Azure's refusal is shown here.";
+
+/** The removal outcome as the screen says it. */
+export function receiverGrantRemoveMessage(outcome: ReceiverGrantRemoveOutcome): PickerMessage {
+  const what = `The ${RECEIVER_GRANT_ROLE.roleName} assignment ${outcome.record.assignmentName}`;
+  switch (outcome.kind) {
+    case "removed":
+      return { tone: "info", text: `${what} was removed, and Azure no longer returns it. This app has forgotten it.` };
+    case "already-gone":
+      return { tone: "info", text: `${what} is no longer in Azure, so nothing was sent. This app has forgotten it.` };
+    case "removed-not-confirmed":
+      return {
+        tone: "warning",
+        text: `Azure accepted the removal of ${outcome.record.assignmentName}, but it could not be confirmed gone (${outcome.reason}). The record is kept; try Remove again.`,
+      };
+    case "not-proven":
+    case "in-use":
+      return { tone: "warning", text: `Nothing was removed. ${outcome.detail}` };
+    case "invalid-record":
+      return { tone: "warning", text: "This record does not name a role assignment this app creates, so nothing was sent." };
+    case "denied":
+    case "unregistered":
+    case "failed":
+      return {
+        tone: "error",
+        text:
+          outcome.step === "read"
+            ? `Nothing was removed: the assignment could not be read (${outcome.message}). The record is kept, so Remove stays offered.`
+            : `The removal stopped: ${outcome.message} The record is kept.`,
+      };
+  }
 }
 
 /** What the section says beside the re-record button. */

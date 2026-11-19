@@ -1,4 +1,4 @@
-export { applyReceiverGrant, planReceiverGrant } from "./eventhub-receiver-grant";
+export { applyReceiverGrant, planReceiverGrant, receiverGrantRemoveRequests, removeReceiverGrant } from "./eventhub-receiver-grant";
 export type {
   ApplyReceiverGrantOutcome,
   ExistingReceiverGrant,
@@ -7,5 +7,8 @@ export type {
   ReadyReceiverGrant,
   ReceiverGrantPorts,
   ReceiverGrantPrincipal,
+  ReceiverGrantRemoveInput,
+  ReceiverGrantRemoveOutcome,
+  ReceiverGrantRemoveStep,
   ReceiverGrantStep,
 } from "./eventhub-receiver-grant";

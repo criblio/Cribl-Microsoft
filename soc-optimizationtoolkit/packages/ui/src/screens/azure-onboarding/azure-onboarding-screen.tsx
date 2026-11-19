@@ -134,6 +134,7 @@ import {
   withEntraSetting,
   withoutEntraSetting,
   withReceiverGrant,
+  withoutReceiverGrant,
   listenRuleName,
   withEventHubAccess,
   withoutEventHubAccess,
@@ -141,6 +142,7 @@ import {
 import type {
   TenantInventory,
   ReceiverGrantRecord,
+  ReceiverGrantRemoveOutcome,
   ActivityLogRemoveOutcome,
   ApplyPauseOutcome,
   ApplyTeardownOutcome,
@@ -222,6 +224,7 @@ import { EntraSettingSection } from "./entra-setting-section";
 import { ReceiverGrantSection } from "./receiver-grant-section";
 import { EntraRemovePanel } from "./entra-remove-panel";
 import { ActivityLogRemovePanel } from "./activity-log-remove-panel";
+import { ReceiverGrantRemovePanel } from "./receiver-grant-remove-panel";
 import { entraDeployedItems, entraReadDisprovesRecord } from "./entra-setting-state";
 import { TenantInventoryHeatmap } from "./inventory/tenant-inventory-heatmap";
 import { HowToPanel } from "./howto/howto-panel";
@@ -441,6 +444,9 @@ export function AzureOnboardingScreen({
   // apart, so the screen holds both running flags and each turns the other off.
   const [activityLogDeploying, setActivityLogDeploying] = useState(false);
   const [activityLogRemoving, setActivityLogRemoving] = useState(false);
+  // AZR-141: a Data Receiver grant and its Remove never run at once.
+  const [receiverGranting, setReceiverGranting] = useState(false);
+  const [receiverGrantRemoving, setReceiverGrantRemoving] = useState(false);
   const [entraState, setEntraState] = useState<EntraSettingState | null>(null);
   // AZR-99: the next Entra read follows the app's own write (see onEntraState).
   const entraReadAfterDeploy = useRef(false);
@@ -987,6 +993,19 @@ export function AzureOnboardingScreen({
     const recorded = p !== null && commitProgress(withReceiverGrant(p, record), "receiver grant");
     logger?.info(`${LOG} receiver grant recorded`, { recorded });
     return recorded;
+  }
+
+  /**
+   * AZR-141: forget a Data Receiver grant's record after a removal that left
+   * nothing behind (removed, or already gone). Every other outcome keeps it,
+   * so Remove stays offered.
+   */
+  function onReceiverGrantRemoved(outcome: ReceiverGrantRemoveOutcome): void {
+    if (outcome.kind !== "removed" && outcome.kind !== "already-gone") return;
+    const p = loadedProgress(latestProgressLoad.current);
+    const forgotten =
+      p !== null && commitProgress(withoutReceiverGrant(p, outcome.record.scopeId, outcome.record.principalId), "receiver grant removed");
+    logger?.info(`${LOG} receiver grant record dropped`, { forgotten });
   }
 
   /**
@@ -1576,6 +1595,8 @@ export function AzureOnboardingScreen({
             onGranted={onReceiverGranted}
             howtoSection={CHOOSER_SECTION_NUMBER}
             onShowHowto={showHowtoSection}
+            removing={receiverGrantRemoving}
+            onRunningChange={setReceiverGranting}
           />
         )}
         {values !== null && hasEventHubLane && (
@@ -1643,6 +1664,14 @@ export function AzureOnboardingScreen({
                   records={progress.eventHubAccess ?? []}
                   inUseBy={eventHubSourcesInUse(progress)}
                   onRemoved={onListenAccessRemoved}
+                />
+                {/* AZR-141: from the records, whatever is chosen. */}
+                <ReceiverGrantRemovePanel
+                  records={progress.receiverGrants ?? []}
+                  inUseBy={eventHubSourcesInUse(progress)}
+                  granting={receiverGranting}
+                  onRunningChange={setReceiverGrantRemoving}
+                  onRemoved={onReceiverGrantRemoved}
                 />
               </>
             }

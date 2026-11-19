@@ -30,11 +30,17 @@
  * the PUT is reported as it comes: a 403 is `denied`, naming the role an
  * administrator grants.
  *
+ * - {@link removeReceiverGrant} (AZR-141): after the operator's confirm in
+ *   "Remove or pause what this app created", ONE GET of a recorded grant by
+ *   name, and only when the record, the deterministic name and the stamp all
+ *   prove it the app's (and no recorded Cribl source may read with it, or the
+ *   operator overrode that), ONE DELETE by name and a GET for the 404.
+ *
  * Never throws: every transport rejection and every non-2xx becomes an
- * outcome. Never DELETEs. No clock, no randomness.
+ * outcome. No clock, no randomness.
  */
 
-import type { AzureManagement } from "../../ports/azure-management";
+import type { AzureManagement, AzureManagementRequest } from "../../ports/azure-management";
 import type { GraphDirectory } from "../../ports/graph-directory";
 import type { Logger } from "../../ports/logger";
 import { attemptArm, classifyArmFailure, is2xx, isErrorCode } from "../arm-http";
@@ -61,9 +67,16 @@ import {
   receiverGrantDescription,
   receiverGrantReadBackDiffs,
   receiverGrantScopeId,
+  classifyReceiverGrantRemoval,
+  isReceiverGrantScope,
 } from "../../domain/eventhub-receiver-grant/receiver-grant";
+import { isGuid } from "../../domain/name-based-guid/name-based-guid";
 import type { ReceiverGrantScopeChoice } from "../../domain/eventhub-receiver-grant/receiver-grant";
-import { RECEIVER_GRANT_ADMIN_CONDITION, RECEIVER_GRANT_ADMIN_ROLE } from "../../domain/eventhub-receiver-grant/receiver-grant-permissions";
+import {
+  RECEIVER_GRANT_ADMIN_CONDITION,
+  RECEIVER_GRANT_ADMIN_ROLE,
+  RECEIVER_GRANT_DELETE_ACTION,
+} from "../../domain/eventhub-receiver-grant/receiver-grant-permissions";
 
 const LOG = "azure-onboarding: receiver grant";
 
@@ -374,4 +387,114 @@ export async function applyReceiverGrant(
   });
   ports.logger?.info(`${LOG}: written`, { verified: diffs.length === 0 });
   return diffs.length === 0 ? { kind: "granted", record } : { kind: "accepted-not-verified", record, reasons: diffs };
+}
+
+// ---------------------------------------------------------------------------
+// Removal (AZR-141)
+// ---------------------------------------------------------------------------
+
+/**
+ * The GET and the DELETE of a recorded grant, by its recorded name at its
+ * recorded scope: exactly what the removal sends, and what its confirm
+ * quotes. Null when the record names no scope this app grants at, or its
+ * name is not a GUID: nothing is sent for it.
+ */
+export function receiverGrantRemoveRequests(
+  record: ReceiverGrantRecord,
+): { readonly get: AzureManagementRequest; readonly del: AzureManagementRequest } | null {
+  const scope = record.scopeId.trim().replace(/\/+$/, "");
+  const name = record.assignmentName.trim();
+  if (!isReceiverGrantScope(scope) || !isGuid(name)) return null;
+  const path = `${scope}/providers/Microsoft.Authorization/roleAssignments/${name}`;
+  return {
+    get: { method: "GET", path, apiVersion: ROLE_ASSIGNMENTS_API_VERSION },
+    del: { method: "DELETE", path, apiVersion: ROLE_ASSIGNMENTS_API_VERSION },
+  };
+}
+
+export interface ReceiverGrantRemoveInput {
+  readonly record: ReceiverGrantRecord;
+  /** Every grant the progress document records (the proof reads it again). */
+  readonly recorded: readonly ReceiverGrantRecord[];
+  /** The Cribl Event Hubs sources the app records: while any remains, nothing goes unless overridden. */
+  readonly inUseBy: readonly string[];
+  /** The operator confirmed the second, explicit confirm naming `inUseBy`. */
+  readonly override: boolean;
+}
+
+/** The steps a removal can stop at. */
+export type ReceiverGrantRemoveStep = "read" | "delete";
+
+export type ReceiverGrantRemoveOutcome =
+  /** DELETE accepted and the assignment no longer reads (404). The record can go. */
+  | { readonly kind: "removed"; readonly record: ReceiverGrantRecord }
+  /** DELETE accepted, but it still reads or the read failed. Keep the record. */
+  | { readonly kind: "removed-not-confirmed"; readonly record: ReceiverGrantRecord; readonly reason: string }
+  /** Nothing there (404 on the read): nothing sent. The record can go. */
+  | { readonly kind: "already-gone"; readonly record: ReceiverGrantRecord }
+  /** There, but not provably the app's, or a recorded Cribl source may still read with it: nothing sent. */
+  | { readonly kind: "not-proven" | "in-use"; readonly record: ReceiverGrantRecord; readonly detail: string }
+  /** The record names no scope or name this app writes: nothing sent. */
+  | { readonly kind: "invalid-record"; readonly record: ReceiverGrantRecord }
+  | {
+      /** The read or the DELETE was refused or failed. Keep the record. */
+      readonly kind: "denied" | "unregistered" | "failed";
+      readonly record: ReceiverGrantRecord;
+      readonly step: ReceiverGrantRemoveStep;
+      readonly message: string;
+    };
+
+/**
+ * Remove one recorded grant, after the operator's confirm: GET it by name
+ * (404 is already gone), prove it the app's and not in use
+ * (classifyReceiverGrantRemoval), DELETE it by name, then GET for the 404.
+ * Never throws; a read Azure would not answer keeps the record.
+ */
+export async function removeReceiverGrant(
+  azure: AzureManagement,
+  input: ReceiverGrantRemoveInput,
+  logger?: Logger,
+): Promise<ReceiverGrantRemoveOutcome> {
+  const { record } = input;
+  const done = (outcome: ReceiverGrantRemoveOutcome): ReceiverGrantRemoveOutcome => {
+    logger?.[outcome.kind === "removed" || outcome.kind === "already-gone" ? "info" : "warn"](`${LOG}: remove finished`, {
+      outcome: outcome.kind,
+      override: input.override,
+    });
+    return outcome;
+  };
+  const requests = receiverGrantRemoveRequests(record);
+  if (requests === null) return done({ kind: "invalid-record", record });
+
+  const read = await attemptArm(() => azure.request(requests.get));
+  let found: { readonly kind: "absent" } | { readonly kind: "found"; readonly body: unknown };
+  if (read.ok && read.response.status === 404) found = { kind: "absent" };
+  else if (read.ok && is2xx(read.response.status)) found = { kind: "found", body: read.response.body };
+  else {
+    const f = classifyArmFailure(read, `Read role assignment ${record.assignmentName}`);
+    return done({ kind: f.kind, record, step: "read", message: f.message });
+  }
+
+  const verdict = classifyReceiverGrantRemoval(found, record, input.recorded, input.inUseBy, input.override);
+  if (verdict.kind === "already-gone") return done({ kind: "already-gone", record });
+  if (verdict.kind === "not-proven" || verdict.kind === "in-use") return done({ kind: verdict.kind, record, detail: verdict.detail });
+
+  const del = await attemptArm(() => azure.request(requests.del));
+  if (!del.ok || !is2xx(del.response.status)) {
+    const f = classifyArmFailure(del, `Remove role assignment ${record.assignmentName}`);
+    const message =
+      f.kind === "denied"
+        ? `${f.message}. Your Azure identity cannot remove role assignments there (${RECEIVER_GRANT_DELETE_ACTION}). ` +
+          `An administrator can grant ${RECEIVER_GRANT_ADMIN_ROLE} on the hub or namespace, narrowed with the condition: ${RECEIVER_GRANT_ADMIN_CONDITION} ` +
+          "Or they can remove the assignment in the Azure portal (Access control (IAM) on the hub or namespace)."
+        : f.message;
+    return done({ kind: f.kind, record, step: "delete", message });
+  }
+  const after = await attemptArm(() => azure.request(requests.get));
+  if (after.ok && after.response.status === 404) return done({ kind: "removed", record });
+  const reason =
+    after.ok && is2xx(after.response.status)
+      ? "Azure accepted the removal, but the assignment still reads back."
+      : classifyArmFailure(after, "Read it after the removal").message;
+  return done({ kind: "removed-not-confirmed", record, reason });
 }
