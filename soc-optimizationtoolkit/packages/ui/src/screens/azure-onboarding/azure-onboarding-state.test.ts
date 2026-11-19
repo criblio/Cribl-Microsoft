@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  emptyProgress,
   DEFENDER_EXPORT_ITEM_ID,
   DEFENDER_EXPORT_NAME,
   FakeKvDocumentStore,
@@ -41,6 +42,7 @@ import type {
   ValidationResult,
 } from "@soc/core";
 import { findHistoryInCopy } from "../../components/copy-rules";
+import { rowChoices } from "./howto/howto-state";
 import * as onboardingState from "./azure-onboarding-state";
 import {
   unmeasuredInventoryMessage,
@@ -76,6 +78,7 @@ import {
   createRuleLabel,
   RULE_NOTE_SOURCES_UNKNOWN,
   ruleNote,
+  manageRuleSourcesOf,
   sourcesNeedingManageRule,
   sendableRules,
   withItem,
@@ -582,6 +585,9 @@ describe("Event Hub picker messages reuse the shared empty-inventory wording", (
     const SAFER = "This rule can also manage the namespace. A dedicated rule with only Send rights is safer.";
     const WHY =
       "a diagnostic setting streams to an Event Hub only through a rule with Manage, Send and Listen rights";
+    const BUILT_IN =
+      "RootManageSharedAccessKey is the namespace's built-in rule. Use a dedicated rule with Manage, Send and Listen rights instead, " +
+      "so it can be rotated or removed on its own.";
 
     it("Defender only (no source needs Manage): today's text, and the Send-only create label", () => {
       expect(sourcesNeedingManageRule([DEFENDER_EXPORT_ITEM_ID])).toEqual([]);
@@ -637,6 +643,12 @@ describe("Event Hub picker messages reuse the shared empty-inventory wording", (
           "Choose a rule with Manage rights.",
       });
       expect(ruleNote({ name: "RootManageSharedAccessKey", rights: ["Listen", "Manage", "Send"] }, sources)).toEqual({
+        tone: "warning",
+        text:
+          `Microsoft Audit diagnostic-settings initiative needs a rule with Manage rights, as this one has, because ${WHY}. ` +
+          BUILT_IN,
+      });
+      expect(ruleNote({ name: "ops", rights: ["Listen", "Manage", "Send"] }, sources)).toEqual({
         tone: "info",
         text: `Microsoft Audit diagnostic-settings initiative needs a rule with Manage rights, as this one has, because ${WHY}.`,
       });
@@ -651,6 +663,53 @@ describe("Event Hub picker messages reuse the shared empty-inventory wording", (
         text: `Community policy initiative needs a rule with Manage rights, as this one has, because ${WHY}.`,
       });
       expect(createRuleLabel(sources)).toBe("Create Manage rule");
+    });
+
+    // Review round 4: the built-in rule keeps a note of its own when a Manage
+    // source is chosen - a dedicated Manage rule, never Send-only.
+    it("a Manage source with the built-in rule: a warning naming it, advising a dedicated Manage rule", () => {
+      const sources = sourcesNeedingManageRule(["activityLog", "entraId"]);
+      const note = ruleNote({ name: "RootManageSharedAccessKey", rights: ["Listen", "Manage", "Send"] }, sources);
+      expect(note).toEqual({
+        tone: "warning",
+        text:
+          `Azure Activity Log and Entra ID diagnostics need a rule with Manage rights, as this one has, because ${WHY}. ` +
+          BUILT_IN,
+      });
+      expect(note?.text).not.toMatch(/Send-only|only Send|safer/);
+      // The same words as the How-to step the guide shows for these sources.
+      expect(howToStep("eh-rule-diagnostic")?.why).toMatch(/Use a dedicated rule, not the namespace's built-in one, so it can be rotated or removed on its own\./);
+    });
+
+    describe("manageRuleSourcesOf (review round 4)", () => {
+      const chosenA: RowChoice = { kind: "chosen", mode: "automate" };
+      const notChosen: RowChoice = { kind: "not-chosen" };
+      const selUnknown: RowChoice = { kind: "unknown", doc: "selection", cause: "not-read" };
+      const all = (c: RowChoice) => new Map<string, RowChoice>(MANAGE_RULE_SOURCE_IDS.map((id) => [id, c]));
+
+      it("titles of the chosen Manage sources when every Manage row is known", () => {
+        const m = all(notChosen);
+        m.set("activityLog", chosenA);
+        m.set("defenderExport", selUnknown); // not a Manage source: its unknown is irrelevant
+        expect(manageRuleSourcesOf(m)).toEqual(["Azure Activity Log"]);
+        expect(manageRuleSourcesOf(all(notChosen))).toEqual([]);
+      });
+
+      it("null when any Manage source's choice is unknown (the selection unread), or its row is missing", () => {
+        const m = all(notChosen);
+        m.set("entraId", selUnknown);
+        expect(manageRuleSourcesOf(m)).toBeNull();
+        const missing = all(notChosen);
+        missing.delete("communityPolicyInitiative");
+        expect(manageRuleSourcesOf(missing)).toBeNull();
+      });
+
+      it("through rowChoices: progress loaded, selection refused -> null; selection loaded -> the titles", () => {
+        const progress = { status: "absent", progress: emptyProgress() } as const;
+        expect(manageRuleSourcesOf(rowChoices(progress, null, "not-read"))).toBeNull();
+        const selection = { enabled: ["activityLog"], subSelections: {} } as unknown as CoverageSelection;
+        expect(manageRuleSourcesOf(rowChoices(progress, selection, "not-read"))).toEqual(["Azure Activity Log"]);
+      });
     });
 
     it("sources not known (null): one neutral note for every rule, and a label naming no kind", () => {
@@ -790,6 +849,7 @@ describe("visible copy carries no project history", () => {
     add("rule.note", ruleNote({ name: "r", rights: ["Manage"] })?.text);
     add("rule.note.manage-source", ruleNote({ name: "r", rights: ["Send"] }, ["A", "B"])?.text);
     add("rule.note.manage-source.ok", ruleNote({ name: "r", rights: ["Manage"] }, ["A"])?.text);
+    add("rule.note.manage-source.built-in", ruleNote({ name: "RootManageSharedAccessKey", rights: ["Manage"] }, ["A"])?.text);
     add("rule.create.label", createRuleLabel(["A"]));
     for (const o of OUTCOMES) add(`outcome.${o.kind}`, deployOutcomeMessage(o).text);
 

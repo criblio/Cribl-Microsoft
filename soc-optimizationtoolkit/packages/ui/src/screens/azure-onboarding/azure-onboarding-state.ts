@@ -898,6 +898,26 @@ export function sourcesNeedingManageRule(chosen: readonly string[]): string[] {
   );
 }
 
+/**
+ * What the rule note is told about the chosen sources, from the chooser's
+ * answer per source ({@link RowChoice}, the same map the method sections
+ * read): the titles of the chosen Manage sources, or NULL while any Manage
+ * source's choice is unknown. Unknown covers BOTH documents: the progress
+ * document (every row), and the coverage selection for a Manage source in
+ * Automate mode - the Activity Log and Entra ID default to Automate, so an
+ * unread selection is not "none chosen" and must not earn Send-only advice.
+ * A missing row is unknown too (the screen's own fallback is unknown).
+ */
+export function manageRuleSourcesOf(choices: ReadonlyMap<string, RowChoice>): string[] | null {
+  const chosen: string[] = [];
+  for (const id of MANAGE_RULE_SOURCE_IDS) {
+    const choice = choices.get(id);
+    if (choice === undefined || choice.kind === "unknown") return null;
+    if (choice.kind === "chosen") chosen.push(id);
+  }
+  return sourcesNeedingManageRule(chosen);
+}
+
 /** "a", "a and b", "a, b and c". */
 function listed(parts: readonly string[]): string {
   if (parts.length <= 1) return parts[0] ?? "";
@@ -919,13 +939,26 @@ export const RULE_NOTE_SOURCES_UNKNOWN =
   "the Defender for Cloud alert export alone does not.";
 
 /**
+ * The advice for the namespace's built-in rule when a chosen source needs
+ * Manage: a dedicated rule with the same rights (the How-to step
+ * eh-rule-diagnostic's wording), never Send-only.
+ */
+function builtInRuleAdvice(name: string): string {
+  return (
+    `${name} is the namespace's built-in rule. Use a dedicated rule with Manage, Send and Listen rights instead, ` +
+    "so it can be rotated or removed on its own."
+  );
+}
+
+/**
  * A note beside a chosen rule, or null. PER SOURCE, so it never recommends a
  * rule a chosen source's own deploy refuses:
  *
  *   - a chosen source needs Manage (`manageSources` non-empty): a rule without
  *     Manage is warned about in the same terms as that source's deploy gate,
  *     and a rule with Manage is said to be what it needs - never "Send-only is
- *     safer";
+ *     safer". The namespace's built-in rule is still warned about by name,
+ *     with a dedicated Manage, Send and Listen rule as the advice;
  *   - which sources are chosen is NOT KNOWN (`manageSources` null): a
  *     neutral note, RULE_NOTE_SOURCES_UNKNOWN, for any rule - never "Send-only
  *     is safer", which a chosen Manage source would refuse;
@@ -953,10 +986,13 @@ export function ruleNote(
           "Choose a rule with Manage rights.",
       };
     }
-    return {
-      tone: "info",
-      text: `${who} ${verb} a rule with Manage rights, as this one has, because ${MANAGE_RULE_WHY}.`,
-    };
+    const enough = `${who} ${verb} a rule with Manage rights, as this one has, because ${MANAGE_RULE_WHY}.`;
+    // The built-in rule has the rights but is still named: the How-to step
+    // eh-rule-diagnostic says to use a dedicated rule, not this one.
+    if (rule.name === DEFAULT_NAMESPACE_RULE) {
+      return { tone: "warning", text: `${enough} ${builtInRuleAdvice(rule.name)}` };
+    }
+    return { tone: "info", text: enough };
   }
   if (!manages && rule.name !== DEFAULT_NAMESPACE_RULE) return null;
   return {

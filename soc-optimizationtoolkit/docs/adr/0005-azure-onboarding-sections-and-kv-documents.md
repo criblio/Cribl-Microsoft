@@ -352,11 +352,15 @@ Appended; nothing above is edited.
   (in either mode), the note beside
   the chosen rule says that source needs a rule with Manage rights - a
   warning in the gate's own terms for a rule without it, an info line for a
-  rule with it - and the disabled create-rule button reads "Create Manage
-  rule". With the Defender export alone, both are unchanged. The rule is
+  rule with it, except the namespace's built-in rule, which is still warned
+  about by name with a dedicated Manage, Send and Listen rule as the advice
+  (the How-to step's own words) - and the disabled create-rule button reads
+  "Create Manage rule". With the Defender export alone, both are unchanged. The rule is
   still one pick for every source; the note never recommends a rule a chosen
   source's own deploy refuses. While WHICH sources are chosen is not known
-  (the progress document is loading or could not be read), the note is a
+  (the progress document is loading or could not be read, or the coverage
+  selection is, which holds the choice of a Manage source in Automate mode -
+  the Activity Log and Entra ID default to Automate), the note is a
   neutral one that recommends neither kind of rule, and the button reads
   "Create authorization rule": an unknown choice is not "none chosen". Not
   measured live: a Send-only PUT of a diagnostic setting has not been tried

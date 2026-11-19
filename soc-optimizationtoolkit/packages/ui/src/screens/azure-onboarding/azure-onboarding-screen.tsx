@@ -197,7 +197,7 @@ import {
   loadedSelection,
   measuredHubsOf,
   selectionUnknownCause,
-  sourcesNeedingManageRule,
+  manageRuleSourcesOf,
 } from "./azure-onboarding-state";
 import type {
   OnboardingLoadState,
@@ -640,13 +640,11 @@ export function AzureOnboardingScreen({
     () => (progress === null ? [] : chosenSourceIds(progress, selection)),
     [progress, selection],
   );
-  // AZR-117: the rule note and create-rule label follow the chosen sources.
-  // `chosen` is [] while progress is not loaded, which is NOT "nothing chosen":
-  // null tells the section the choice is unknown, so it recommends no rule.
-  const manageSources = useMemo(
-    () => (progress === null ? null : sourcesNeedingManageRule(chosen)),
-    [progress, chosen],
-  );
+  // AZR-117: the rule note and create-rule label follow the chosen sources,
+  // read from the chooser's answer per source. Null while a Manage source's
+  // choice is unknown (progress OR, for an Automate source, the selection not
+  // loaded), which is NOT "nothing chosen": the section then recommends no rule.
+  const manageSources = useMemo(() => manageRuleSourcesOf(choices), [choices]);
   const subSelectionOf = useCallback(
     (id: OnboardingSourceId): readonly string[] => selection?.subSelections[id] ?? [],
     [selection],

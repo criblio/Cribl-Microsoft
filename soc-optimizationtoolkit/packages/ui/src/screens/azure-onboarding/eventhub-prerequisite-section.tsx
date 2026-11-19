@@ -20,7 +20,10 @@
  * either policy initiative), which Azure documents as needing Manage, it says
  * that source needs Manage instead, and warns about a rule without it - the
  * same refusal the Activity Log and Entra ID deploy gates make and the How-to
- * Manage-rule check makes. The disabled create-rule button names the same kind.
+ * Manage-rule check makes; the built-in rule still gets a warning naming it,
+ * advising a dedicated Manage rule. While a Manage source's choice is unknown
+ * (either document unread) the note is neutral. The disabled create-rule
+ * button names the same kind.
  *
  * A PASTED HUB MUST EXIST. A hub id pasted in is checked against the
  * namespace's hub listing once it lands. When that listing is COMPLETE (2xx,

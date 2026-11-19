@@ -874,16 +874,49 @@ describe("AzureOnboardingScreen - the Event Hub target", () => {
     expect(screen.queryByRole("button", { name: "Create Send-only rule" })).toBeNull();
     expect(button("Create Manage rule").disabled).toBe(true);
     choose("Authorization rule", "RootManageSharedAccessKey");
+    // Review round 4: the built-in rule has the rights, but is still named,
+    // with a dedicated Manage rule as the advice (eh-rule-diagnostic's words).
     expect(
-      screen.getByText(`Azure Activity Log needs a rule with Manage rights, as this one has, because ${why}.`),
+      screen.getByText(
+        `Azure Activity Log needs a rule with Manage rights, as this one has, because ${why}. ` +
+          "RootManageSharedAccessKey is the namespace's built-in rule. Use a dedicated rule with Manage, Send and Listen rights instead, " +
+          "so it can be rotated or removed on its own.",
+      ),
     ).toBeTruthy();
-    expect(screen.queryByText(/safer/)).toBeNull();
+    expect(screen.queryByText(/safer|only Send rights/)).toBeNull();
   });
 
   // Review round 2: while progress is unread the chosen sources are unknown,
   // which is not "none chosen" - the note must not fall back to Send-only advice.
   it("with progress unreadable, the rule note recommends neither kind of rule", async () => {
     const store = new FakeKvDocumentStore().scriptLoad(PROGRESS_KEY, {
+      kind: "unknown",
+      reason: "HTTP 403",
+      status: 403,
+    });
+    mount({ store });
+    await loaded();
+    expect(button("Create authorization rule").disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Create Send-only rule" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create Manage rule" })).toBeNull();
+    const NEUTRAL =
+      "Which sources are chosen is not known yet, so this note cannot say which rule they need. " +
+      "A source that streams through a diagnostic setting needs a rule with Manage rights; " +
+      "the Defender for Cloud alert export alone does not.";
+    await chooseTarget();
+    choose("Authorization rule", "RootManageSharedAccessKey");
+    expect(screen.getByText(NEUTRAL)).toBeTruthy();
+    expect(screen.queryByText(/safer/)).toBeNull();
+    choose("Authorization rule", "SendOnly");
+    expect(screen.getByText(NEUTRAL)).toBeTruthy();
+    expect(screen.queryByText(/safer|Choose a rule with Manage rights/)).toBeNull();
+  });
+
+  // Review round 4: progress reads fine but the coverage SELECTION read is
+  // refused. The Activity Log and Entra ID default to Automate, whose choice
+  // lives in the selection, so the chosen sources are still unknown.
+  it("with the selection unreadable, the rule note recommends neither kind of rule", async () => {
+    const store = new FakeKvDocumentStore().scriptLoad(SELECTION_KEY, {
       kind: "unknown",
       reason: "HTTP 403",
       status: 403,
