@@ -382,6 +382,11 @@ describe("classifyActivityLogRemoval", () => {
     const moved = classifyActivityLogRemoval({ kind: "found", setting: setting({ ruleId: `${RULE}2` }) }, record, "s1");
     expect(moved.kind === "not-proven" && moved.detail).toContain(`it now sends with rule ${RULE}2, not the rule this app wrote`);
   });
+
+  it("never matches a blank subscription, even against a blank record (shared rule with Entra ID)", () => {
+    expect(classifyActivityLogRemoval({ kind: "found", setting: setting() }, record, " ").kind).toBe("not-proven");
+    expect(classifyActivityLogRemoval({ kind: "found", setting: setting() }, { ...record, subscriptionId: "" }, "").kind).toBe("not-proven");
+  });
 });
 
 describe("classifyEntraSettingRemoval (AZR-99)", () => {
