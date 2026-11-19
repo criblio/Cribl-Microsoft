@@ -10524,7 +10524,7 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   lists each red Azure or Cribl indicator with its reason and a jump link,
   counts unknown sources separately, shows when the read was taken, and offers
   to open All tenants when nothing is saved; each red source's row in the
-  source chooser carries a small gap badge. DONE 2026-11-19 (pins; 1.13.37):
+  source chooser carries a small gap badge. DONE 2026-11-19 (pins; 1.13.38):
   the grid (screens/tenant-gap, moved not rewritten) is the collapsible All
   tenants section of the new AzureOnboardingPage
   (screens/azure-onboarding/tenants/), which also renders Focus here and the
