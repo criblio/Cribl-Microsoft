@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**106 in the backlog, 33 in progress, 249 done.**
+**104 in the backlog, 35 in progress, 249 done.**
 
 ## By menu item
 
@@ -158,7 +158,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (33)
+## In progress (35)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -1011,9 +1011,40 @@ Started. Anything here with an unfinished dependency is called out on its card.
   with the benefit Microsoft actually applied over those days (Operation
   table) shown beside it.
 
+- **AZR-141** Remove the Data Receiver assignment the app granted, from the teardown panel
+  `AZR-F9` `story` `settled`
+  FOUND 2026-11-18 while building [[AZR-103]]: the app now creates an Azure
+  Event Hubs Data Receiver role assignment for the Cribl principal and records
+  it (progress.receiverGrants), but nothing removes it from the app; the grant
+  panel says an administrator removes it in the portal. Scope: a row in
+  'Remove or pause what this app created' ([[AZR-105]]) per recorded grant,
+  deleting only with all three ownership signals (the record, the
+  deterministic name receiverGrantAssignmentName, the description stamp),
+  behind a confirm quoting scope, role and principal; DELETE by name, GET for
+  the 404, forget the record on removed or already-gone; refuse when the Cribl
+  source still uses Entra ID on that hub unless the operator says so. Needs
+  Microsoft.Authorization/roleAssignments/delete in the least-privilege
+  registry and the change request.
+
+- **AZR-143** Cribl source plan reads 'not cross-checked' when the directory lists the object id under another client id
+  `AZR-F9` `bug` `settled`
+  FOUND 2026-11-18 in review round 1 of [[AZR-103]]. crossCheckPrincipal
+  (usecases/cribl-principal, used by plan-cribl-source for an Entra ID Cribl
+  source) only looks for the CLIENT id in the directory listing. When the
+  listing lacks the client id but lists the typed object id under ANOTHER
+  appId, the directory has disproved the pair, yet the plan reads
+  principalCheck 'not-cross-checked' and goes on to read the receive role for
+  that other principal, so its role verdict describes the wrong identity and a
+  source is offered that will fail to read. AZR-103 closed the same gap for
+  the grant (resolveCriblPrincipal refuses principal-mismatch, naming the
+  appId and display name the directory gives); this card applies the same rule
+  to crossCheckPrincipal so both callers agree, with a pin in
+  create-cribl-source.test.ts (graphOf([sp(OBJ, 'other-client')]) refuses
+  principal-mismatch before any Azure or Cribl call).
+
 ---
 
-## Backlog - now (13)
+## Backlog - now (12)
 
 Next to pick up. Nothing blocks these.
 
@@ -1237,22 +1268,6 @@ Next to pick up. Nothing blocks these.
   config-json warning when an imported connectivity value is coerced to full;
   Batch's template-only export is gated on the identity fields, so
   Disconnected cannot reach it from Batch (fallback routing).
-
-- **AZR-143** Cribl source plan reads 'not cross-checked' when the directory lists the object id under another client id
-  `AZR-F9` `bug` `settled`
-  FOUND 2026-11-18 in review round 1 of [[AZR-103]]. crossCheckPrincipal
-  (usecases/cribl-principal, used by plan-cribl-source for an Entra ID Cribl
-  source) only looks for the CLIENT id in the directory listing. When the
-  listing lacks the client id but lists the typed object id under ANOTHER
-  appId, the directory has disproved the pair, yet the plan reads
-  principalCheck 'not-cross-checked' and goes on to read the receive role for
-  that other principal, so its role verdict describes the wrong identity and a
-  source is offered that will fail to read. AZR-103 closed the same gap for
-  the grant (resolveCriblPrincipal refuses principal-mismatch, naming the
-  appId and display name the directory gives); this card applies the same rule
-  to crossCheckPrincipal so both callers agree, with a pin in
-  create-cribl-source.test.ts (graphOf([sp(OBJ, 'other-client')]) refuses
-  principal-mismatch before any Azure or Cribl call).
 
 ---
 
@@ -2215,7 +2230,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (40)
+## Backlog - later (39)
 
 Settled, gated on something above.
 
@@ -2804,21 +2819,6 @@ Settled, gated on something above.
   the paragraph still says lab bring-your-own-RG needs RG-scoped Contributor
   only, which AZR-81 made false (NetworkWatcherRG and the Event Grid admin
   step). FIX: move the rows into the table and correct the paragraph.
-
-- **AZR-141** Remove the Data Receiver assignment the app granted, from the teardown panel
-  `AZR-F9` `story` `settled`
-  FOUND 2026-11-18 while building [[AZR-103]]: the app now creates an Azure
-  Event Hubs Data Receiver role assignment for the Cribl principal and records
-  it (progress.receiverGrants), but nothing removes it from the app; the grant
-  panel says an administrator removes it in the portal. Scope: a row in
-  'Remove or pause what this app created' ([[AZR-105]]) per recorded grant,
-  deleting only with all three ownership signals (the record, the
-  deterministic name receiverGrantAssignmentName, the description stamp),
-  behind a confirm quoting scope, role and principal; DELETE by name, GET for
-  the 404, forget the record on removed or already-gone; refuse when the Cribl
-  source still uses Entra ID on that hub unless the operator says so. Needs
-  Microsoft.Authorization/roleAssignments/delete in the least-privilege
-  registry and the change request.
 
 ---
 
