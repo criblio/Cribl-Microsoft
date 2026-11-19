@@ -160,3 +160,117 @@ export function receiverGrantReadBackDiffs(
   }
   return diffs;
 }
+
+// ---------------------------------------------------------------------------
+// Removal (AZR-141): may the app delete a grant it recorded?
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether `scopeId` is a scope this app grants at: an Event Hub namespace, or
+ * one hub in it. A record naming anything else did not come from this app's
+ * grant, and nothing is sent for it.
+ */
+export function isReceiverGrantScope(scopeId: string): boolean {
+  const segments = scopeId.trim().split("/").filter((s) => s !== "");
+  const lower = segments.map((s) => s.toLowerCase());
+  const nsOk =
+    segments.length >= 8 &&
+    lower[0] === "subscriptions" &&
+    lower[2] === "resourcegroups" &&
+    lower[4] === "providers" &&
+    lower[5] === "microsoft.eventhub" &&
+    lower[6] === "namespaces";
+  if (!nsOk) return false;
+  return segments.length === 8 || (segments.length === 10 && lower[8] === "eventhubs");
+}
+
+/**
+ * The record a removal works from: the shape of progress-document's
+ * ReceiverGrantRecord, which this pure module does not import.
+ */
+export interface ReceiverGrantRemovalRecord {
+  readonly scopeId: string;
+  readonly principalId: string;
+  readonly assignmentName: string;
+}
+
+/** What a recorded grant's removal may do. */
+export type ReceiverGrantRemovalVerdict =
+  | { readonly kind: "delete" }
+  | { readonly kind: "already-gone" }
+  | { readonly kind: "not-proven"; readonly detail: string }
+  | { readonly kind: "in-use"; readonly detail: string };
+
+const removalKey = (r: ReceiverGrantRemovalRecord): string => `${armScopeKey(r.scopeId)}|${r.principalId.trim().toLowerCase()}`;
+
+/** A read-back difference as a clause: lower-case first letter, no full stop. */
+const clause = (sentence: string): string => `${sentence.charAt(0).toLowerCase()}${sentence.slice(1)}`.replace(/\.$/, "");
+
+/**
+ * May the app delete this Data Receiver assignment? Judged from the GET of the
+ * assignment by its recorded name, made just before.
+ *
+ *   - Absent (404): already gone; nothing is sent.
+ *   - `inUseBy` names the Cribl Event Hubs sources this app records. Any of
+ *     them may sign in with Entra ID as this principal and read under this
+ *     grant (the source record says neither its credential nor its hub), and
+ *     removing it stops them reading, so while one remains nothing goes -
+ *     UNLESS `override` is true: the operator confirmed a second, explicit
+ *     confirm that names them.
+ *   - Otherwise ALL THREE ownership signals must hold, else not-proven with
+ *     every missing one named: (1) the record - the progress document still
+ *     holds it under this scope and principal, with this name; (2) the name -
+ *     the recorded name is the deterministic one for the scope, role and
+ *     principal (receiverGrantAssignmentName), and the read answered under
+ *     it; (3) the stamp - its description carries this app's stamp. The read
+ *     must also still be Data Receiver, for this principal, at this scope
+ *     (receiverGrantReadBackDiffs).
+ */
+export function classifyReceiverGrantRemoval(
+  lookup: { readonly kind: "absent" } | { readonly kind: "found"; readonly body: unknown },
+  record: ReceiverGrantRemovalRecord,
+  recorded: readonly ReceiverGrantRemovalRecord[],
+  inUseBy: readonly string[],
+  override: boolean,
+): ReceiverGrantRemovalVerdict {
+  if (lookup.kind === "absent") return { kind: "already-gone" };
+  const name = record.assignmentName.trim();
+  if (inUseBy.length > 0 && !override) {
+    const one = inUseBy.length === 1;
+    return {
+      kind: "in-use",
+      detail:
+        `The Cribl source${one ? "" : "s"} ${inUseBy.join(", ")} this app created may sign in with Entra ID as principal ${record.principalId} ` +
+        `and read under this assignment; removing it stops ${one ? "that source" : "those sources"} reading. ` +
+        `Remove ${one ? "it" : "them"} first (Remove or pause what this app created), or remove the assignment anyway after a second confirm.`,
+    };
+  }
+  const missing: string[] = [];
+  const saved = recorded.find((r) => removalKey(r) === removalKey(record));
+  if (saved === undefined) {
+    missing.push("this app has no record of creating it");
+  } else if (saved.assignmentName.trim().toLowerCase() !== name.toLowerCase()) {
+    missing.push(`this app recorded it under the name ${saved.assignmentName}, not ${name}`);
+  }
+  const expectedName = receiverGrantAssignmentName(record.scopeId, record.principalId);
+  if (name.toLowerCase() !== expectedName) {
+    missing.push(`its name ${name} is not the one this app gives this role for this principal at this scope (${expectedName})`);
+  }
+  const row = parseReceiverAssignmentRow(lookup.body);
+  if (row === null) {
+    missing.push("Azure's answer was not a role assignment");
+  } else {
+    const diffs = receiverGrantReadBackDiffs(row, { scopeId: record.scopeId, principalId: record.principalId, assignmentName: name });
+    missing.push(...diffs.map(clause));
+    if (!hasReceiverGrantStamp(row.description)) missing.push("its description does not carry this app's stamp");
+  }
+  if (missing.length > 0) {
+    return {
+      kind: "not-proven",
+      detail:
+        `This app cannot prove it created role assignment ${name} as it is now (${missing.join("; ")}), so it does not remove it. ` +
+        "An administrator can remove it in the Azure portal (Access control (IAM) on the hub or namespace) if it should go.",
+    };
+  }
+  return { kind: "delete" };
+}

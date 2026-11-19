@@ -942,6 +942,27 @@ const OPERATIONS = {
     auditGap:
       "Added after the 2026-11-03 audit (AZR-103): the onboarding screen grants the Cribl principal Azure Event Hubs Data Receiver on the hub or namespace. Documented, not measured - no assignment has been made with a reduced identity.",
   },
+  "eventhub.receiverGrant.delete": {
+    id: "eventhub.receiverGrant.delete",
+    calls: [
+      // AZR-141: Remove in "Remove or pause what this app created" deletes the
+      // assignment the grant above recorded, by name, at the scope it was made.
+      { method: "DELETE", path: "{*}/providers/Microsoft.EventHub/namespaces/{ns}/eventhubs/{hub}/providers/Microsoft.Authorization/roleAssignments/{assignment}", api: "arm" },
+      { method: "DELETE", path: "{*}/providers/Microsoft.EventHub/namespaces/{ns}/providers/Microsoft.Authorization/roleAssignments/{assignment}", api: "arm" },
+    ],
+    operation: "Microsoft.Authorization/roleAssignments/delete",
+    // RBAC Administrator holds write and delete; the portal's "constrain
+    // roles and principal types" condition narrows both actions alike.
+    leastRole: "RBAC Administrator",
+    alsoGrantedBy: ["User Access Administrator", "Owner"],
+    scope: "resource",
+    scopeNote: "the Event Hub the Cribl principal reads, or its namespace when that scope was chosen",
+    citation: "https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/privileged",
+    confidence: "high",
+    audit: [],
+    auditGap:
+      "Added after the 2026-11-03 audit (AZR-141): Remove deletes only the Data Receiver assignment this app created and proved its own (record, deterministic name, description stamp). Documented, not measured - no delete has been made with a reduced identity.",
+  },
   "lab.roleAssignment.write": {
     id: "lab.roleAssignment.write",
     calls: [

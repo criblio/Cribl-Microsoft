@@ -62,6 +62,7 @@ import { EVENT_HUB_RECEIVER_ROLES } from "../eventhub-arm";
 import {
   RECEIVER_GRANT_ADMIN_CONDITION,
   RECEIVER_GRANT_ADMIN_ROLE,
+  RECEIVER_GRANT_DELETE_ACTION,
 } from "../eventhub-receiver-grant/receiver-grant-permissions";
 import type { PermissionNecessity } from "../azure-permissions";
 import {
@@ -832,6 +833,10 @@ export function resourceCreationRequest(
     "  grant its identity " + RECEIVER_GRANT_ADMIN_ROLE + " on the hub or namespace",
     "  with this condition:",
     "  " + RECEIVER_GRANT_ADMIN_CONDITION,
+    // AZR-141: the same role and condition let the app remove the one
+    // assignment it made (roleAssignments/delete), behind its own confirm.
+    "  The same role lets it remove that assignment later, behind a confirm",
+    "  (" + RECEIVER_GRANT_DELETE_ACTION + "); nothing else is removed.",
   );
 
   const parts: string[] = [

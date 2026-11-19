@@ -29,7 +29,12 @@ function action(operationId: OperationId, label: string): RequiredAction {
 export const RECEIVER_GRANT_SCOPE_ACTIONS: readonly RequiredAction[] = [
   action("rbac.roleAssignments.read", "Read the Cribl principal's existing role assignments there"),
   action("eventhub.receiverGrant.write", "Create the Azure Event Hubs Data Receiver assignment"),
+  // AZR-141: Remove, in "Remove or pause what this app created".
+  action("eventhub.receiverGrant.delete", "Remove the assignment this app created"),
 ];
+
+/** The delete action alone, for the removal row's note and its refusal. */
+export const RECEIVER_GRANT_DELETE_ACTION = operationAction("eventhub.receiverGrant.delete");
 
 /** The role an administrator grants the app for this, from the registry. */
 export const RECEIVER_GRANT_ADMIN_ROLE = leastRoleFor("eventhub.receiverGrant.write");
@@ -52,6 +57,6 @@ export const RECEIVER_GRANT_PERMISSIONS: AutomationPermissions = {
 
 /** The line shown under the unmeasured list. Visible copy: no card ids, dates or phases. */
 export const RECEIVER_GRANT_ACTIONS_NOT_MEASURED =
-  `Needed, not yet measured. ${RECEIVER_GRANT_ADMIN_ROLE} (or User Access Administrator, or Owner) on the hub or namespace holds both; ` +
+  `Needed, not yet measured. ${RECEIVER_GRANT_ADMIN_ROLE} (or User Access Administrator, or Owner) on the hub or namespace holds all three; ` +
   `an administrator can narrow it with the condition: ${RECEIVER_GRANT_ADMIN_CONDITION} ` +
   "If one is missing, Azure's refusal is shown at the step that needed it.";
