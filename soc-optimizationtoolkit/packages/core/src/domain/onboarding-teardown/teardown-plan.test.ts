@@ -420,4 +420,10 @@ describe("classifyEntraSettingRemoval (AZR-99)", () => {
     const renamed = classifyEntraSettingRemoval({ kind: "found", setting: setting({ name: "Other" }) }, record, "t1");
     expect(renamed.kind === "not-proven" && renamed.detail).toContain("its name is Other, not CriblEntraIDLogs");
   });
+
+  it("never matches a blank recorded rule against a setting that sends to no Event Hub", () => {
+    const verdict = classifyEntraSettingRemoval({ kind: "found", setting: setting({ ruleId: "" }) }, { ...record, ruleId: "" }, "t1");
+    expect(verdict.kind).toBe("not-proven");
+    expect(verdict.kind === "not-proven" && verdict.detail).toContain("this app recorded no rule for it");
+  });
 });

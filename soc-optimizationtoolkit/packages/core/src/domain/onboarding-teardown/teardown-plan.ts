@@ -756,7 +756,7 @@ function classifyDiagnosticSettingRemoval(
   } else if (rule.recordRuleId.trim() === "") {
     // A blank recorded rule would match a setting that sends to no Event Hub;
     // the writer always records a rule, so blank means a damaged record.
-    missing.push("this app recorded no rule for it, so it cannot tell its own setting from another");
+    missing.push("this app recorded no rule for it, which leaves its own setting indistinguishable from another");
   } else if (!sameArmId(rule.recordRuleId, lookup.setting.ruleId)) {
     missing.push(`it now sends with rule ${lookup.setting.ruleId || "(none)"}, not the rule this app wrote (${rule.recordRuleId})`);
   }
