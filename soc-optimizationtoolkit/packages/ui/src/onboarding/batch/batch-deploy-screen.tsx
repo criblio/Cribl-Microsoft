@@ -130,6 +130,16 @@ export interface BatchDeployScreenProps {
    * an ingestion secret (no destination is created, so none is used).
    */
   forcedTemplateOnly?: boolean;
+  /**
+   * Why the SHELL refuses a Run right now, or absent when it does not
+   * (DBT-180): the options handed in above are not known to be the
+   * operator's - their read failed, or is still in flight - and a run would
+   * write real Azure and Cribl config with them. Both ways this screen starts
+   * a run (Run, and the fallback offer's template-only run, whose artifact
+   * would carry those options too) stay visible, disabled, with this reason
+   * - the offerRunDisabledReason shape; the shell renders its own Retry.
+   */
+  runDisabledReason?: string;
 }
 
 /** The tri-state override select, one per overridable flag. */
@@ -178,6 +188,7 @@ export function BatchDeployScreen({
   criblDefaults,
   onOpenOptions,
   forcedTemplateOnly = false,
+  runDisabledReason,
 }: BatchDeployScreenProps) {
   // D-3: `capabilities` (what the identity was MEASURED to be able to do, used
   // only to decide which fallback artifacts this run offers - HON-7) and
@@ -401,6 +412,9 @@ export function BatchDeployScreen({
   // neither). Stating the reason is required - the notice never disables
   // silently.
   const offerRunDisabledReason = (): string | undefined => {
+    if (runDisabledReason !== undefined) {
+      return runDisabledReason;
+    }
     if (running) {
       return "A batch run is already in flight.";
     }
@@ -432,6 +446,7 @@ export function BatchDeployScreen({
   // Forced templateOnly runs make no Cribl calls, so no worker group is
   // required (there is no live leader to pick one from in this mode).
   const canRun =
+    runDisabledReason === undefined &&
     !running &&
     selection.specs.length > 0 &&
     selection.errors.length === 0 &&
@@ -687,12 +702,16 @@ export function BatchDeployScreen({
           className="run-button"
           onClick={() => void run()}
           disabled={!canRun}
+          title={runDisabledReason}
         >
           Run batch onboarding
         </button>
         <span className={`status ${RUN_STATE_CLASS[recordState]}`}>
           {recordState}
         </span>
+        {runDisabledReason !== undefined && (
+          <span className="field-hint">{runDisabledReason}</span>
+        )}
       </div>
 
       {steps.length > 0 && (

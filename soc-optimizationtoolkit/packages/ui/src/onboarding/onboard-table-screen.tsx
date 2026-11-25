@@ -101,6 +101,15 @@ export interface OnboardTableScreenProps {
    * renders.
    */
   roleGuidance?: string;
+  /**
+   * Why the SHELL refuses a Run right now, or absent when it does not
+   * (DBT-180): the options handed in above are not known to be the
+   * operator's - their read failed, or is still in flight - and a run would
+   * write real Azure and Cribl config with them. Run stays visible, disabled,
+   * with this reason beside it (the DcrAutomationScreen singleDisabledReason
+   * shape); the shell renders its own Retry.
+   */
+  runDisabledReason?: string;
 }
 
 /**
@@ -113,6 +122,7 @@ export function OnboardTableScreen({
   criblDefaults,
   operationDefaults,
   roleGuidance,
+  runDisabledReason,
 }: OnboardTableScreenProps = {}) {
   const { ports, config } = usePorts();
 
@@ -276,6 +286,7 @@ export function OnboardTableScreen({
         : "idle";
 
   const canRun =
+    runDisabledReason === undefined &&
     !running &&
     table.trim() !== "" &&
     groupId !== "" &&
@@ -518,10 +529,14 @@ export function OnboardTableScreen({
           className="run-button"
           onClick={() => void run()}
           disabled={!canRun}
+          title={runDisabledReason}
         >
           Run onboarding
         </button>
         <span className={`status status-${status}`}>{status}</span>
+        {runDisabledReason !== undefined && (
+          <span className="field-hint">{runDisabledReason}</span>
+        )}
       </div>
       {steps.length > 0 && (
         <pre className="result">{steps.map(formatStepLine).join("\n")}</pre>

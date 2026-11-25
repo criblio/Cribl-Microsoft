@@ -109,14 +109,18 @@ export type {
 // The appOptions read as loaded / absent / unreadable, and the inline-save
 // decision over it: an unreadable read refuses the save (DBT-158), a save
 // patches the stored record (DBT-172), and a failed save or retry is said
-// out loud (DBT-173).
+// out loud (DBT-173), and a deploy may not Run on a read that did not answer
+// (DBT-180).
 export {
   OPTIONS_LOADING,
+  OPTIONS_RUN_RETRYING_REASON,
+  OPTIONS_RUN_UNREADABLE_REASON,
   OPTIONS_UNREADABLE_NOTICE,
   beginOptionsRetry,
   optionsReadFailureLine,
   optionsReadFromSave,
   optionsReadFromSettled,
+  optionsRunBlockedReason,
   planOptionsSave,
   settleOptionsSave,
 } from "./frame/options-read";

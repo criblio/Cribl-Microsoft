@@ -47,6 +47,7 @@ import {
   beginOptionsRetry,
   optionsReadFailureLine,
   optionsReadFromSettled,
+  optionsRunBlockedReason,
   planOptionsSave,
   settleOptionsSave,
   resolveFramePhase,
@@ -2049,6 +2050,12 @@ function App() {
   ) : optionsSaveNotice !== null ? (
     <p className="connection-notice" role="status">{optionsSaveNotice}</p>
   ) : null;
+  // The Run refusal Onboard and Batch carry while that read has not answered
+  // (DBT-180, operator decision 2026-10-28): they deploy with the options
+  // handed to them, which are then the defaults, and a deploy writes real
+  // Azure and Cribl config. Undefined when the read answered. The screens
+  // show it beside their disabled Run; optionsNotice above holds the Retry.
+  const optionsRunRefusal = optionsRunBlockedReason(optionsRead) ?? undefined;
 
   // The Integrate route (legacy-flow-analysis.md single-page decision): THE
   // MVP centerpiece - the single-page Integrate flagship composing the built
@@ -2137,6 +2144,7 @@ function App() {
               initialTable={prefillTable}
               criblDefaults={appOptions.cribl}
               operationDefaults={appOptions.operation}
+              runDisabledReason={optionsRunRefusal}
               roleGuidance={ROLE_GUIDANCE}
             />
           </PortsProvider>
@@ -2187,6 +2195,7 @@ function App() {
               pacing={BATCH_PACING}
               operationDefaults={appOptions.operation}
               criblDefaults={appOptions.cribl}
+              runDisabledReason={optionsRunRefusal}
               // HON-7 wired the measured audit into this screen so its
               // dcr.write/table.write fallback offers could reach production.
               // D-3 moved the audit onto portsProviderProps above, so the wire

@@ -31,7 +31,7 @@ const CONFIG: AzureConfig = {
   allowedPermissions: ["Reader"],
 };
 
-function renderWith(listGroups: ReturnType<typeof vi.fn>) {
+function renderWith(listGroups: ReturnType<typeof vi.fn>, runDisabledReason?: string) {
   const ports = {
     azure: { request: vi.fn().mockRejectedValue(new Error("offline")) },
     cribl: { request: vi.fn().mockRejectedValue(new Error("offline")), listGroups },
@@ -40,10 +40,12 @@ function renderWith(listGroups: ReturnType<typeof vi.fn>) {
   } as unknown as UiPorts;
   return render(
     <PortsProvider ports={ports} config={CONFIG}>
-      <OnboardTableScreen />
+      <OnboardTableScreen runDisabledReason={runDisabledReason} />
     </PortsProvider>,
   );
 }
+
+const STREAM_GROUPS = toListing([{ id: "prod", product: "stream" }]);
 
 /** The labelled field that holds the worker-group control. */
 function groupField(container: HTMLElement): HTMLElement {
@@ -105,5 +107,31 @@ describe("OnboardTableScreen - worker-group listing states (DBT-134)", () => {
         "prod",
       ),
     );
+  });
+});
+
+describe("OnboardTableScreen - a shell-held Run refusal (DBT-180)", () => {
+  const REASON = "Run is unavailable: the options could not be read.";
+
+  it("Run is enabled once every field is filled and no refusal is held", async () => {
+    renderWith(vi.fn().mockResolvedValue(STREAM_GROUPS));
+    const run = screen.getByRole("button", { name: "Run onboarding" }) as HTMLButtonElement;
+    await waitFor(() => expect(run.disabled).toBe(false));
+    expect(screen.queryByText(REASON)).toBeNull();
+  });
+
+  it("a refusal disables Run with every field filled, and says why beside it", async () => {
+    const { container } = renderWith(vi.fn().mockResolvedValue(STREAM_GROUPS), REASON);
+    await waitFor(() =>
+      expect(groupField(container).querySelector(".searchable-select-control")?.textContent).toBe(
+        "prod",
+      ),
+    );
+    const run = screen.getByRole("button", { name: "Run onboarding" }) as HTMLButtonElement;
+    expect(run.disabled).toBe(true);
+    expect(run.title).toBe(REASON);
+    // Beside the button, in the same controls row - not elsewhere on the page.
+    const hints = [...run.parentElement!.querySelectorAll(".field-hint")].map((el) => el.textContent);
+    expect(hints).toEqual([REASON]);
   });
 });
