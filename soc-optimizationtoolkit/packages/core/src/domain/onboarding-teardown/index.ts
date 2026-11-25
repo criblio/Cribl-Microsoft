@@ -14,7 +14,6 @@ export {
   isDenied,
   planCriblTeardown,
   recordsAfterTeardown,
-  sameDeletions,
   teardownDeletions,
   teardownGroup,
   teardownReadsNeeded,

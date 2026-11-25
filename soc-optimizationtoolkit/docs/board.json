@@ -1972,6 +1972,19 @@
       "detail": "FOUND 2026-11-25 by the independent review of PR #241 (DBT-306). classifyDiagnosticSettingRemoval refused a blank scope but still compared the recorded rule with sameArmId, so a record with ruleId \"\" matched a setting whose ruleId is \"\" (no Event Hub destination) and proved ownership. The writer always records namespaceRuleResourceId(...), never blank, so only a hand-edited or damaged KV record reaches it. FIXED: a blank recorded rule is not-proven with its own reason, for both Activity Log and Entra ID; pin written first and seen failing. Same PR: the heat-map design doc goes back to Proposed (the review noted Living would exempt its unbuilt phases 2-5 from expiry)."
     },
     {
+      "id": "DBT-315",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "story",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "verified": "pins",
+      "title": "Remove two dead core exports: criblUiBaseFromLeaderUrl and sameDeletions",
+      "detail": "FOUND 2026-11-25 by the architecture audit of 857b05b8..9eb2fca7 (both pre-existing). criblUiBaseFromLeaderUrl (domain/live-architecture) derived the Cribl UI base from a configured leader URL for the local shell retired by ADR-0002; the cloud shell derives it from the embedding page's origin (App.tsx), so only its own test called it. sameDeletions (domain/onboarding-teardown) compared two whole teardown plans; applySourceTeardown instead re-reads and re-plans before EACH deletion and stops on a changed verdict, which is the stronger form of config-plane rule 3, so only its test called it. Both removed with their pins and index exports; packages/core and packages/ui CONTEXT.md updated. Every other unused-looking export in the range is used inside its own module and exported for tests."
+    },
+    {
       "id": "DBT-303",
       "epic": "DBT",
       "feature": "DBT-F1",

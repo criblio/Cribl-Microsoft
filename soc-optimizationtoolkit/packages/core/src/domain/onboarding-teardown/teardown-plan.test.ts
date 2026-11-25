@@ -5,7 +5,6 @@ import {
   classifyInputForPause,
   planCriblTeardown,
   recordsAfterTeardown,
-  sameDeletions,
   teardownDeletions,
   teardownReadsNeeded,
   type CriblTeardownInput,
@@ -224,13 +223,6 @@ describe("planCriblTeardown", () => {
       jobs: false,
       otherGroups: true,
     });
-  });
-
-  it("compares two plans by what they delete", () => {
-    const a = steps(planCriblTeardown(input(), reads()));
-    const b = steps(planCriblTeardown(input({ removeDataset: false }), reads()));
-    expect(sameDeletions(a, a)).toBe(true);
-    expect(sameDeletions(a, b)).toBe(false);
   });
 });
 

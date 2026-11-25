@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**114 in the backlog, 30 in progress, 257 done.**
+**114 in the backlog, 30 in progress, 258 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 7 | 2 |
-| Sentinel Integration | 57 | 108 | 22 |
+| Sentinel Integration | 57 | 109 | 22 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 61% (117/191)
+### `DBT` Quality and technical debt _(enabler)_ - 61% (118/192)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 53/107 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-301, DBT-302, DBT-306, DBT-307, DBT-303, DBT-304, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-310, DBT-181, DBT-311, DBT-312, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-308, DBT-309, DBT-313, DBT-314, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254, DBT-255, DBT-256, DBT-257, DBT-300, DBT-305 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 54/108 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-301, DBT-302, DBT-306, DBT-307, DBT-315, DBT-303, DBT-304, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-310, DBT-181, DBT-311, DBT-312, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-308, DBT-309, DBT-313, DBT-314, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254, DBT-255, DBT-256, DBT-257, DBT-300, DBT-305 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 52/63 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250, DBT-251, DBT-298, DBT-249 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 10/15 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136, DBT-299 |
@@ -2909,7 +2909,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (257)
+## Done (258)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5721,6 +5721,21 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   written first and seen failing. Same PR: the heat-map design doc goes back
   to Proposed (the review noted Living would exempt its unbuilt phases 2-5
   from expiry).
+
+- **DBT-315** Remove two dead core exports: criblUiBaseFromLeaderUrl and sameDeletions
+  `DBT-F1` `story` `settled` `verified: pins`
+  FOUND 2026-11-25 by the architecture audit of 857b05b8..9eb2fca7 (both
+  pre-existing). criblUiBaseFromLeaderUrl (domain/live-architecture) derived
+  the Cribl UI base from a configured leader URL for the local shell retired
+  by ADR-0002; the cloud shell derives it from the embedding page's origin
+  (App.tsx), so only its own test called it. sameDeletions
+  (domain/onboarding-teardown) compared two whole teardown plans;
+  applySourceTeardown instead re-reads and re-plans before EACH deletion and
+  stops on a changed verdict, which is the stronger form of config-plane rule
+  3, so only its test called it. Both removed with their pins and index
+  exports; packages/core and packages/ui CONTEXT.md updated. Every other
+  unused-looking export in the range is used inside its own module and
+  exported for tests.
 
 - **DBT-303** Dead Cribl write: buildFdrBreakerRequest (POST /lib/breakers) has no caller, yet the least-privilege registry lists it as an operation the app makes
   `DBT-F1` `story` `settled` `verified: pins`

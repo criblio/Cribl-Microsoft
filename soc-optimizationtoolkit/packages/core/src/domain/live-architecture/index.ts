@@ -22,7 +22,6 @@ export type {
 } from "./live-architecture";
 export {
   buildLiveDiagram,
-  criblUiBaseFromLeaderUrl,
   installedPackIds,
   listLiveOutputs,
   parseRouteFilterInputs,
