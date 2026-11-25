@@ -753,6 +753,10 @@ function classifyDiagnosticSettingRemoval(
   if (!sameArmId(lookup.setting.name, rule.settingName)) missing.push(`its name is ${lookup.setting.name}, not ${rule.settingName}`);
   if (rule.recordScope === null || rule.scope.trim() === "" || !sameArmId(rule.recordScope, rule.scope)) {
     missing.push(rule.noRecord);
+  } else if (rule.recordRuleId.trim() === "") {
+    // A blank recorded rule would match a setting that sends to no Event Hub;
+    // the writer always records a rule, so blank means a damaged record.
+    missing.push("this app recorded no rule for it, which leaves its own setting indistinguishable from another");
   } else if (!sameArmId(rule.recordRuleId, lookup.setting.ruleId)) {
     missing.push(`it now sends with rule ${lookup.setting.ruleId || "(none)"}, not the rule this app wrote (${rule.recordRuleId})`);
   }

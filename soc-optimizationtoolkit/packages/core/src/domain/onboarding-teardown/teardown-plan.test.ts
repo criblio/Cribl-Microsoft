@@ -387,6 +387,13 @@ describe("classifyActivityLogRemoval", () => {
     expect(classifyActivityLogRemoval({ kind: "found", setting: setting() }, record, " ").kind).toBe("not-proven");
     expect(classifyActivityLogRemoval({ kind: "found", setting: setting() }, { ...record, subscriptionId: "" }, "").kind).toBe("not-proven");
   });
+
+  it("never matches a blank recorded rule against a setting that sends to no Event Hub", () => {
+    const noHub = { kind: "found", setting: setting({ ruleId: "" }) } as const;
+    const verdict = classifyActivityLogRemoval(noHub, { ...record, ruleId: "" }, "s1");
+    expect(verdict.kind).toBe("not-proven");
+    expect(verdict.kind === "not-proven" && verdict.detail).toContain("this app recorded no rule for it");
+  });
 });
 
 describe("classifyEntraSettingRemoval (AZR-99)", () => {
@@ -412,5 +419,11 @@ describe("classifyEntraSettingRemoval (AZR-99)", () => {
     expect(moved.kind === "not-proven" && moved.detail).toContain(`it now sends with rule ${RULE}2, not the rule this app wrote`);
     const renamed = classifyEntraSettingRemoval({ kind: "found", setting: setting({ name: "Other" }) }, record, "t1");
     expect(renamed.kind === "not-proven" && renamed.detail).toContain("its name is Other, not CriblEntraIDLogs");
+  });
+
+  it("never matches a blank recorded rule against a setting that sends to no Event Hub", () => {
+    const verdict = classifyEntraSettingRemoval({ kind: "found", setting: setting({ ruleId: "" }) }, { ...record, ruleId: "" }, "t1");
+    expect(verdict.kind).toBe("not-proven");
+    expect(verdict.kind === "not-proven" && verdict.detail).toContain("this app recorded no rule for it");
   });
 });
