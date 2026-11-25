@@ -139,6 +139,13 @@ export function matchInputIdFilter(
 export type ParsedInputIdFilter = Exclude<InputIdFilter, { kind: "unparsed" }>;
 
 /**
+ * What ONE clause can say: the inputs it names or a prefix. `all` is a whole
+ * route filter's answer (missing or `true`, parseRouteFilterInputs), never a
+ * clause's, so a reader of clauses has no `all` branch to keep.
+ */
+export type InputIdClause = Extract<InputIdFilter, { kind: "inputs" | "prefix" }>;
+
+/**
  * A quoted JS string literal: named group `q` is the quote, `body` the text
  * between, ESCAPES INCLUDED (DBT-190). JSON.stringify writes `"a\"b"` for an
  * id holding a double quote, and a grammar that stopped at the backslash read
@@ -230,7 +237,7 @@ function listIds(body: string): string[] | null {
 }
 
 /** The expression read as exactly ONE clause, or null when it is not one. */
-export function parseInputIdClause(expression: string): ParsedInputIdFilter | null {
+export function parseInputIdClause(expression: string): InputIdClause | null {
   const trimmed = expression.trim();
   for (const form of [EQUALITY, EQUALITY_REVERSED]) {
     const single = matchedLiteral(form, trimmed);
@@ -262,7 +269,7 @@ export function parseInputIdClause(expression: string): ParsedInputIdFilter | nu
  * operand is none of these; what an unread test means is the caller's call.
  */
 export type InputIdTest =
-  | { kind: "clause"; clause: ParsedInputIdFilter; negated: boolean }
+  | { kind: "clause"; clause: InputIdClause; negated: boolean }
   | { kind: "suffix"; value: string }
   | { kind: "segment"; id: string; negated: boolean }
   | { kind: "guard"; holds: boolean };

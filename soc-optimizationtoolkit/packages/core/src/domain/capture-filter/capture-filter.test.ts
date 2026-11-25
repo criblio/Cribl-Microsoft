@@ -695,8 +695,56 @@ describe("captureFilterWarning - hostile filters (DBT-190 review)", () => {
 
   it("does not take a property, string or regex named __inputId for the field", () => {
     expect(warn("e.__inputId=='syslog:in_syslog'")).toBe(ABSENT);
+    expect(warn("x.__e.__inputId=='syslog:in_syslog'")).toBe(ABSENT);
+    expect(warn("my__e.__inputId=='syslog:in_syslog'")).toBe(ABSENT);
     expect(warn("_raw.includes('__inputId')")).toBe(ABSENT);
+    expect(warn("_raw == 'a __e.__inputId'")).toBe(ABSENT);
     expect(warn("/__inputId/.test(_raw)")).toBe(ABSENT);
+    // Unsplittable (a bare ternary), yet it names no field: absent, not "not checked".
+    expect(warn("a || x ? e.__inputId : y")).toBe(ABSENT);
+  });
+
+  it("reads __e.__inputId and __e['__inputId'] as the field (second review)", () => {
+    // __e is the event in a Cribl filter, so this IS the field.
+    expect(warn("__e.__inputId == 'http:in_http' || x")).not.toBe(ABSENT);
+    expect(warn("__e.__inputId == 'syslog:in_syslog'")).toBeNull();
+    expect(warn("__e['__inputId'] == 'syslog:in_syslog' && status > 400")).toBeNull();
+    expect(warn('__e["__inputId"].startsWith("syslog:in_syslog:")')).toBeNull();
+    expect(warn("__e.__inputId == 'http:in_http'")).toBe(OTHER);
+    expect(warn("!(__e.__inputId == 'http:in_http')")).toBe(OTHER);
+  });
+
+  it("does not check a / after postfix ++ or -- (second review)", () => {
+    // Prefix and postfix cannot be told apart from tokens, so whether that /
+    // divides or opens a regex is unknown; reading it as a regex hid a ||.
+    expect(
+      warn(
+        "n++ / 2 > 0 || __inputId=='http:in_http' || m / 1 > 0 && __inputId.startsWith('syslog:in_syslog:')",
+      ),
+    ).toBe(UNCHECKED);
+    expect(
+      warn(
+        "n-- / 2 > 0 || __inputId=='http:in_http' || m / 1 > 0 && __inputId.startsWith('syslog:in_syslog:')",
+      ),
+    ).toBe(UNCHECKED);
+  });
+
+  it("gives a guard alone the every-source wording (second review)", () => {
+    const EVERY = `This filter's __inputId test lets every source through, so it captures from EVERY source in the worker group - not just "in_syslog". ${WRITE} unless that is what you want.`;
+    expect(warn("typeof __inputId === 'string'")).toBe(EVERY);
+    expect(warn("typeof __inputId === 'string' && status > 400")).toBe(EVERY);
+    // A guard does not name the source, so it does not rescue a filter that names another.
+    expect(warn("typeof __inputId === 'string' && __inputId == 'http:in_http'")).toBe(OTHER);
+  });
+
+  it("reads a prefix past <type>:<id>: as a sender of this source (second review)", () => {
+    expect(
+      warn("__inputId.startsWith('syslog:in_syslog:') || __inputId.startsWith('syslog:in_syslog:10.')"),
+    ).toBeNull();
+    expect(warn("__inputId.startsWith('syslog:in_syslog:10.')")).toBeNull();
+    expect(
+      warn("__inputId.startsWith('syslog:in_syslog:') && !__inputId.startsWith('syslog:in_syslog:10.')"),
+    ).toBeNull();
   });
 
   it("does not check optional chaining on __inputId", () => {

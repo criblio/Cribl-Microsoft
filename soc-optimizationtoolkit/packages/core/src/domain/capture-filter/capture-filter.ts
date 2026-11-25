@@ -53,7 +53,7 @@ import {
   HIGH_CONFIDENCE_DISCRIMINATOR_COUNT,
 } from "../sample-parsing/discriminators";
 import type { FilterNode } from "./filter-structure";
-import { readFilterStructure, structureNamesInputId } from "./filter-structure";
+import { namesInputIdField, readFilterStructure, structureNamesInputId } from "./filter-structure";
 import type { InputIdRef, InputIdTest } from "./input-id";
 import { inputIdValue, matchInputIdFilter, readInputIdTest } from "./input-id";
 
@@ -238,8 +238,9 @@ export function captureFilterWarning(
     return "An empty filter captures every event from every source in the worker group.";
   }
   const absent = `This filter does not mention __inputId, so it captures from EVERY source in the worker group - not just "${inputId}". Add ${inputPredicate(inputId)} unless that is what you want.`;
-  // Word-bounded: `my__inputId` is another name (DBT-190).
-  if (!/(?<![\w$])__inputId(?![\w$])/.test(filter)) {
+  // The one definition of naming the field (filter-structure.ts), here on the
+  // raw text as a fast path; the tree below asks it of each operand's code.
+  if (!namesInputIdField(filter)) {
     return absent;
   }
   const value = inputType === undefined ? undefined : inputIdValue({ type: inputType, id: inputId });
@@ -259,6 +260,7 @@ export function captureFilterWarning(
   }
   const facts: Facts = {
     namesSelf: false,
+    namesSource: false,
     negatesSelf: false,
     otherNames: [],
     broad: false,
@@ -280,6 +282,11 @@ export function captureFilterWarning(
   }
   if (facts.unread) {
     return unchecked;
+  }
+  // Its __inputId tests name no source at all (a `typeof` guard), so they
+  // select nothing and every source passes them (second review).
+  if (!facts.namesSource && mixed) {
+    return `This filter's __inputId test lets every source through, so it captures from EVERY source in the worker group - not just "${inputId}". ${write} unless that is what you want.`;
   }
   if (!facts.namesSelf) {
     return `This filter references __inputId but not "${inputId}", so it may capture from a different source than the one selected.`;
@@ -354,6 +361,8 @@ const ANYTHING: Reach = { self: "maybe", others: "partial" };
 interface Facts {
   /** A test that selects this source, not under negation. */
   namesSelf: boolean;
+  /** A test that names any source, either way up (a `typeof` guard does not). */
+  namesSource: boolean;
   /** A test that selects this source under an odd number of negations. */
   negatesSelf: boolean;
   /** The values non-negated tests name for OTHER sources. */
@@ -423,8 +432,13 @@ function testReach(test: InputIdTest, ref: SelectedInput, negated: boolean, fact
   const own = test.kind === "clause" || test.kind === "segment" ? test.negated : false;
   const polarity = negated !== own;
   const named: string[] = [];
-  const r = positiveReach(test, ref, named, facts, polarity);
-  if (r.self === "yes" || r.self === "legacy") {
+  const hit = { sender: false };
+  const r = positiveReach(test, ref, named, facts, polarity, hit);
+  // A guard (`typeof __inputId`) passes every source alike: it names none,
+  // so it is not a test FOR this source (second review).
+  const selects = test.kind !== "guard" && (r.self === "yes" || r.self === "legacy" || hit.sender);
+  facts.namesSource ||= test.kind !== "guard";
+  if (selects) {
     if (polarity) {
       facts.negatesSelf = true;
     } else {
@@ -448,6 +462,7 @@ function positiveReach(
   named: string[],
   facts: Facts,
   polarity: boolean,
+  hit: { sender: boolean },
 ): Reach {
   const other = (name: string): Reach => {
     named.push(name);
@@ -498,13 +513,18 @@ function positiveReach(
           true,
         );
       }
-      if (clause.kind === "all") {
-        return { self: "yes", others: "all" };
-      }
       if (ref.type === undefined) {
         return unknown();
       }
       const typed: InputIdRef = { type: ref.type, id: ref.id };
+      const own = `${inputIdValue(typed)}:`;
+      if (clause.value.length > own.length && clause.value.startsWith(own)) {
+        // Past `<type>:<id>:` is the sender segment: SOME of this source's
+        // events and no other source's (second review: it read as another
+        // source).
+        hit.sender = true;
+        return { self: "maybe", others: "none" };
+      }
       const how = matchInputIdFilter(clause, typed);
       if (how === "legacy") {
         return { self: "legacy", others: "none" };

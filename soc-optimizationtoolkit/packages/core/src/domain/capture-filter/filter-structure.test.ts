@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { readFilterStructure, structureNamesInputId } from "./filter-structure";
+import { namesInputIdField, readFilterStructure, structureNamesInputId } from "./filter-structure";
 
 const op = (text: string, namesInputId = false) => ({ kind: "operand", text, namesInputId });
 
@@ -86,6 +86,44 @@ describe("readFilterStructure", () => {
     }
     const tree = readFilterStructure("a && !(b || __inputId == 'x')");
     expect(tree === null ? null : structureNamesInputId(tree)).toBe(true);
+  });
+
+  it("has ONE definition of naming the field (namesInputIdField, second review)", () => {
+    for (const code of [
+      "__inputId",
+      "typeof __inputId",
+      "!__inputId",
+      "(__inputId)",
+      "__e.__inputId",
+      "__e?.__inputId",
+      "__e . __inputId",
+      "__e['__inputId']",
+      '__e[ "__inputId" ]',
+    ]) {
+      expect(namesInputIdField(code)).toBe(true);
+    }
+    for (const code of [
+      "my__inputId",
+      "__inputIds",
+      "e.__inputId",
+      "e. __inputId",
+      "x.__e.__inputId",
+      "my__e.__inputId",
+      "'__inputId'",
+      "e['__inputId']",
+      "__e['__inputIdx']",
+    ]) {
+      expect(namesInputIdField(code)).toBe(false);
+    }
+    // The structure asks the same question of each operand's code.
+    const tree = readFilterStructure("__e['__inputId'] == 'x'");
+    expect(tree === null ? null : structureNamesInputId(tree)).toBe(true);
+    expect(tree).toEqual(op("__inputId == 'x'", true));
+  });
+
+  it("refuses a / after postfix ++ or -- (second review)", () => {
+    expect(readFilterStructure("n++ / 2 > 0 || a")).toBeNull();
+    expect(readFilterStructure("n-- / 2 > 0 || a")).toBeNull();
   });
 
   it("tolerates an unclosed group as one opaque operand", () => {

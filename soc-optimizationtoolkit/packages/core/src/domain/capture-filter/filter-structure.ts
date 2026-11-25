@@ -49,8 +49,42 @@ interface Token {
   substitutesInputId?: boolean;
 }
 
-/** `__inputId` as a name: not part of a longer one, not a property. */
-const INPUT_ID_NAME = /(?<![\w$.])__inputId(?![\w$])/;
+/**
+ * THE definition of code naming the `__inputId` FIELD (second review): the
+ * bare name, or `__e.__inputId` / `__e?.__inputId` / `__e['__inputId']`,
+ * since `__e` is the event in a Cribl filter. Not a longer name
+ * (`my__inputId`), not a property of anything else (`e.__inputId`,
+ * `x.__e.__inputId`), not the word quoted (`'__inputId'`).
+ *
+ * One pattern for every caller - the capture warning's fast path, a template
+ * substitution, and each operand's code (with its other literals masked) -
+ * so they cannot disagree about what names the field.
+ */
+const INPUT_ID_FIELD =
+  /(?<![\w$]|[.'"`]\s*)(?:__e\s*\??\.\s*|__e\s*\[\s*(['"`])(?=__inputId\1\s*\]))?__inputId(?![\w$])/;
+
+/** Does this code name the `__inputId` field? See INPUT_ID_FIELD. */
+export function namesInputIdField(code: string): boolean {
+  return INPUT_ID_FIELD.test(code);
+}
+
+/** A string token that is exactly the quoted field name. */
+const QUOTED_FIELD = /^(['"`])__inputId\1$/;
+
+/**
+ * How many tokens from `__e` at `i` spell the field as the event's member
+ * (`__e . __inputId`, `__e ?. __inputId`, `__e [ '__inputId' ]`), or 0.
+ */
+function eventMemberLength(tokens: readonly Token[], i: number, end: number): number {
+  const at = (k: number): string => (i + k < end ? tokens[i + k].text : "");
+  if ((at(1) === "." || at(1) === "?.") && at(2) === "__inputId") {
+    return 3;
+  }
+  if (at(1) === "[" && QUOTED_FIELD.test(at(2)) && at(3) === "]") {
+    return 4;
+  }
+  return 0;
+}
 
 /** Longest first, so `===` is not read as `==` then `=`. */
 const PUNCTUATORS = [
@@ -128,7 +162,7 @@ function scanTemplate(text: string, start: number): { end: number; substitutesIn
         i += 1;
       }
     }
-    substitutesInputId ||= INPUT_ID_NAME.test(text.slice(open, i - 1));
+    substitutesInputId ||= namesInputIdField(text.slice(open, i - 1));
   }
   return { end: Math.min(i + 1, text.length), substitutesInputId };
 }
@@ -158,6 +192,9 @@ function scanRegex(text: string, start: number): number {
   }
   return Math.min(i, text.length);
 }
+
+/** Thrown by the tokenizer or parser when the split would misread the filter. */
+class Unreadable extends Error {}
 
 function regexMayStart(previous: Token | undefined): boolean {
   if (previous === undefined) {
@@ -195,6 +232,11 @@ function tokenize(text: string): Token[] {
       const template = scanTemplate(text, i);
       i = template.end;
       substitutesInputId = template.substitutesInputId;
+    } else if (c === "/" && ["++", "--"].includes(tokens[tokens.length - 1]?.text ?? "")) {
+      // `n++ / 2` divides and `a = ++/x/.lastIndex` would not; prefix and
+      // postfix cannot be told apart from tokens, so neither reading is safe
+      // (second review: the regex reading hid a real ||).
+      throw new Unreadable();
     } else if (c === "/" && regexMayStart(tokens[tokens.length - 1])) {
       kind = "regex";
       i = scanRegex(text, i);
@@ -217,9 +259,6 @@ function tokenize(text: string): Token[] {
   }
   return tokens;
 }
-
-/** Thrown inside the parser when the split would misread the filter. */
-class Unreadable extends Error {}
 
 /**
  * A parsed piece and what its parent needs to know about it. Both flags are
@@ -351,16 +390,54 @@ class Parser {
       const inner = new Parser(this.source, this.tokens, start + 1, close).parseAll();
       return joined(inner.node);
     }
-    let namesInputId = false;
-    for (let i = start; i < this.pos; i += 1) {
-      const previous = i > start ? this.tokens[i - 1].text : "";
-      if (this.tokens[i].text === "__inputId" && previous !== "." && previous !== "?.") {
-        namesInputId = true;
+    const namesInputId =
+      namesInputIdField(this.maskedCode(start, this.pos)) ||
+      this.tokens.slice(start, this.pos).some((t) => t.substitutesInputId === true);
+    return { node: { kind: "operand", text: this.operandText(start, this.pos), namesInputId }, loose, binary };
+  }
+
+  /**
+   * The operand's CODE for namesInputIdField: every literal masked (a string
+   * to `""`, a regex to `/r/`) except a string that is exactly the quoted
+   * field name, which `__e['__inputId']` needs; comments are already gone.
+   */
+  private maskedCode(start: number, end: number): string {
+    let code = "";
+    for (let i = start; i < end; i += 1) {
+      const token = this.tokens[i];
+      if (i > start && token.start > this.tokens[i - 1].end) {
+        code += " ";
       }
-      namesInputId ||= this.tokens[i].substitutesInputId === true;
+      if (token.kind === "string") {
+        code += QUOTED_FIELD.test(token.text) ? token.text : '""';
+      } else {
+        code += token.kind === "regex" ? "/r/" : token.text;
+      }
     }
-    const text = this.source.slice(this.tokens[start].start, this.tokens[this.pos - 1].end);
-    return { node: { kind: "operand", text, namesInputId }, loose, binary };
+    return code;
+  }
+
+  /**
+   * The operand's source text, with `__e.__inputId`, `__e?.__inputId` and
+   * `__e['__inputId']` rewritten to `__inputId`, the form input-id.ts reads:
+   * `__e` is the event, so they are the same field (second review).
+   */
+  private operandText(start: number, end: number): string {
+    let text = "";
+    let from = this.tokens[start].start;
+    for (let i = start; i < end; i += 1) {
+      const previous = i > start ? this.tokens[i - 1].text : "";
+      if (this.tokens[i].text !== "__e" || previous === "." || previous === "?.") {
+        continue;
+      }
+      const run = eventMemberLength(this.tokens, i, end);
+      if (run > 0) {
+        text += `${this.source.slice(from, this.tokens[i].start)}__inputId`;
+        from = this.tokens[i + run - 1].end;
+        i += run - 1;
+      }
+    }
+    return text + this.source.slice(from, this.tokens[end - 1].end);
   }
 
   /** The index of the `)` closing a `(` at `start` within this operand, or -1. */
@@ -402,8 +479,8 @@ export function structureNamesInputId(node: FilterNode): boolean {
 
 /** The filter's boolean structure, or null when splitting it would misread it. */
 export function readFilterStructure(filter: string): FilterNode | null {
-  const tokens = tokenize(filter);
   try {
+    const tokens = tokenize(filter);
     return new Parser(filter, tokens, 0, tokens.length).parseAll().node;
   } catch (error) {
     if (error instanceof Unreadable) {
