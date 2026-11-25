@@ -121,7 +121,11 @@ import { IdentityMismatchBlock } from "./identity-mismatch-block";
 import { OverflowTriageBlock } from "./overflow-triage-block";
 import { UnmappedColumnPanel } from "./unmapped-column-panel";
 import { DestClaimPanel } from "./dest-claim-panel";
-import { useEnrichmentFields, useLearnedMappings } from "./mapping-review-hooks";
+import {
+  describeLearnedRefusal,
+  useEnrichmentFields,
+  useLearnedMappings,
+} from "./mapping-review-hooks";
 import { SearchableSelect } from "../../components/searchable-select";
 import {
   isValidEnrichmentFieldName,
@@ -524,11 +528,14 @@ export function MappingReviewSection({
   // Learned mappings (the reviewer-feedback loop): loaded per solution,
   // replayed into Phase 0 AHEAD of the vendor packs on every analysis,
   // extended with the diffed hand edits on every APPROVE (the hook owns the
-  // load/persist mechanics).
-  const { learned, persistLearned, clearLearned } = useLearnedMappings(
-    learnedCache,
-    solutionName,
-  );
+  // load/persist mechanics, and keeps a refused store call for the note
+  // below - DBT-181).
+  const {
+    learned,
+    persistLearned,
+    clearLearned,
+    storeRefused: learnedRefused,
+  } = useLearnedMappings(learnedCache, solutionName);
 
   // Enrichment constants the pipeline ADDS (DeviceVendor etc.): global +
   // per-table state, merged per log type and reported upward by the hook.
@@ -1265,6 +1272,11 @@ export function MappingReviewSection({
             Clear learned mappings
           </button>
         </div>
+      )}
+      {learnedRefused !== null && (
+        <p className="field-hint learned-mappings-refused" role="status">
+          {describeLearnedRefusal(learnedRefused)}
+        </p>
       )}
 
       {reports.length > 0 &&

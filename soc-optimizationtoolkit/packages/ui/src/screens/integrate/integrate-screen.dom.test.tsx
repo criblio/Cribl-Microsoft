@@ -1985,3 +1985,179 @@ describe("IntegrateScreen - folds the sections you are not using (DBT-232)", () 
     expect(screen.getByRole("button", { name: "Unpin Configure Cribl" }).getAttribute("aria-pressed")).toBe("true");
   });
 });
+
+/**
+ * A REFUSED SELECTED-SOLUTION READ OR WRITE (DBT-181).
+ *
+ * The selection persists so a reload (an app upgrade reloads the page) does
+ * not silently run the next analysis solution-less. Since DBT-145 a refused KV
+ * call throws, and both ends swallowed it: a refused WRITE lost the selection
+ * across the next reload with nothing said, and a refused restore READ looked
+ * exactly like no selection ever having been made. Each is now said, with its
+ * reason - and only the LATEST write's answer counts, so an older pick refused
+ * late claims nothing about the one now on screen.
+ */
+describe("IntegrateScreen - a refused selected-solution store (DBT-181)", () => {
+  const INDEX: SolutionRef[] = [
+    { name: "CiscoASA", path: "Solutions/CiscoASA" },
+    { name: "Zscaler", path: "Solutions/Zscaler" },
+  ];
+
+  function renderWithSelectionStore(selection: {
+    get?: () => Promise<unknown>;
+    set?: (value: unknown) => Promise<void>;
+  }) {
+    window.location.hash = "#/";
+    const set = vi.fn(async (key: string, value: unknown) => {
+      if (key.includes("selected-solution") && selection.set !== undefined) {
+        await selection.set(value);
+      }
+    });
+    const ports = {
+      ...(PORTS as unknown as Record<string, unknown>),
+      content: {
+        getCommitSha: vi.fn().mockResolvedValue("abcdef012345"),
+        listSolutions: vi.fn().mockResolvedValue(INDEX),
+        listConnectorFiles: vi.fn().mockResolvedValue([]),
+        readFile: vi.fn().mockResolvedValue(null),
+      },
+      contentCache: {
+        get: vi.fn(async (key: string) => {
+          if (key.includes("selected-solution") && selection.get !== undefined) {
+            return selection.get();
+          }
+          return null;
+        }),
+        set,
+      },
+      samples: {
+        list: vi.fn().mockResolvedValue([]),
+        get: vi.fn().mockResolvedValue(null),
+        upsert: vi.fn().mockResolvedValue(undefined),
+        remove: vi.fn().mockResolvedValue(undefined),
+      },
+    } as unknown as UiPorts;
+    render(
+      <PortsProvider ports={ports} config={SCOPED_CONFIG}>
+        <IntegrateScreen
+          toolkitVersion="9.9.9-test"
+          scopeCommitted
+          offline={false}
+          onCommitScope={vi.fn().mockResolvedValue({ ok: true } as never)}
+          criblDefaults={DEFAULT_CRIBL_OPTIONS}
+        />
+      </PortsProvider>,
+    );
+    return { set };
+  }
+
+  const unread = () => document.querySelectorAll(".integrate-selection-unread");
+  const unsaved = () => document.querySelectorAll(".integrate-selection-unsaved");
+  const selectionWrites = (set: ReturnType<typeof vi.fn>) =>
+    set.mock.calls.filter(([key]) => String(key).includes("selected-solution"));
+
+  async function pick(name: string) {
+    // DBT-227: the browse state is a search box; the list waits for Browse all.
+    // After Clear selection the list may already be open, so Browse all is
+    // pressed only while it is offered.
+    expandSection("Select Sentinel Solution");
+    await waitFor(() => {
+      const browseAll = screen.queryByRole("button", { name: "Browse all" });
+      if (browseAll !== null) fireEvent.click(browseAll);
+      expect(screen.getAllByText(name)).toHaveLength(1);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText(name));
+    });
+    await waitFor(() => {
+      expect(
+        document.querySelector(".solution-browser-selected-name")?.textContent,
+      ).toBe(name);
+    });
+  }
+
+  afterEach(() => {
+    window.location.hash = "#/";
+  });
+
+  it("a refused restore READ is said with its reason, not shown as no selection", async () => {
+    renderWithSelectionStore({
+      get: async () => {
+        throw new Error("KV read refused (403)");
+      },
+    });
+    expandSection("Select Sentinel Solution");
+    await waitFor(() => {
+      expect(unread()).toHaveLength(1);
+    });
+    const text = unread()[0].textContent ?? "";
+    expect(text).toContain("KV read refused (403)");
+    expect(text).toMatch(/could not be read/);
+  });
+
+  it("a refused selection WRITE is said, and nothing claims it will survive a reload", async () => {
+    const { set } = renderWithSelectionStore({
+      get: async () => "",
+      set: async () => {
+        throw new Error("KV write refused (403)");
+      },
+    });
+    await pick("Zscaler");
+    await waitFor(() => {
+      expect(unsaved()).toHaveLength(1);
+    });
+    expect(selectionWrites(set)).toEqual([
+      ["integrate-selected-solution~v1", "Zscaler"],
+    ]);
+    const text = unsaved()[0].textContent ?? "";
+    expect(text).toContain("KV write refused (403)");
+    expect(text).toMatch(/could not be saved/);
+    expect(text).toMatch(/reload will not restore it/);
+  });
+
+  it("says nothing when the store answers", async () => {
+    const { set } = renderWithSelectionStore({
+      get: async () => "",
+      set: async () => undefined,
+    });
+    await pick("Zscaler");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(selectionWrites(set)).toHaveLength(1);
+    expect(unread()).toHaveLength(0);
+    expect(unsaved()).toHaveLength(0);
+  });
+
+  it("an older pick refused AFTER a newer one landed is not said", async () => {
+    const pending: Array<() => void> = [];
+    let calls = 0;
+    const { set } = renderWithSelectionStore({
+      get: async () => "",
+      set: () => {
+        calls += 1;
+        if (calls === 1) {
+          return new Promise<void>((_resolve, reject) => {
+            pending.push(() => reject(new Error("KV write refused (403)")));
+          });
+        }
+        return Promise.resolve();
+      },
+    });
+    await pick("Zscaler");
+    await act(async () => {
+      fireEvent.click(screen.getByText("Clear selection"));
+    });
+    await pick("CiscoASA");
+    expect(selectionWrites(set).map(([, value]) => value)).toEqual([
+      "Zscaler",
+      "",
+      "CiscoASA",
+    ]);
+    await act(async () => {
+      pending[0]();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(unsaved()).toHaveLength(0);
+  });
+});

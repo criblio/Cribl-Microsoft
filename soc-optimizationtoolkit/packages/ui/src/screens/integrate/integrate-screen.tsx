@@ -592,6 +592,17 @@ export function IntegrateScreen({
   // is distinguishable from "has not reported yet". Only the restore below
   // reads it, to tell which of the two async paths got here first.
   const reportedRef = useRef<{ solution: SolutionRef | null } | null>(null);
+  // A REFUSED selection store is said, not swallowed (DBT-181). Since DBT-145 a
+  // refused KV call throws: a refused restore READ looked like no selection
+  // ever made, and a refused WRITE lost the selection across the next reload
+  // with nothing said. Only the LATEST write's answer counts (the generation),
+  // so an older pick refused late claims nothing about the one now shown.
+  const [selectionReadError, setSelectionReadError] = useState("");
+  const [selectionWriteError, setSelectionWriteError] = useState<{
+    action: "save" | "clear";
+    reason: string;
+  } | null>(null);
+  const selectionWriteGenRef = useRef(0);
 
   // ---- Sample Data section (Unit 11) ------------------------------------
   // The section owns its own store IO and reports the tagged-sample count so
@@ -784,10 +795,25 @@ export function IntegrateScreen({
       // Persist across reloads (live 2026-07-13: uploading a new app
       // version reloaded the page, samples survived via their store but
       // the selection silently reset - the next analysis ran solution-less
-      // with no packs, no rules, and no identity).
-      void ports.contentCache
-        ?.set(SELECTED_SOLUTION_KEY, nextName ?? "")
-        .catch(() => undefined);
+      // with no packs, no rules, and no identity). A refused write is said
+      // (DBT-181), for the latest write only.
+      const cache = ports.contentCache;
+      if (cache !== undefined) {
+        selectionWriteGenRef.current += 1;
+        const gen = selectionWriteGenRef.current;
+        void cache.set(SELECTED_SOLUTION_KEY, nextName ?? "").then(
+          () => {
+            if (gen === selectionWriteGenRef.current) setSelectionWriteError(null);
+          },
+          (err: unknown) => {
+            if (gen !== selectionWriteGenRef.current) return;
+            setSelectionWriteError({
+              action: nextName === null ? "clear" : "save",
+              reason: String(err),
+            });
+          },
+        );
+      }
       if (prevName === null || prevName === nextName) {
         return;
       }
@@ -855,8 +881,10 @@ export function IntegrateScreen({
           path: `Solutions/${stored}`,
           deprecated: false,
         });
-      } catch {
-        // No restore - the browser selection works as before.
+      } catch (err) {
+        // No restore - the browser selection works as before - but a refused
+        // read is not "no selection" (DBT-181): one may be stored, so say so.
+        setSelectionReadError(String(err));
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2410,17 +2438,37 @@ export function IntegrateScreen({
   // ---- Section bodies (built sections only) -----------------------------
 
   const solutionBody = (
-    <SolutionBrowser
-      onSelect={handleSolutionChange}
-      // GEN-21: its Content Hub cross-reference is an Azure read, and the
-      // existing-destination path makes none; the repo heuristics still run.
-      scopeCommitted={scopeCommitted && azureNeeds.scope}
-      // Keep this section in agreement with the rest of the page: the solution
-      // restored from the content cache above drives every other section and
-      // the readiness pill, so the browser must show it as selected too rather
-      // than rendering the browse list (live review 2026-08-03).
-      restoreName={solution?.name ?? null}
-    />
+    <>
+      <SolutionBrowser
+        onSelect={handleSolutionChange}
+        // GEN-21: its Content Hub cross-reference is an Azure read, and the
+        // existing-destination path makes none; the repo heuristics still run.
+        scopeCommitted={scopeCommitted && azureNeeds.scope}
+        // Keep this section in agreement with the rest of the page: the solution
+        // restored from the content cache above drives every other section and
+        // the readiness pill, so the browser must show it as selected too rather
+        // than rendering the browse list (live review 2026-08-03).
+        restoreName={solution?.name ?? null}
+      />
+      {/* DBT-181: a refused restore read is "could not read", never "none
+        * selected"; a refused write says the reload will not keep it. */}
+      {selectionReadError !== "" && solution === null && (
+        <p className="field-hint integrate-selection-unread" role="status">
+          The solution selected before this page loaded could not be read (
+          {selectionReadError}), so none was restored. Picking one below works
+          as usual.
+        </p>
+      )}
+      {selectionWriteError !== null && (
+        <p className="field-hint integrate-selection-unsaved" role="status">
+          {selectionWriteError.action === "save"
+            ? `The selected solution could not be saved (${selectionWriteError.reason}). ` +
+              "It applies now, but a reload will not restore it."
+            : `Clearing the selection could not be saved (${selectionWriteError.reason}), ` +
+              "so a reload may restore the previous solution."}
+        </p>
+      )}
+    </>
   );
 
   const sampleDataBody = (

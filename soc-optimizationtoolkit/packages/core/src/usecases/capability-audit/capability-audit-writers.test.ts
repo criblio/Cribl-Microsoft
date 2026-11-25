@@ -236,6 +236,33 @@ describe("audit, then an RBAC panel refresh (CAP-11)", () => {
     expect(await saveCapabilityAudit(unreadable, panel, "tenant-a")).toBe(panel);
     expect(writes).toHaveLength(0);
   });
+
+  it("hands a refusal to onRefused - read or write - and never rejects (DBT-181)", async () => {
+    // The panel fires the save without waiting and must be able to SAY a
+    // record was not kept, rather than it only reaching the log.
+    const panel = await panelSet(groupReads(), PANEL_AT);
+    const refusals: string[] = [];
+    const onRefused = (reason: string) => refusals.push(reason);
+
+    const unreadable: ContentCache = {
+      get: () => Promise.reject(new Error("KV read refused")),
+      set: async () => undefined,
+    };
+    await saveCapabilityAudit(unreadable, panel, "tenant-a", undefined, { onRefused });
+    expect(refusals).toEqual(["KV read refused"]);
+
+    const unwritable: ContentCache = {
+      get: async () => null,
+      set: () => Promise.reject(new Error("KV write refused")),
+    };
+    await saveCapabilityAudit(unwritable, panel, "tenant-a", undefined, { onRefused });
+    expect(refusals).toEqual(["KV read refused", "KV write refused"]);
+
+    // A healthy store and no store at all are not refusals.
+    await saveCapabilityAudit(new FakeContentCache(), panel, "tenant-a", undefined, { onRefused });
+    await saveCapabilityAudit(undefined, panel, "tenant-a", undefined, { onRefused });
+    expect(refusals).toHaveLength(2);
+  });
 });
 
 describe("an audit retracts its own earlier verdicts it could not repeat (CAP-11 review round 1)", () => {

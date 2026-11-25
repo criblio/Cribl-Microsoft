@@ -33,9 +33,14 @@
  * nothing, and found them gone next session. The hook now keeps the LAST
  * refusal - which call, and why - for the screen to say; the pre-fill and the
  * apply carry on exactly as before.
+ *
+ * A LATE REFUSAL KEEPS ITS SCOPE (DBT-181). remember and forget do not wait
+ * for the store, so a refusal can land after the operator has moved to the
+ * next vendor or log type. It is said only while the scope it was asked under
+ * is still current; otherwise it would describe an order nobody named here.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildVendorFieldDefinition,
   describeColumnOrder,
@@ -131,9 +136,13 @@ export function useVendorColumnOrder(
   const [storeRefused, setStoreRefused] = useState<ColumnOrderRefusal | null>(
     null,
   );
+  // The scope a write's late answer must still belong to (DBT-181): replaced
+  // whenever the scope changes, so a refusal from the last one is dropped.
+  const scopeRef = useRef<object>({});
 
   useEffect(() => {
     let cancelled = false;
+    scopeRef.current = {};
     setStored(null);
     setStoreRefused(null);
     if (cache === undefined || key === null) {
@@ -190,8 +199,11 @@ export function useVendorColumnOrder(
       }
       setStored(definition);
       // A refused write is a skip - the order is in hand and applies - but
-      // it is said, since it will not be there next session (DBT-175).
+      // it is said, since it will not be there next session (DBT-175) -
+      // for the scope it was asked under only (DBT-181).
+      const scope = scopeRef.current;
       void cache.set(key, definition).catch((err: unknown) => {
+        if (scopeRef.current !== scope) return;
         setStoreRefused({ action: "remember", reason: String(err) });
       });
     },
@@ -205,7 +217,9 @@ export function useVendorColumnOrder(
     }
     // Written as null rather than deleted: the port has no delete, and a stored
     // null decodes as absent, so the bundled order answers again.
+    const scope = scopeRef.current;
     void cache.set(key, null).catch((err: unknown) => {
+      if (scopeRef.current !== scope) return;
       setStoreRefused({ action: "forget", reason: String(err) });
     });
   }, [cache, key]);
