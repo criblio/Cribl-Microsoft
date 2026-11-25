@@ -32,10 +32,16 @@ import App from './App';
 const API = 'https://leader.test/api/v1';
 const KV = `${API}/kvstore/`;
 
-/** The operator's real options: DCE ON, where the default is off. */
+/**
+ * The operator's real options: DCE ON, where the default is off, and the
+ * SECOND listed worker group saved as the default - so a screen that kept the
+ * listing's automatic first-row pick after the read answered is caught.
+ */
+const SAVED_GROUP = 'prod';
 const SAVED_RAW = serializeAppOptions({
   ...DEFAULT_APP_OPTIONS,
   operation: { ...DEFAULT_APP_OPTIONS.operation, createDCE: true },
+  cribl: { ...DEFAULT_APP_OPTIONS.cribl, workerGroup: SAVED_GROUP },
 });
 
 const PROFILES = JSON.stringify({
@@ -103,7 +109,15 @@ beforeEach(() => {
       return new Response('[]');
     }
     if (method === 'GET' && url === `${API}/master/groups`) {
-      return new Response(JSON.stringify({ count: 1, items: [{ id: 'default', product: 'stream' }] }));
+      return new Response(
+        JSON.stringify({
+          count: 2,
+          items: [
+            { id: 'default', product: 'stream' },
+            { id: SAVED_GROUP, product: 'stream' },
+          ],
+        }),
+      );
     }
     return new Response('not stubbed', { status: 404 });
   });
@@ -159,6 +173,15 @@ function hintsBeside(button: HTMLButtonElement): string[] {
   return [...button.parentElement!.querySelectorAll('.field-hint')].map((el) => el.textContent ?? '');
 }
 
+/** The worker group the visible screen has selected. */
+function selectedGroup(): string {
+  const label = [...document.querySelectorAll<HTMLElement>('label.field')].find(
+    (el) => el.querySelector('.field-label')?.textContent === 'Cribl worker group',
+  );
+  expect(label).toBeTruthy();
+  return label!.querySelector('.searchable-select-control')?.textContent ?? '';
+}
+
 /** List one table on the Batch tab, so Run has something to run. */
 function listOneTable(): void {
   fireEvent.change(screen.getByPlaceholderText(/SecurityEvent/), { target: { value: 'SecurityEvent' } });
@@ -174,6 +197,9 @@ describe('App - a refused appOptions read (DBT-158, DBT-188)', () => {
     expect(toggle.checked).toBe(false);
     expect(toggle.disabled).toBe(true);
     fireEvent.click(toggle);
+    // A save is async: give one the chance to go out before saying none did.
+    // That the save itself refuses here is pinned in options-save.test.ts.
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(optionsPuts()).toHaveLength(0);
     expect(kvGets('appOptions')).toBe(1);
   });
@@ -230,7 +256,9 @@ describe('App - a refused appOptions read (DBT-158, DBT-188)', () => {
     expect(Object.fromEntries(OTHER_BOOT_KEYS.map((k) => [k, kvGets(k)]))).toEqual(before);
     expect(kvGets('appOptions')).toBe(2);
 
-    // Onboard: Run unlocks, no reason beside it.
+    // Onboard: Run unlocks, no reason beside it - and it would deploy to the
+    // SAVED worker group, not the first-row pick made over the defaults.
+    await waitFor(() => expect(selectedGroup()).toBe(SAVED_GROUP));
     const run = runButton('Run onboarding');
     expect(run.disabled).toBe(false);
     expect(run.title).toBe('');
@@ -241,6 +269,7 @@ describe('App - a refused appOptions read (DBT-158, DBT-188)', () => {
     expect(noticeCount()).toBe(0);
     listOneTable();
     await waitFor(() => expect(runButton('Run batch onboarding').disabled).toBe(false));
+    expect(selectedGroup()).toBe(SAVED_GROUP);
     expect(hintsBeside(runButton('Run batch onboarding'))).toEqual([]);
 
     // Integrate: the real options show, the toggle saves, and the save is a

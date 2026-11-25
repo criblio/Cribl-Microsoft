@@ -22,7 +22,7 @@
  * destination ships the "<replace me>" placeholder to fill in Cribl's UI.
  */
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   destinationIdFromOptions,
   isCustomTableName,
@@ -202,7 +202,7 @@ export function OnboardTableScreen({
   // live list; otherwise the first discovered group is preselected as before.
   const preferredGroup = criblDefaults?.workerGroup ?? "";
   const workerGroups = useStreamWorkerGroups(ports.cribl, { logger: ports.logger });
-  useInitialWorkerGroup(workerGroups.state, preferredGroup, setGroupId);
+  const chooseGroup = useInitialWorkerGroup(workerGroups.state, preferredGroup, setGroupId);
 
   const run = async () => {
     setRunning(true);
@@ -285,6 +285,9 @@ export function OnboardTableScreen({
         ? "failed"
         : "idle";
 
+  // The shell-held refusal is the Run button's accessible description,
+  // not only text beside it (DBT-180 review).
+  const runReasonId = useId();
   const canRun =
     runDisabledReason === undefined &&
     !running &&
@@ -332,7 +335,7 @@ export function OnboardTableScreen({
                   hint: g.product,
                 }))}
                 value={groupId}
-                onChange={setGroupId}
+                onChange={chooseGroup}
                 placeholder="Select a worker group..."
                 label="Cribl worker group"
                 ariaLabel="Filter worker groups"
@@ -530,12 +533,15 @@ export function OnboardTableScreen({
           onClick={() => void run()}
           disabled={!canRun}
           title={runDisabledReason}
+          aria-describedby={runDisabledReason !== undefined ? runReasonId : undefined}
         >
           Run onboarding
         </button>
         <span className={`status status-${status}`}>{status}</span>
         {runDisabledReason !== undefined && (
-          <span className="field-hint">{runDisabledReason}</span>
+          <span className="field-hint" id={runReasonId}>
+            {runDisabledReason}
+          </span>
         )}
       </div>
       {steps.length > 0 && (

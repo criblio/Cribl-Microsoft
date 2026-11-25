@@ -19,7 +19,7 @@
  * secret is TRANSIENT input for this one run and cleared afterward.
  */
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   DEFAULT_OPERATION_OPTIONS,
   ONBOARD_BATCH_JOB_KIND,
@@ -244,7 +244,7 @@ export function BatchDeployScreen({
     auto: !forcedTemplateOnly,
     logger: ports.logger,
   });
-  useInitialWorkerGroup(workerGroups.state, preferredGroup, setGroupId);
+  const chooseGroup = useInitialWorkerGroup(workerGroups.state, preferredGroup, setGroupId);
 
   // ---- Run state -----------------------------------------------------------
   const [running, setRunning] = useState(false);
@@ -445,6 +445,9 @@ export function BatchDeployScreen({
 
   // Forced templateOnly runs make no Cribl calls, so no worker group is
   // required (there is no live leader to pick one from in this mode).
+  // The shell-held refusal is the Run button's accessible description,
+  // not only text beside it (DBT-180 review).
+  const runReasonId = useId();
   const canRun =
     runDisabledReason === undefined &&
     !running &&
@@ -657,7 +660,7 @@ export function BatchDeployScreen({
                     hint: g.product,
                   }))}
                   value={groupId}
-                  onChange={setGroupId}
+                  onChange={chooseGroup}
                   placeholder="Select a worker group..."
                   label="Cribl worker group"
                   ariaLabel="Filter worker groups"
@@ -703,6 +706,7 @@ export function BatchDeployScreen({
           onClick={() => void run()}
           disabled={!canRun}
           title={runDisabledReason}
+          aria-describedby={runDisabledReason !== undefined ? runReasonId : undefined}
         >
           Run batch onboarding
         </button>
@@ -710,7 +714,9 @@ export function BatchDeployScreen({
           {recordState}
         </span>
         {runDisabledReason !== undefined && (
-          <span className="field-hint">{runDisabledReason}</span>
+          <span className="field-hint" id={runReasonId}>
+            {runDisabledReason}
+          </span>
         )}
       </div>
 

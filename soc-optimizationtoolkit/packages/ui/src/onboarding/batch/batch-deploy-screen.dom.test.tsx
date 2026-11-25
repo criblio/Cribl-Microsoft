@@ -220,6 +220,7 @@ describe("BatchDeployScreen - a shell-held Run refusal (DBT-180)", () => {
     listOneTable();
     await waitFor(() => expect(buttonMatching(/^Run batch onboarding$/)?.disabled).toBe(false));
     expect(screen.queryByText(REASON)).toBeNull();
+    expect(buttonMatching(/^Run batch onboarding$/)!.hasAttribute("aria-describedby")).toBe(false);
   });
 
   it("a refusal disables Run with everything else ready, and says why beside it", async () => {
@@ -235,6 +236,10 @@ describe("BatchDeployScreen - a shell-held Run refusal (DBT-180)", () => {
     expect(run.title).toBe(REASON);
     const hints = [...run.parentElement!.querySelectorAll(".field-hint")].map((el) => el.textContent);
     expect(hints).toEqual([REASON]);
+    // The hint is the button's accessible description, not just nearby text.
+    const describedBy = run.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent).toBe(REASON);
   });
 
   it("the fallback offer's run is refused too, with the same reason", () => {

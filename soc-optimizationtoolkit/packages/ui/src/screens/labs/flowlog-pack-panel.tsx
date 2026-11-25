@@ -34,7 +34,7 @@ export function FlowLogPackPanel({ defaultStorageAccount }: FlowLogPackPanelProp
   // fleets; this one listed them.
   const workerGroups = useStreamWorkerGroups(ports.cribl, { auto: false });
   const [groupId, setGroupId] = useState("");
-  useInitialWorkerGroup(workerGroups.state, "", setGroupId);
+  const chooseGroup = useInitialWorkerGroup(workerGroups.state, "", setGroupId);
   const [packStorageAccount, setPackStorageAccount] = useState("");
   const [packSecret, setPackSecret] = useState("");
   const [packScheduleEnabled, setPackScheduleEnabled] = useState(true);
@@ -119,7 +119,7 @@ export function FlowLogPackPanel({ defaultStorageAccount }: FlowLogPackPanelProp
                 label="Worker group (where to deploy)"
                 options={groups.map((group) => ({ value: group.id, label: group.id }))}
                 value={groupId}
-                onChange={setGroupId}
+                onChange={chooseGroup}
               />
             )}
           </WorkerGroupField>

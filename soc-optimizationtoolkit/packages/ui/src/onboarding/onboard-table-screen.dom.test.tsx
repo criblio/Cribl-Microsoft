@@ -118,6 +118,7 @@ describe("OnboardTableScreen - a shell-held Run refusal (DBT-180)", () => {
     const run = screen.getByRole("button", { name: "Run onboarding" }) as HTMLButtonElement;
     await waitFor(() => expect(run.disabled).toBe(false));
     expect(screen.queryByText(REASON)).toBeNull();
+    expect(run.hasAttribute("aria-describedby")).toBe(false);
   });
 
   it("a refusal disables Run with every field filled, and says why beside it", async () => {
@@ -133,5 +134,9 @@ describe("OnboardTableScreen - a shell-held Run refusal (DBT-180)", () => {
     // Beside the button, in the same controls row - not elsewhere on the page.
     const hints = [...run.parentElement!.querySelectorAll(".field-hint")].map((el) => el.textContent);
     expect(hints).toEqual([REASON]);
+    // The hint is the button's accessible description, not just nearby text.
+    const describedBy = run.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent).toBe(REASON);
   });
 });

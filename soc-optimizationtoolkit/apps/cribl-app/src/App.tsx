@@ -2,6 +2,7 @@ import { clearNotice } from './clear-notice';
 import { connectionIncompleteText, secretNotice as secretNoticeFor } from './connection-notices';
 import type { SecretProbe } from './connection-notices';
 import { JOURNEY_LINKS, SETUP_CONNECT_ANCHOR, SETUP_GITHUB_ANCHOR } from './journey-links';
+import { saveOperationOptions } from './options-save';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
@@ -48,8 +49,6 @@ import {
   optionsReadFailureLine,
   optionsReadFromSettled,
   optionsRunBlockedReason,
-  planOptionsSave,
-  settleOptionsSave,
   resolveFramePhase,
   useCapabilityAudit,
   useConsolidatedPolling,
@@ -811,24 +810,18 @@ function App() {
   // settleOptionsSave keeps the read as it was, so the controlled toggle shows
   // the stored value again, and the notice says the change was not saved
   // (DBT-173). The dedicated Options screen was RETIRED (2026-07-14); this is
-  // the only options write the shell owns.
+  // the only options write the shell owns. The save itself lives in
+  // options-save.ts, where its refusal is pinned (DBT-188).
   const persistOperation = useCallback(
     (operation: OperationOptions) => {
-      const plan = planOptionsSave(optionsRead, { operation });
-      if (plan.kind === 'refused') {
-        setOptionsSaveNotice(plan.reason);
-        return;
-      }
-      setOptionsSaveNotice(null);
-      void (async () => {
-        const [result] = await Promise.allSettled([
-          appStateStore.set(APP_OPTIONS_KEY, plan.serialized),
-        ]);
-        // The read settles against the CURRENT state (another save may have
-        // landed meanwhile); the notice depends only on the PUT's result.
-        setOptionsRead((current) => settleOptionsSave(current, plan.serialized, result).read);
-        setOptionsSaveNotice(settleOptionsSave(optionsRead, plan.serialized, result).notice);
-      })();
+      void saveOperationOptions({
+        read: optionsRead,
+        operation,
+        store: appStateStore,
+        key: APP_OPTIONS_KEY,
+        setRead: setOptionsRead,
+        setNotice: setOptionsSaveNotice,
+      });
     },
     [optionsRead],
   );

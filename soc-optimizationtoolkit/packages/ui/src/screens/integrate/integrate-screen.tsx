@@ -948,7 +948,7 @@ export function IntegrateScreen({
   // first discovered group is used.
   const preferredGroup = criblDefaults?.workerGroup ?? "";
   const workerGroups = useStreamWorkerGroups(ports.cribl, { logger: ports.logger });
-  useInitialWorkerGroup(workerGroups.state, preferredGroup, setGroupId);
+  const chooseGroup = useInitialWorkerGroup(workerGroups.state, preferredGroup, setGroupId);
 
   // Distinct worker groups the pack would be deployed to: the primary group
   // plus any extra groups when the multi-group toggle is on.
@@ -2849,7 +2849,7 @@ export function IntegrateScreen({
               value={groupId}
               onChange={(next) => {
                 groupTouchedRef.current = true;
-                setGroupId(next);
+                chooseGroup(next);
               }}
               placeholder="Select a worker group..."
               label="Cribl worker group"
