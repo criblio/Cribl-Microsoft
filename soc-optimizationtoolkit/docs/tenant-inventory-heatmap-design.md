@@ -1,8 +1,9 @@
 # Azure Native Source Onboarding: tenant inventory heat map
 
-Status: Living - redesign of the Azure Native Source Onboarding screen around a tenant
-inventory heat map; phase 1 (read-only cards) built as AZR-107, phases 2-5 not yet built.
-Last-confirmed: 2026-11-18
+Status: Proposed - redesign of the Azure Native Source Onboarding screen around a tenant
+inventory heat map; phase 1 (read-only cards) built as AZR-107, phases 2-5 not yet built, so it
+stays Proposed and expires until they are.
+Last-confirmed: 2026-11-25
 
 ## Intent
 

@@ -1959,6 +1959,19 @@
       "detail": "FOUND 2026-11-18 by the architecture audit (range fe6f9cee..c97084b6). classifyActivityLogRemoval and classifyEntraSettingRemoval (domain/onboarding-teardown/teardown-plan.ts) were line-for-line copies of the config-plane rule 11 check (name, KV record for this scope, recorded rule). They had already drifted: the Entra copy refused a blank tenant, the Activity Log copy did not, so a blank subscription id against a record with a blank subscription would have proven ownership and allowed a delete. Not observed live; no caller is known to pass a blank subscription. FIXED: both now call one private classifyDiagnosticSettingRemoval, so a blank scope never matches for either; pinned and mutation-checked (removing the blank guard fails the new pin)."
     },
     {
+      "id": "DBT-307",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "verified": "pins",
+      "title": "Setting removal let a blank recorded rule match a setting that sends to no Event Hub",
+      "detail": "FOUND 2026-11-25 by the independent review of PR #241 (DBT-306). classifyDiagnosticSettingRemoval refused a blank scope but still compared the recorded rule with sameArmId, so a record with ruleId \"\" matched a setting whose ruleId is \"\" (no Event Hub destination) and proved ownership. The writer always records namespaceRuleResourceId(...), never blank, so only a hand-edited or damaged KV record reaches it. FIXED: a blank recorded rule is not-proven with its own reason, for both Activity Log and Entra ID; pin written first and seen failing. Same PR: the heat-map design doc goes back to Proposed (the review noted Living would exempt its unbuilt phases 2-5 from expiry)."
+    },
+    {
       "id": "DBT-303",
       "epic": "DBT",
       "feature": "DBT-F1",
