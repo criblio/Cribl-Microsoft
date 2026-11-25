@@ -21,6 +21,11 @@
  * PROBES ARE TRUTH: readiness comes from effective-action checks + live probes,
  * never from a role name (the legacy role-name heuristic is the negative example
  * this unit replaces). The granted-roles list is decoration only.
+ *
+ * A REFUSED AUDIT RECORD IS SAID (DBT-181). The finished check feeds the
+ * app-level capability cache without waiting on it. A refused read-before-merge
+ * or write was only logged; the panel now says the record was not saved, with
+ * its reason, for the run it belongs to.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -205,6 +210,9 @@ export function RbacPreflightPanel({
   const [setupPath, setSetupPath] = useState<SetupPath>(defaultSetupPath);
   const [azure, setAzure] = useState<AzureSideState>({ phase: "idle", result: null });
   const [cribl, setCribl] = useState<CriblSideState>({ phase: "idle", result: null });
+  // Why this run's capability record could not be SAVED, "" when it was or
+  // has not been tried (DBT-181). Reset by every run.
+  const [auditSaveError, setAuditSaveError] = useState("");
 
   const target: AzurePreflightTarget = useMemo(
     () => ({
@@ -217,6 +225,7 @@ export function RbacPreflightPanel({
 
   const run = useCallback(() => {
     const logger = ports.logger;
+    setAuditSaveError("");
     setAzure({ phase: "pending", result: null });
     setCribl({ phase: "pending", result: null });
     // Both sides fire INDEPENDENTLY: each resolves into its own state slot so a
@@ -278,9 +287,20 @@ export function RbacPreflightPanel({
       auditedAt: new Date().toISOString(),
       connectionId: key,
     });
-    // Fire-and-forget: saveCapabilityAudit swallows backend failures, and a
-    // missed write only costs a re-audit later.
-    void saveCapabilityAudit(ports.contentCache, set, config.tenantId, ports.logger);
+    // Fire-and-forget: the report never waits on the store, and a missed write
+    // only costs a re-audit later. saveCapabilityAudit never rejects, but it
+    // hands back a refusal (DBT-181), which is SAID rather than only logged -
+    // and only while this run's results are still the ones on screen, so a
+    // late refusal from the run before a Retry claims nothing about this one.
+    let cancelled = false;
+    void saveCapabilityAudit(ports.contentCache, set, config.tenantId, ports.logger, {
+      onRefused: (reason) => {
+        if (!cancelled) setAuditSaveError(reason);
+      },
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [azure, cribl, config.tenantId, config.clientId, target, setupPath, workerGroup, ports]);
 
   // The artifacts for whatever the identity was MEASURED to lack
@@ -344,6 +364,13 @@ export function RbacPreflightPanel({
         the deploy. Effective-action checks and live probes are the truth; the
         role names below are decoration only.
       </p>
+      {auditSaveError !== "" && (
+        <p className="field-hint preflight-audit-unsaved" role="status">
+          This check's record could not be saved ({auditSaveError}). This
+          check's results stand, but the app will not remember them and may
+          measure again at next launch.
+        </p>
+      )}
 
       <div className="preflight-sides">
         <SideSection view={view.azure} />

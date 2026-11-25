@@ -376,7 +376,9 @@ function asRecord(value: unknown): Record<string, unknown> {
  * `__inputId.startsWith('collection:')`, missing or `true` = all inputs;
  * anything else = unparsed (treated as all, with a note - honest
  * over-approximation). The clause forms are input-id.ts parseInputIdClause,
- * shared with the capture warning (DBT-169); the result shape (InputIdFilter)
+ * shared with the capture warning (DBT-169), which since DBT-190 also reads
+ * the reversed equality (`'x'==__inputId`) and escaped literals - so such a
+ * route now parses where it read `unparsed`; the result shape (InputIdFilter)
  * is owned there too, and matched against an input there (DBT-162).
  */
 export function parseRouteFilterInputs(filter: string | undefined): InputIdFilter {

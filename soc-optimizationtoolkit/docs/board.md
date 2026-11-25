@@ -15,7 +15,7 @@ in, and what it waits on.
 reasoning is in `backlog.md` and their full text in the git history of
 `board.json`; a link that resolves to nothing here is not a typo.
 
-**107 in the backlog, 33 in progress, 254 done.**
+**114 in the backlog, 30 in progress, 257 done.**
 
 ## By menu item
 
@@ -27,7 +27,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 |---|---|---|---|
 | Dataflow | 4 | 2 | 2 |
 | Setup | 3 | 7 | 2 |
-| Sentinel Integration | 53 | 105 | 23 |
+| Sentinel Integration | 57 | 108 | 22 |
 | DCR Automation | 3 | 0 | 0 |
 | Pack Maintenance | 4 | 0 | 0 |
 | Repositories | 0 | 1 | 0 |
@@ -41,7 +41,7 @@ operator sees on any screen. One menu is PLANNED and has no route yet.
 | Windows Event analysis (planned) | 5 | 0 | 0 |
 | Cross-cutting | 17 | 19 | 6 |
 
-Open work totals 140.
+Open work totals 144.
 
 ## Epics and features
 
@@ -116,13 +116,13 @@ ENABLER EPIC: release mechanics. The packaged tarball trails main, and the lab t
 |---|---|---|---|
 | `REL-F1` Release and deployment hygiene | Cross-cutting | 0/2 | REL-5, REL-6 |
 
-### `DBT` Quality and technical debt _(enabler)_ - 62% (114/184)
+### `DBT` Quality and technical debt _(enabler)_ - 61% (117/191)
 
 ENABLER EPIC: verification gaps, copy, diagram fidelity, docs and the board's own tooling
 
 | Feature | Menu | Done | Stories |
 |---|---|---|---|
-| `DBT-F1` Verification gaps | Sentinel Integration | 50/100 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-301, DBT-302, DBT-306, DBT-307, DBT-303, DBT-304, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-181, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254, DBT-255, DBT-256, DBT-257, DBT-300, DBT-305 |
+| `DBT-F1` Verification gaps | Sentinel Integration | 53/107 | DBT-5*, DBT-36*, DBT-74, DBT-84, DBT-89, DBT-82, DBT-92, DBT-88, DBT-86, DBT-87, DBT-93, DBT-94, DBT-95, DBT-99, DBT-101, DBT-105, DBT-106, DBT-107, DBT-109, DBT-110, DBT-114, DBT-115, DBT-116, DBT-117, DBT-123, DBT-128, DBT-134, DBT-138, DBT-140, DBT-141, DBT-142, DBT-145*, DBT-146*, DBT-147*, DBT-148*, DBT-149, DBT-301, DBT-302, DBT-306, DBT-307, DBT-303, DBT-304, DBT-151, DBT-152, DBT-153*, DBT-154*, DBT-155, DBT-156*, DBT-157*, DBT-158*, DBT-159*, DBT-160*, DBT-161*, DBT-162*, DBT-163*, DBT-164*, DBT-165*, DBT-166*, DBT-167*, DBT-168*, DBT-169, DBT-170*, DBT-171*, DBT-172, DBT-173, DBT-174, DBT-175, DBT-176, DBT-177*, DBT-178*, DBT-179*, DBT-180, DBT-310, DBT-181, DBT-311, DBT-312, DBT-182, DBT-183, DBT-184*, DBT-185*, DBT-186*, DBT-187, DBT-188, DBT-189*, DBT-190, DBT-308, DBT-309, DBT-313, DBT-314, DBT-191, DBT-196, DBT-197, DBT-198, DBT-201, DBT-205, DBT-206, DBT-207, DBT-217, DBT-220, DBT-252, DBT-253, DBT-254, DBT-255, DBT-256, DBT-257, DBT-300, DBT-305 |
 | `DBT-F2` Copy and UX | Sentinel Integration | 52/63 | DBT-14, D-10*, DBT-96, DBT-97, DBT-118*, DBT-121, DBT-122, DBT-125, DBT-126, DBT-127, DBT-143, DBT-192, DBT-193, DBT-194, DBT-195, DBT-199, DBT-200, DBT-202, DBT-203, DBT-204, DBT-208, DBT-209, DBT-210, DBT-211, DBT-212, DBT-213, DBT-214, DBT-215, DBT-216, DBT-218, DBT-219, DBT-221, DBT-222, DBT-223, DBT-224, DBT-225, DBT-226, DBT-227, DBT-228, DBT-229, DBT-230, DBT-231, DBT-232, DBT-237, DBT-233, DBT-234, DBT-235, DBT-236, DBT-246, DBT-247, DBT-248, DBT-238, DBT-239, DBT-240, DBT-241, DBT-242, DBT-243, DBT-244, DBT-245, DBT-250, DBT-251, DBT-298, DBT-249 |
 | `DBT-F3` Diagram fidelity | Dataflow | 2/4 | DBT-1, DBT-4, DBT-12, DBT-150 |
 | `DBT-F4` Docs and spec grounding | Cross-cutting | 10/15 | DBT-8, DBT-10, DBT-11, DBT-58, DBT-119*, DBT-120, DBT-124, DBT-129, DBT-130, DBT-131, DBT-132, DBT-133, DBT-135, DBT-136, DBT-299 |
@@ -157,7 +157,7 @@ RAISED BY THE OPERATOR 2026-11-11, alongside the Azure Native Source Onboarding 
 
 ---
 
-## In progress (33)
+## In progress (30)
 
 Started. Anything here with an unfinished dependency is called out on its card.
 
@@ -785,48 +785,14 @@ Started. Anything here with an unfinished dependency is called out on its card.
   DEFAULT_APP_OPTIONS (App.tsx passes them ~1928 and ~1988) under the DBT-158
   notice. FIX: derive a run gate from OptionsRead
   (packages/ui/src/frame/options-read.ts), disable Run with the reason and the
-  Retry, pin it.
-
-- **DBT-181** Five more KV calls swallow a refused read or write
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-28 by the DBT-175 implementer/reviewer (pre-existing unless
-  said). integrate-screen.tsx:686-689 (selected-solution write, .catch(() =>
-  undefined)) and :757 (its restore read, which reads as no selection);
-  mapping-review-hooks.ts:64 (learned-mappings read), :93-95 and :105-107
-  (persist and forget writes: approved edits silently not learned, Forget
-  silently does nothing); siem-migration-screen.tsx:134 persist();
-  rbac-preflight-panel.tsx:275 void saveCapabilityAudit (deliberate and
-  logged, but nothing on screen). Also
-  use-vendor-column-order.ts:194-196/:208-210 can record a late refusal under
-  a scope it no longer belongs to. FIX each per the DBT-159/175 pattern; pin
-  each.
-
-- **DBT-188** DBT-158's shell wiring has no pin
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce),
-  adversarially verified. options-read.ts's decisions are pinned, but
-  App.tsx's use of them is not: the notice on Integrate/Onboard/Batch (App.tsx
-  ~1845, 1903, 1963), Retry re-reading only appOptions, persistOperation
-  refusing, the DCE checkbox going read-only. A wiring regression would pass
-  every test. FIX: a DOM pin of the frame with a refused appOptions read
-  (DBT-180 adds the Run gate to the same path).
-
-- **DBT-190** The capture warning reads __inputId clauses, not the boolean structure around them
-  `DBT-F1` `bug` `settled`
-  FOUND 2026-10-28 by the DBT-169 reviewer (all but one also in the base).
-  captureFilterWarning (capture-filter.ts:220) finds clauses and ignores what
-  surrounds them: (1) negation is silent - !(__inputId=='syslog:in_syslog')
-  captures everything except the selected source; (2) a filter naming two
-  inputs is silent - a || of two typed clauses, or
-  ['http:in_http','syslog:in_syslog'].includes(__inputId), which a DBT-169 pin
-  currently pins as silent; (3) endsWith(':in_syslog') gets the false
-  'references __inputId but not in_syslog' wording (new in DBT-169); (4) the
-  reversed comparison 'syslog:in_syslog' == __inputId gets the
-  different-source warning, and my__inputId==... is silent (no word boundary);
-  (5) an id containing a double quote makes the app warn about its own filter
-  (input-id.ts:95 reads no backslash escapes). FIX: warn on negation and on
-  any clause naming another input; word-boundary the patterns; accept the
-  reversed form; true wording for endsWith; repin the includes case.
+  Retry, pin it. BUILT 2026-11-25 (pins): Onboard and Batch refuse Run with a
+  reason (aria-describedby) while appOptions is loading, unreadable or
+  retrying; a failed save does not block; absent (first run) runs. Review
+  found Retry unlocked Run with the defaults-era worker group; fixed
+  (automatic picks yield to the saved group, hand choices never overridden).
+  Integrate's deploy is the follow-up card per the operator's 2026-11-25
+  decision. STILL OPEN: Live Preview check - with a refused appOptions GET,
+  Run disabled with the reason, Retry unlocks it, saved worker group selected.
 
 - **AZR-35** Route the onboarding Cribl source to its destination (Cribl Lake for Defender alerts and Activity Log), with diagnostic records unrolled
   `AZR-F9` `story` `settled`
@@ -1012,7 +978,7 @@ Started. Anything here with an unfinished dependency is called out on its card.
 
 ---
 
-## Backlog - now (13)
+## Backlog - now (15)
 
 Next to pick up. Nothing blocks these.
 
@@ -1140,6 +1106,33 @@ Next to pick up. Nothing blocks these.
   list them in API_CALLS, and remove the exception; the coverage test fails if
   an exception goes stale.
 
+- **DBT-310** Integrate's deploy refuses to run while the options read is unreadable or retrying, as Onboard and Batch do
+  `DBT-F1` `story` `settled` `blocked by DBT-180`
+  OPERATOR DECISION 2026-11-25 (asked after the DBT-180 review): block it too.
+  Integrate passes criblDefaults and operationDefaults from appOptions into
+  its deploys (destination naming, retention, createDCE and operation options;
+  App.tsx ~2094 and integrate-screen.tsx deploy paths), so with the read
+  unreadable 'Deploy everything' writes real config with defaults the operator
+  did not choose. DBT-180 gated only Onboard and Batch, as its decision was
+  worded. FIX: pass optionsRunBlockedReason to Integrate and disable every
+  deploy action with the reason (aria-describedby hint) and the existing
+  Retry; pin on the screen and on the frame.
+
+- **DBT-308** A capture filter that matches none of a segmented source's events is silent: the capture looks like an empty source
+  `DBT-F1` `bug` `settled`
+  FOUND 2026-11-25 by the independent review of DBT-190 (pre-existing, same on
+  the base). For a segmented input type (syslog, http), __inputId carries
+  <type>:<id>:<sender>, so an equality on '<type>:<id>' matches none of its
+  events - input-id.ts says so itself. Yet `__inputId === 'syslog:in_syslog'`,
+  `['syslog:in_syslog'].includes(__inputId)` and
+  `__inputId.startsWith('syslog:in_syslog:') &&
+  __inputId.endsWith(':in_syslog')` draw no warning; matchInputIdFilter
+  answers match. The operator sees an empty capture and concludes the source
+  sends nothing. FIX: for a segmented type, an equality or literal list on the
+  bare <type>:<id> (or a contradiction like the endsWith case) warns that the
+  filter matches none of this source's events, with the startsWith form to use
+  instead; pin each.
+
 - **GEN-31** Preset coerce and matcher cross-type renames ignore the field's real type
   `GEN-F1` `bug` `settled`
   FOUND 2026-10-30 by the priority-now bug review (wf_f7edac02-12e).
@@ -1254,7 +1247,7 @@ Next to pick up. Nothing blocks these.
 
 ---
 
-## Backlog - next (54)
+## Backlog - next (58)
 
 Settled and unblocked, sequenced behind now.
 
@@ -1680,6 +1673,33 @@ Settled and unblocked, sequenced behind now.
   a 'transport' refusal) and the error texts the pins assert. Then make
   readAllPages the core and the others thin wrappers.
 
+- **DBT-311** After a refused restore read, Integrate's first pick is treated as the initial pick and the stored solution's samples are not retired
+  `DBT-F1` `bug` `settled`
+  Not now because: Conservative direction: nothing stored is overwritten, and
+  it needs a refused KV read at the moment of restore followed by a pick of a
+  different solution. The carried samples are visible in the sample list and
+  can be removed.
+  FOUND 2026-11-25 by the independent review of DBT-181 (pre-existing).
+  integrate-screen.tsx ~866-891: a refused selected-solution restore read
+  leaves prevSolutionRef null, so the next pick takes the initial-pick branch
+  and skips retiring samples tagged for the previously stored solution; they
+  can carry over. The DBT-181 note says picking works as usual, which is only
+  mostly true. FIX: treat an unreadable stored selection as 'unknown previous'
+  and retire or flag solution-tagged samples on the first pick; pin it.
+
+- **DBT-312** Two more KV calls swallow a refusal: the section-folding pin write and an adapter cleanup delete
+  `DBT-F1` `bug` `settled`
+  Not now because: Neither loses operator data: one is a UI preference
+  (section pinning) and the other a cleanup of a key the app owns. The DBT-181
+  sites wrote over or hid real data and came first.
+  FOUND 2026-11-25 by the independent review of DBT-181.
+  components/section-folding/use-section-folding.ts:113 swallows a refused pin
+  write ('Best effort'), so a pinned section silently does not stay pinned;
+  apps/cribl-app/src/platform/adapters.ts:1783 swallows a cleanup kvDelete, so
+  a leftover key is never reported. FIX per the DBT-159/175 pattern, or record
+  why each is deliberately best-effort in a comment the next audit can see;
+  pin each.
+
 - **DBT-182** Inline option saves are not serialised, and a timed-out PUT is assumed not to have landed
   `DBT-F1` `bug` `settled`
   Not now because: Needs two DCE toggles within one PUT round trip or a PUT
@@ -1727,6 +1747,51 @@ Settled and unblocked, sequenced behind now.
   useInitialWorkerGroup commits it. Also the module header (:11-14) says the
   screen calls nothing external and needs no ports, false since the Live
   Workgroup and Edge views. FIX: confirm live; fix the header regardless.
+
+- **DBT-313** Capture warning residuals after DBT-190: optional-bracket __e, sender equality, guard wording, fast-path comments
+  `DBT-F1` `bug` `settled`
+  Not now because: None is silent about a mixed capture, which is what DBT-190
+  closed: each either over-warns or picks the weaker of two true warnings, so
+  the operator is told to look at a filter that is fine or told less than they
+  could be. The silent-empty-capture case DBT-308 outranks them.
+  FOUND 2026-11-25 by the final re-review of the DBT-180/181/190 PR. All
+  CONFIRMED by running them. (1) `__e?.['__inputId']` is not read as the
+  field, so a correct filter gets 'does not mention __inputId ... EVERY
+  source' (filter-structure.ts INPUT_ID_FIELD / eventMemberLength allow `?.`
+  only before a name). (2) The sender fix covers only startsWith:
+  `__inputId=='syslog:in_syslog:10.0.0.1'`, a literal list of senders and `!=`
+  a sender still warn that another source may be captured. (3) `typeof
+  __inputId === 'string' || <other source>` lets every source through but gets
+  the weaker other-source wording; `typeof __inputId !== 'string'` captures
+  nothing and gets the same (probably pre-existing). (4) The fast path runs
+  namesInputIdField on raw text and the tree on comment-stripped code, so `__e
+  /*x*/ .__inputId==...` gets the wrong wording (contrived). FIX each with a
+  pin first.
+
+- **DBT-314** Learned-mappings and column-order residuals after DBT-181: Clear during the initial load, column order's read note, chain robustness
+  `DBT-F1` `bug` `settled`
+  Not now because: (1) needs a Clear inside the first load's round trip after
+  an Approve, which needs an analysis to exist first; (2) leaves a stale note
+  while the order is in fact saved; (3) and (4) are not reachable with the
+  shipped async adapter or need a solution switch mid-write. None writes
+  defaults over read data, which is what DBT-181 closed.
+  FOUND 2026-11-25 by the final re-review of the DBT-180/181/190 PR. (1)
+  CONFIRMED: a Clear while the initial learned-mappings load is in flight
+  empties the store but the load then merges the stored decisions back on
+  screen (mapping-review-hooks.ts ~156-162, ~220-238): screen shows and
+  replays [OLD], store holds []. Pre-existing race, now under a 'one store
+  call at a time' comment that does not cover it. (2) CONFIRMED: column
+  order's successful remember does not clear the read note
+  (use-vendor-column-order.ts ~208, clears is [remember, forget]), unlike
+  learned mappings. (3) SUSPECTED, not reachable with KvContentCache: the
+  learned chain links have no catch, so a synchronous throw from the cache or
+  a load that never settles silently stops every later learn/clear. (4)
+  SUSPECTED: switching solution A->B->A while A's write is in flight can hide
+  this session's stored edit and let a new learn overwrite it, because the new
+  chain does not wait for the old one. Also noted, harmless: in
+  worker-group-listing.ts a screen-set group equal to the automatic pick
+  yields to a late preferred group; Integrate's capture-group effect restores
+  it after one render. FIX (1)-(4) with pins first.
 
 - **AZR-22** Create an Event Hub namespace, hub or authorization rule from the onboarding screen
   `AZR-F9` `story` `settled` `blocked by AZR-11, CAP-9`
@@ -2226,7 +2291,7 @@ Settled and unblocked, sequenced behind now.
 
 ---
 
-## Backlog - later (40)
+## Backlog - later (41)
 
 Settled, gated on something above.
 
@@ -2720,6 +2785,17 @@ Settled, gated on something above.
   WorkerGroupsState["kind"], so a state added to the hook would not reach the
   badge logic. Fix: import the type.
 
+- **DBT-309** With no source type, the capture warning says only 'type unknown' when the filter plainly names another source
+  `DBT-F1` `bug` `settled`
+  Not now because: Not silent: the operator is already told the filter cannot
+  be checked, so nothing is trusted that should not be. Only the second reason
+  is missing, and the typed case (the common one, since the app knows the type
+  of every source it picks) already warns correctly.
+  FOUND 2026-11-25 by the independent review of DBT-190. With no type,
+  `__inputId.startsWith('syslog:in_syslog:') || __inputId=='http:in_http'`
+  gets the type-unknown message because it is checked before the other-source
+  message. FIX: when another source is named, say that too.
+
 - **AZR-24** Persist the Event Hub prerequisite choice
   `AZR-F9` `story` `settled` `blocked by AZR-11`
   FILED 2026-10-21 as a follow-up of AZR-18
@@ -2833,7 +2909,7 @@ Settled, gated on something above.
 
 ---
 
-## Done (254)
+## Done (257)
 
 Kept briefly so a reader can see what just landed; prune when the list grows.
 
@@ -5852,6 +5928,24 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   present-other-name kinds says only what its classifier matched on, plus how
   many others were found. Leftovers: DBT-189.
 
+- **DBT-181** Five more KV calls swallow a refused read or write
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-10-28 by the DBT-175 implementer/reviewer (pre-existing unless
+  said). integrate-screen.tsx:686-689 (selected-solution write, .catch(() =>
+  undefined)) and :757 (its restore read, which reads as no selection);
+  mapping-review-hooks.ts:64 (learned-mappings read), :93-95 and :105-107
+  (persist and forget writes: approved edits silently not learned, Forget
+  silently does nothing); siem-migration-screen.tsx:134 persist();
+  rbac-preflight-panel.tsx:275 void saveCapabilityAudit (deliberate and
+  logged, but nothing on screen). Also
+  use-vendor-column-order.ts:194-196/:208-210 can record a late refusal under
+  a scope it no longer belongs to. FIX each per the DBT-159/175 pattern; pin
+  each. DONE 2026-11-25: all five sites report a refused read or write;
+  reviewed independently, which found and fixed Clear writing over unread
+  decisions and a re-read dropping unsaved edits; learn/clear serialized; one
+  shared useStoreRefusal hook for the latest-write and scope patterns.
+  Follow-ups filed from the review.
+
 - **DBT-183** A Content Hub package with no displayName matches every solution
   `DBT-F1` `bug` `settled` `verified: pins`
   FOUND 2026-10-28 by the DBT-176 implementer/reviewer (pre-existing unless
@@ -5884,6 +5978,20 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   SECRETS_API_PATH removed. Mutation: dropping the non-object-entry check
   fails 5 pins. Internal parsing only - no screen to verify live.
 
+- **DBT-188** DBT-158's shell wiring has no pin
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce),
+  adversarially verified. options-read.ts's decisions are pinned, but
+  App.tsx's use of them is not: the notice on Integrate/Onboard/Batch (App.tsx
+  ~1845, 1903, 1963), Retry re-reading only appOptions, persistOperation
+  refusing, the DCE checkbox going read-only. A wiring regression would pass
+  every test. FIX: a DOM pin of the frame with a refused appOptions read
+  (DBT-180 adds the Run gate to the same path). DONE 2026-11-25:
+  App.dom.test.tsx mounts the frame with a refused appOptions read (notice on
+  Integrate/Onboard/Batch, Retry re-reads only appOptions, DCE toggle
+  read-only, Run gate, saved worker group restored after Retry);
+  persistOperation's refusal pinned through options-save.ts.
+
 - **DBT-189** How-to step word and dataflow lane ignore the 'others also found' count
   `DBT-F1` `bug` `settled` `verified: pins`
   Not now because: The extra-count wording is a refinement DBT-178 added to
@@ -5907,6 +6015,30 @@ Kept briefly so a reader can see what just landed; prune when the list grows.
   unit; each broke a pin. Live check outstanding: None. The task forbids live
   Azure or Cribl calls. The change is pure wording, built from verdicts, and
   is covered by pins; it was not confirmed in Cribl Live Preview.
+
+- **DBT-190** The capture warning reads __inputId clauses, not the boolean structure around them
+  `DBT-F1` `bug` `settled` `verified: pins`
+  FOUND 2026-10-28 by the DBT-169 reviewer (all but one also in the base).
+  captureFilterWarning (capture-filter.ts:220) finds clauses and ignores what
+  surrounds them: (1) negation is silent - !(__inputId=='syslog:in_syslog')
+  captures everything except the selected source; (2) a filter naming two
+  inputs is silent - a || of two typed clauses, or
+  ['http:in_http','syslog:in_syslog'].includes(__inputId), which a DBT-169 pin
+  currently pins as silent; (3) endsWith(':in_syslog') gets the false
+  'references __inputId but not in_syslog' wording (new in DBT-169); (4) the
+  reversed comparison 'syslog:in_syslog' == __inputId gets the
+  different-source warning, and my__inputId==... is silent (no word boundary);
+  (5) an id containing a double quote makes the app warn about its own filter
+  (input-id.ts:95 reads no backslash escapes). FIX: warn on negation and on
+  any clause naming another input; word-boundary the patterns; accept the
+  reversed form; true wording for endsWith; repin the includes case. DONE
+  2026-11-25 (PR for DBT-180/181/190): the October commit rebased, reviewed
+  independently twice; 6 more silent cases fixed in an adversarial pass
+  (negated other source, template substitutions, comments, non-literal
+  includes lists, __inputId in strings/regex/templates), then postfix ++/--
+  before /, __e.__inputId as the field, typeof-guard wording and sender
+  prefixes. One namesInputIdField definition. Follow-ups filed from the
+  review.
 
 - **AZR-36** Create a Listen rule and a dedicated consumer group for the Cribl Event Hub source from the app
   `AZR-F9` `story` `settled` `verified: pins`

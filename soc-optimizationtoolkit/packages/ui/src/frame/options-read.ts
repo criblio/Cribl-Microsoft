@@ -1,8 +1,8 @@
 /**
  * Options read - the PURE decision behind the shell's appOptions entry: what
  * the boot read of the stored options means, whether an inline edit may be
- * saved over it, what that save writes, and what a failed save leaves behind
- * (DBT-158, DBT-172, DBT-173).
+ * saved over it, what that save writes, what a failed save leaves behind
+ * (DBT-158, DBT-172, DBT-173), and whether a deploy may Run on it (DBT-180).
  *
  * The @soc/core option-forms module owns the codec (parseAppOptions /
  * serializeAppOptions / applyOptionsPatch). This module owns the one fact the
@@ -42,6 +42,16 @@
  * and the operator is told in plain words ({@link settleOptionsSave},
  * DBT-173); the screen's controlled toggle renders from the read, so it
  * shows the stored value again.
+ *
+ * A RUN is refused on the same reads a save is (DBT-180, operator decision
+ * 2026-10-28). The Onboard and Batch screens deploy with the options the
+ * shell hands them, and over a read that did not answer those are the
+ * defaults - so a Run would write real Azure and Cribl config with options
+ * the operator never chose. {@link optionsRunBlockedReason} says why Run is
+ * unavailable, in words the screen shows beside its disabled Run; only a
+ * read that answered ("loaded" or "absent") lets it go. A FAILED SAVE does
+ * not block Run: it leaves the read as it was, and the stored options are
+ * still known.
  *
  * Which answers reject is the adapter's half, not decided here:
  * PlatformSecretsStore.get resolves null for a 404 and the encrypted-value
@@ -87,6 +97,25 @@ export const OPTIONS_SAVE_FAILED_NOTICE =
 
 const OPTIONS_LOADING_NOTICE =
   "Your saved deployment options are still loading; try again in a moment.";
+
+/** Why Run is unavailable while the boot read has not settled (DBT-180). */
+export const OPTIONS_RUN_LOADING_REASON =
+  "Run is unavailable until your saved deployment options finish loading, so the deploy " +
+  "uses the options you chose.";
+
+/**
+ * Why Run is unavailable while the options read is unreadable (DBT-180): the
+ * run would deploy with the defaults, and what to do about it.
+ */
+export const OPTIONS_RUN_UNREADABLE_REASON =
+  "Run is unavailable: your saved deployment options could not be read, so this run would " +
+  "deploy Azure and Cribl configuration with default options you did not choose. Use Retry " +
+  "reading options above; Run unlocks once the read answers.";
+
+/** Why Run is unavailable while a retry of that read is in flight (DBT-180). */
+export const OPTIONS_RUN_RETRYING_REASON =
+  "Run is unavailable while your saved deployment options are being read again; it unlocks " +
+  "if the read answers.";
 
 function reasonText(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
@@ -150,6 +179,27 @@ export function optionsReadFailureLine(read: OptionsRead): string | null {
     return null;
   }
   return `The retry failed too (${read.failures} failed reads in a row): ${read.detail}`;
+}
+
+/**
+ * Whether a deploy may Run on this read (DBT-180): null when it may - the
+ * read answered, "loaded" or "absent", so the options handed to the screen
+ * are the operator's - or the plain-words reason it may not, for the screen
+ * to show beside its disabled Run. "loading", "unreadable" and "retrying"
+ * each refuse with their own reason.
+ */
+export function optionsRunBlockedReason(read: OptionsRead): string | null {
+  switch (read.state) {
+    case "loaded":
+    case "absent":
+      return null;
+    case "loading":
+      return OPTIONS_RUN_LOADING_REASON;
+    case "unreadable":
+      return OPTIONS_RUN_UNREADABLE_REASON;
+    case "retrying":
+      return OPTIONS_RUN_RETRYING_REASON;
+  }
 }
 
 /** Whether an inline save may run: the serialized document to PUT, or why not. */

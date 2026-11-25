@@ -28,6 +28,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -284,5 +285,147 @@ describe("SIEM Migration and the workspace inventory (MIG-10)", () => {
       expect(screen.getByText(/Upload detection rules/i)).toBeTruthy();
     });
     expect(screen.queryByText("Existing Sentinel workspace inventory")).toBeNull();
+  });
+});
+
+/**
+ * A REFUSED PLAN-CACHE WRITE (DBT-181).
+ *
+ * persist() caught a refused write and said nothing, so the bounce-back
+ * restore - the screen's own headline promise - was silently lost: the
+ * operator pivoted to Sentinel Integration, came back, and found an empty
+ * page. And "Clear saved analysis" said "Saved analysis cleared." before the
+ * store had answered, so a refused clear claimed a removal that did not
+ * happen and the analysis came back next visit. A refused write is now said,
+ * per call; "cleared" waits for the store; and only the LATEST write's answer
+ * counts, since an older one refused late describes a plan no longer shown.
+ */
+describe("SiemMigrationScreen - a refused plan-cache write (DBT-181)", () => {
+  const SPLUNK_EXPORT = JSON.stringify({
+    result: {
+      alertrules: [
+        { title: "Okta anomaly", search: "`okta` | stats count", "alert.severity": 2 },
+      ],
+    },
+  });
+  const unsaved = () => document.querySelectorAll(".siem-plan-unsaved");
+
+  function portsWithSet(
+    planJson: string | null,
+    set: (key: string, value: unknown) => Promise<void>,
+  ): UiPorts {
+    return {
+      contentCache: {
+        get: vi.fn(async () => planJson),
+        set: vi.fn(set),
+      },
+      artifacts: { save: vi.fn().mockResolvedValue(undefined) },
+    } as unknown as UiPorts;
+  }
+
+  async function upload() {
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+    if (input === null) throw new Error("no file input");
+    const file = new File([SPLUNK_EXPORT], "savedsearches.json", {
+      type: "application/json",
+    });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+    });
+    await waitFor(() => {
+      expect(screen.getAllByText(/Analysis complete/)).toHaveLength(1);
+    });
+  }
+
+  it("says a fresh analysis could not be saved, with the reason, once", async () => {
+    const ports = portsWithSet(null, async () => {
+      throw new Error("KV write refused (403)");
+    });
+    render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <SiemMigrationScreen onOpenIntegration={vi.fn()} />
+      </PortsProvider>,
+    );
+    await upload();
+    await waitFor(() => {
+      expect(unsaved()).toHaveLength(1);
+    });
+    const text = unsaved()[0].textContent ?? "";
+    expect(text).toContain("KV write refused (403)");
+    expect(text).toMatch(/could not be saved/);
+    expect(text).toMatch(/leaving this screen loses it/);
+    expect(
+      (ports.contentCache as unknown as { set: ReturnType<typeof vi.fn> }).set,
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refused CLEAR never says 'cleared', and says the analysis may come back", async () => {
+    const ports = portsWithSet(serializeMigrationPlan(PLAN), async () => {
+      throw new Error("KV write refused (403)");
+    });
+    render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <SiemMigrationScreen onOpenIntegration={vi.fn()} />
+      </PortsProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getAllByText("Clear saved analysis")).toHaveLength(1);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Clear saved analysis"));
+    });
+    await waitFor(() => {
+      expect(unsaved()).toHaveLength(1);
+    });
+    const text = unsaved()[0].textContent ?? "";
+    expect(text).toContain("KV write refused (403)");
+    expect(text).toMatch(/could not be removed/);
+    expect(screen.queryAllByText("Saved analysis cleared.")).toHaveLength(0);
+  });
+
+  it("says 'cleared' once the store accepts the clear, and nothing else", async () => {
+    const ports = portsWithSet(serializeMigrationPlan(PLAN), async () => undefined);
+    render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <SiemMigrationScreen onOpenIntegration={vi.fn()} />
+      </PortsProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getAllByText("Clear saved analysis")).toHaveLength(1);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Clear saved analysis"));
+    });
+    await waitFor(() => {
+      expect(screen.getAllByText("Saved analysis cleared.")).toHaveLength(1);
+    });
+    expect(unsaved()).toHaveLength(0);
+  });
+
+  it("an older write refused AFTER a newer one landed is not said", async () => {
+    const pending: Array<() => void> = [];
+    let calls = 0;
+    const ports = portsWithSet(null, () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Promise<void>((_resolve, reject) => {
+          pending.push(() => reject(new Error("KV write refused (403)")));
+        });
+      }
+      return Promise.resolve();
+    });
+    render(
+      <PortsProvider ports={ports} config={CONFIG}>
+        <SiemMigrationScreen onOpenIntegration={vi.fn()} />
+      </PortsProvider>,
+    );
+    await upload();
+    await upload();
+    expect(calls).toBe(2);
+    await act(async () => {
+      pending[0]();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(unsaved()).toHaveLength(0);
   });
 });

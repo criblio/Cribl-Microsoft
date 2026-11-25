@@ -12,6 +12,9 @@
  *    between this screen and Sentinel Integration loses nothing (the legacy
  *    kept the plan in volatile React state only). A REFUSED restore read is
  *    said, with its reason, rather than looking like no saved plan (DBT-175).
+ *    A REFUSED write is said too (DBT-181) - a refused save loses the restore,
+ *    a refused clear brings the old analysis back - and "cleared" waits for
+ *    the store's answer.
  *  - PIVOT PER SOLUTION: "Open in Sentinel Integration" writes the EXISTING
  *    solution deep link (buildSolutionDeepLink - the contract preserved for
  *    this exact unit) and navigates via the shell callback; the Integrate
@@ -49,6 +52,7 @@ import type {
 import { usePorts } from "../../ports-context";
 import { buildSolutionDeepLink } from "../solution-browser/browser-state";
 import { InfoTip } from "../../components/info-tip";
+import { useStoreRefusal } from "../../components/use-store-refusal";
 import {
   SIEM_MIGRATION_PLAN_KEY,
   confidenceTone,
@@ -80,6 +84,13 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
   // (DBT-175). "No saved plan" and "could not read the saved plan" render the
   // same empty page and ask different things of the operator.
   const [planReadError, setPlanReadError] = useState("");
+  // The latest plan-cache WRITE the store refused, null while none has
+  // (DBT-181): a refused save loses the bounce-back restore, a refused clear
+  // leaves the old analysis to come back.
+  // Only the latest write's answer counts, and its success takes the note
+  // down (useStoreRefusal "latest", shared with Integrate's selection).
+  const { refusal: planWriteError, track: trackPlanWrite } =
+    useStoreRefusal<"save" | "clear">("latest");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // LAZY per-solution rule enrichment (the 2026-07-14 stall fix: eager
@@ -126,17 +137,21 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
     };
   }, [cache]);
 
+  // Resolves true when THIS write landed and is still the latest one. Never
+  // rejects: the analysis renders either way, and only the bounce-back restore
+  // is affected - but a refusal is SAID (DBT-181), since leaving the screen
+  // then loses the analysis (or, for a clear, brings it back). Only the latest
+  // write's answer counts; an older one refused late describes a plan no
+  // longer on screen.
   const persist = useCallback(
-    (next: MigrationPlan | null) => {
-      if (cache === undefined) return;
-      void cache
-        .set(SIEM_MIGRATION_PLAN_KEY, next === null ? "" : serializeMigrationPlan(next))
-        .catch(() => {
-          // Best-effort: the analysis still renders; only the bounce-back
-          // restore is affected, and the next analyze retries the write.
-        });
+    (next: MigrationPlan | null): Promise<boolean> => {
+      if (cache === undefined) return Promise.resolve(true);
+      return trackPlanWrite(
+        cache.set(SIEM_MIGRATION_PLAN_KEY, next === null ? "" : serializeMigrationPlan(next)),
+        next === null ? "clear" : "save",
+      );
     },
-    [cache],
+    [cache, trackPlanWrite],
   );
 
   const analyze = useCallback(
@@ -157,7 +172,7 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
           { content, platform: detected, fileName },
         );
         setPlan(produced);
-        persist(produced);
+        void persist(produced);
         setNotice(
           "Analysis complete. Load each solution's Sentinel rules on its card below (fetched on demand).",
         );
@@ -206,7 +221,7 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
         setLoadedSolutions(new Set(rulesBySolutionRef.current.keys()));
         const next = enrichPlanWithAnalyticRules(plan, rulesBySolutionRef.current);
         setPlan(next);
-        persist(next);
+        void persist(next);
         setEnrichProgress((p) => {
           const { [key]: _done, ...rest } = p;
           return rest;
@@ -272,8 +287,12 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
     rulesBySolutionRef.current = new Map();
     setLoadedSolutions(new Set());
     setEnrichProgress({});
-    setNotice("Saved analysis cleared.");
-    persist(null);
+    // "Cleared" waits for the store (DBT-181): said before it answered, a
+    // refused clear claimed a removal that did not happen.
+    setNotice("");
+    void persist(null).then((cleared) => {
+      if (cleared) setNotice("Saved analysis cleared.");
+    });
   }, [persist]);
 
   return (
@@ -328,6 +347,16 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
           <p className="field-hint siem-plan-unread" role="status">
             A saved analysis could not be read ({planReadError}), so none was
             restored. Uploading the export again re-analyzes it.
+          </p>
+        )}
+        {planWriteError !== null && (
+          <p className="field-hint siem-plan-unsaved" role="status">
+            {planWriteError.action === "save"
+              ? `This analysis could not be saved (${planWriteError.reason}). ` +
+                "It is shown now, but leaving this screen loses it; analyzing " +
+                "again or loading a solution's rules retries the save."
+              : `The saved analysis could not be removed (${planWriteError.reason}), ` +
+                "so it may be restored the next time this screen opens."}
           </p>
         )}
       </section>

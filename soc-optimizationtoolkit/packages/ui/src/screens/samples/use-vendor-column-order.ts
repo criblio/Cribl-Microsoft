@@ -33,6 +33,14 @@
  * nothing, and found them gone next session. The hook now keeps the LAST
  * refusal - which call, and why - for the screen to say; the pre-fill and the
  * apply carry on exactly as before.
+ *
+ * A LATE REFUSAL KEEPS ITS SCOPE (DBT-181). remember and forget do not wait
+ * for the store, so a refusal can land after the operator has moved to the
+ * next vendor or log type. It is said only while the scope it was asked under
+ * is still current; otherwise it would describe an order nobody named here.
+ * A later successful remember or forget takes the note down, since either
+ * rewrites the slot (DBT-181 review). Both rules are useStoreRefusal's
+ * "scope" mode, shared with the learned-mappings hook.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -48,6 +56,7 @@ import type {
   ResolvedColumnOrder,
   VendorFieldDefinition,
 } from "@soc/core";
+import { useStoreRefusal } from "../../components/use-store-refusal";
 
 /** Which store call was refused, and why (DBT-175). */
 export interface ColumnOrderRefusal {
@@ -128,14 +137,18 @@ export function useVendorColumnOrder(
   const key = vendorFieldDefinitionKey(vendor, logType);
   const [stored, setStored] = useState<VendorFieldDefinition | null>(null);
   const [loading, setLoading] = useState(false);
-  const [storeRefused, setStoreRefused] = useState<ColumnOrderRefusal | null>(
-    null,
-  );
+  const {
+    refusal: storeRefused,
+    track,
+    refuse,
+    reset,
+  } = useStoreRefusal<ColumnOrderRefusal["action"]>("scope");
 
   useEffect(() => {
     let cancelled = false;
+    // A new scope: earlier answers no longer describe anything on screen.
+    reset();
     setStored(null);
-    setStoreRefused(null);
     if (cache === undefined || key === null) {
       setLoading(false);
       return;
@@ -152,7 +165,7 @@ export function useVendorColumnOrder(
         // order still pre-fills and the operator can still supply their own.
         // It is KEPT, not swallowed (DBT-175): a saved order may exist.
         if (!cancelled) {
-          setStoreRefused({ action: "read", reason: String(err) });
+          refuse("read", err);
         }
       } finally {
         if (!cancelled) {
@@ -163,7 +176,7 @@ export function useVendorColumnOrder(
     return () => {
       cancelled = true;
     };
-  }, [cache, key, vendor, logType]);
+  }, [cache, key, vendor, logType, reset, refuse]);
 
   const resolved = useMemo(
     () => resolveColumnOrder(vendor, logType, stored),
@@ -190,12 +203,11 @@ export function useVendorColumnOrder(
       }
       setStored(definition);
       // A refused write is a skip - the order is in hand and applies - but
-      // it is said, since it will not be there next session (DBT-175).
-      void cache.set(key, definition).catch((err: unknown) => {
-        setStoreRefused({ action: "remember", reason: String(err) });
-      });
+      // it is said, since it will not be there next session (DBT-175) -
+      // for the scope it was asked under only (DBT-181).
+      void track(cache.set(key, definition), "remember", ["remember", "forget"]);
     },
-    [cache, key, vendor, logType],
+    [cache, key, vendor, logType, track],
   );
 
   const forget = useCallback(() => {
@@ -205,10 +217,8 @@ export function useVendorColumnOrder(
     }
     // Written as null rather than deleted: the port has no delete, and a stored
     // null decodes as absent, so the bundled order answers again.
-    void cache.set(key, null).catch((err: unknown) => {
-      setStoreRefused({ action: "forget", reason: String(err) });
-    });
-  }, [cache, key]);
+    void track(cache.set(key, null), "forget", ["forget", "remember"]);
+  }, [cache, key, track]);
 
   return { resolved, notice, loading, remember, forget, storeRefused };
 }

@@ -5,10 +5,14 @@ import {
   OPTIONS_SAVE_FAILED_NOTICE,
   OPTIONS_UNREADABLE_NOTICE,
   OPTIONS_LOADING,
+  OPTIONS_RUN_LOADING_REASON,
+  OPTIONS_RUN_RETRYING_REASON,
+  OPTIONS_RUN_UNREADABLE_REASON,
   beginOptionsRetry,
   optionsReadFailureLine,
   optionsReadFromSettled,
   optionsReadFromSave,
+  optionsRunBlockedReason,
   planOptionsSave,
   settleOptionsSave,
 } from "./options-read";
@@ -356,5 +360,50 @@ describe("options read retry (DBT-173)", () => {
     expect(optionsReadFailureLine(retry(again))).toBe(
       "The retry failed too (2 failed reads in a row): GET kvstore/appOptions: HTTP 502",
     );
+  });
+});
+
+describe("optionsRunBlockedReason (DBT-180)", () => {
+  // A Run deploys with the options it was handed. Over a read that did not
+  // answer those are the defaults, not the operator's - and the deploy writes
+  // real Azure and Cribl config - so only a read that ANSWERED lets Run go.
+  const unreadable = optionsReadFromSettled(REFUSED);
+
+  it("a loaded read lets Run go", () => {
+    expect(optionsRunBlockedReason(optionsReadFromSettled({ status: "fulfilled", value: SAVED_RAW }))).toBeNull();
+  });
+
+  it("an absent read lets Run go - the defaults ARE the operator's options", () => {
+    expect(optionsRunBlockedReason(optionsReadFromSettled({ status: "fulfilled", value: null }))).toBeNull();
+  });
+
+  it("a read that has not settled refuses, saying it is still loading", () => {
+    expect(optionsRunBlockedReason(OPTIONS_LOADING)).toBe(OPTIONS_RUN_LOADING_REASON);
+  });
+
+  it("an unreadable read refuses, saying the run would use options the operator did not choose", () => {
+    expect(optionsRunBlockedReason(unreadable)).toBe(OPTIONS_RUN_UNREADABLE_REASON);
+    expect(OPTIONS_RUN_UNREADABLE_REASON).toContain("you did not choose");
+    expect(OPTIONS_RUN_UNREADABLE_REASON).toContain("Retry reading options");
+  });
+
+  it("a retry in flight refuses too, with its own reason", () => {
+    const retrying = beginOptionsRetry(unreadable);
+    expect(retrying).not.toBeNull();
+    expect(optionsRunBlockedReason(retrying as OptionsRead)).toBe(OPTIONS_RUN_RETRYING_REASON);
+  });
+
+  it("every refusal is its own plain sentence", () => {
+    const reasons = [OPTIONS_RUN_LOADING_REASON, OPTIONS_RUN_UNREADABLE_REASON, OPTIONS_RUN_RETRYING_REASON];
+    expect(new Set(reasons).size).toBe(3);
+    for (const reason of reasons) {
+      expect(reason.trim().length).toBeGreaterThan(40);
+    }
+  });
+
+  it("a failed save leaves a loaded read able to Run - the stored options are still known", () => {
+    const loaded = optionsReadFromSettled({ status: "fulfilled", value: SAVED_RAW });
+    const after = settleOptionsSave(loaded, "{}", { status: "rejected", reason: new Error("HTTP 500") });
+    expect(optionsRunBlockedReason(after.read)).toBeNull();
   });
 });

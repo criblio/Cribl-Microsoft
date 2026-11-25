@@ -303,13 +303,19 @@ export async function loadCachedCapabilities(
  * nothing to merge over, and writing the incoming set alone would erase
  * whatever the other writer measured - the defect this exists to prevent. The
  * skipped write costs at most a re-audit.
+ *
+ * A REFUSAL CAN BE SAID (DBT-181). Never rejects - neither caller waits on the
+ * store - but `options.onRefused` receives the reason when the record was not
+ * kept, whether the read-before-merge or the write was refused, so a screen
+ * that ran the check can say so instead of it only reaching the log. No cache
+ * bound is not a refusal: nothing was asked.
  */
 export async function saveCapabilityAudit(
   cache: ContentCache | undefined,
   set: CapabilitySet,
   tenantId: string,
   logger?: Logger,
-  options: { supersede?: boolean } = {},
+  options: { supersede?: boolean; onRefused?: (reason: string) => void } = {},
 ): Promise<CapabilitySet> {
   if (cache === undefined) {
     return set;
@@ -322,6 +328,7 @@ export async function saveCapabilityAudit(
     logger?.info("capability-audit: cache read before write failed; not writing", {
       error: errText(err),
     });
+    options.onRefused?.(errText(err));
     return set;
   }
   const merged =
@@ -330,6 +337,7 @@ export async function saveCapabilityAudit(
     await cache.set(key, serializeCapabilitySet(merged));
   } catch (err) {
     logger?.info("capability-audit: cache write failed", { error: errText(err) });
+    options.onRefused?.(errText(err));
   }
   return merged;
 }

@@ -344,3 +344,104 @@ describe("describeColumnOrderRefusal (DBT-175)", () => {
     expect(new Set([read, remember, forget]).size).toBe(3);
   });
 });
+
+/**
+ * A LATE REFUSAL BELONGS TO THE SCOPE IT WAS ASKED UNDER (DBT-181).
+ *
+ * remember and forget are fire-and-forget writes. DBT-175 kept their refusal,
+ * but kept it for whatever scope was current when the store ANSWERED: a write
+ * refused after the operator moved to the next log type set storeRefused on
+ * that next scope, whose own read had just been asked fresh - so the screen
+ * said "this column order could not be saved" about an order nobody had named.
+ */
+describe("useVendorColumnOrder - a late refusal after a scope change (DBT-181)", () => {
+  /** A cache whose writes wait to be refused by hand, and whose reads answer. */
+  function slowRefusingCache() {
+    const inner = new FakeContentCache();
+    const pending: Array<() => void> = [];
+    const cache = {
+      get: async (key: string) => inner.get(key),
+      set: () =>
+        new Promise<void>((_resolve, reject) => {
+          pending.push(() => reject(new Error("KV write refused (403)")));
+        }),
+    } as unknown as ContentCache;
+    return { cache, pending };
+  }
+
+  function mountMovable(cache: ContentCache, logType: string) {
+    const seen: { current: VendorColumnOrderState | null } = { current: null };
+    function Probe({ lt }: { lt: string }) {
+      seen.current = useVendorColumnOrder(cache, PANOS, lt);
+      return null;
+    }
+    const view = render(<Probe lt={logType} />);
+    return {
+      seen,
+      move: (lt: string) => view.rerender(<Probe lt={lt} />),
+    };
+  }
+
+  for (const call of ["remember", "forget"] as const) {
+    it(`a ${call} refused AFTER the scope moved is not said about the next scope`, async () => {
+      const { cache, pending } = slowRefusingCache();
+      const { seen, move } = mountMovable(cache, "TRAFFIC");
+      await waitFor(() => expect(seen.current?.loading).toBe(false));
+      act(() => {
+        if (call === "remember") seen.current?.remember(operatorTraffic());
+        else seen.current?.forget();
+      });
+      expect(pending).toHaveLength(1);
+      move("THREAT");
+      await waitFor(() => expect(seen.current?.loading).toBe(false));
+      await act(async () => {
+        pending[0]();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(seen.current?.storeRefused).toBeNull();
+    });
+  }
+
+  it("a refusal that lands while the scope is unchanged is still said", async () => {
+    const { cache, pending } = slowRefusingCache();
+    const { seen } = mountMovable(cache, "TRAFFIC");
+    await waitFor(() => expect(seen.current?.loading).toBe(false));
+    act(() => seen.current?.remember(operatorTraffic()));
+    expect(pending).toHaveLength(1);
+    await act(async () => {
+      pending[0]();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(seen.current?.storeRefused).toEqual({
+      action: "remember",
+      reason: "Error: KV write refused (403)",
+    });
+  });
+
+  // DBT-181 review (A5): a note describes the store as it is NOW, so the next
+  // successful write of the same slot takes it down, as on Integrate and SIEM.
+  for (const call of ["remember", "forget"] as const) {
+    it(`a later successful ${call} clears the refusal`, async () => {
+      const inner = new FakeContentCache();
+      let refuse = true;
+      const cache = {
+        get: async (key: string) => inner.get(key),
+        set: async (key: string, value: unknown) => {
+          if (refuse) throw new Error("KV write refused (403)");
+          await inner.set(key, value);
+        },
+      } as unknown as ContentCache;
+      const { seen } = mountMovable(cache, "TRAFFIC");
+      await waitFor(() => expect(seen.current?.loading).toBe(false));
+      const ask = () => {
+        if (call === "remember") seen.current?.remember(operatorTraffic());
+        else seen.current?.forget();
+      };
+      act(ask);
+      await waitFor(() => expect(seen.current?.storeRefused?.action).toBe(call));
+      refuse = false;
+      act(ask);
+      await waitFor(() => expect(seen.current?.storeRefused).toBeNull());
+    });
+  }
+});

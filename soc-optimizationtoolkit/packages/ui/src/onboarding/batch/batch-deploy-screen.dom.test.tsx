@@ -99,7 +99,7 @@ function batchPorts() {
   } as unknown as UiPorts;
 }
 
-function renderBatch(capabilities: CapabilitySet) {
+function renderBatch(capabilities: CapabilitySet, runDisabledReason?: string) {
   const ports = batchPorts();
   render(
     // D-3: the audit reaches the screen through PortsContext, not props.
@@ -109,7 +109,7 @@ function renderBatch(capabilities: CapabilitySet) {
       capabilities={capabilities}
       capabilityContext={CONNECTED}
     >
-      <BatchDeployScreen pacing={PACING} />
+      <BatchDeployScreen pacing={PACING} runDisabledReason={runDisabledReason} />
     </PortsProvider>,
   );
   return ports;
@@ -203,6 +203,53 @@ describe("BatchDeployScreen - the blocked write offers an artifact", () => {
     listOneTable();
     expect(buttonMatching(/download the arm request bodies/i)).toBeUndefined();
     expect(buttonMatching(new RegExp(FALLBACK_POINTER_LABEL, "i"))).toBeUndefined();
+  });
+});
+
+/**
+ * DBT-180: a Run refusal the SHELL holds - the options this screen was handed
+ * are not known to be the operator's - disables both ways this screen starts
+ * a run, and says why. The shell's half (which reads refuse) is pinned in
+ * options-read.test.ts and the wiring in the cribl-app App.dom.test.tsx.
+ */
+describe("BatchDeployScreen - a shell-held Run refusal (DBT-180)", () => {
+  const REASON = "Run is unavailable: the options could not be read.";
+
+  it("Run is enabled with a table and a group listed and no refusal held", async () => {
+    renderBatch(emptyCapabilitySet());
+    listOneTable();
+    await waitFor(() => expect(buttonMatching(/^Run batch onboarding$/)?.disabled).toBe(false));
+    expect(screen.queryByText(REASON)).toBeNull();
+    expect(buttonMatching(/^Run batch onboarding$/)!.hasAttribute("aria-describedby")).toBe(false);
+  });
+
+  it("a refusal disables Run with everything else ready, and says why beside it", async () => {
+    const ports = renderBatch(emptyCapabilitySet(), REASON);
+    listOneTable();
+    // The group listing has to land first, or Run is disabled for that.
+    await waitFor(() =>
+      expect((ports.cribl as unknown as { listGroups: ReturnType<typeof vi.fn> }).listGroups).toHaveBeenCalled(),
+    );
+    await waitFor(() => expect(screen.getByText("default")).toBeTruthy());
+    const run = buttonMatching(/^Run batch onboarding$/)!;
+    expect(run.disabled).toBe(true);
+    expect(run.title).toBe(REASON);
+    const hints = [...run.parentElement!.querySelectorAll(".field-hint")].map((el) => el.textContent);
+    expect(hints).toEqual([REASON]);
+    // The hint is the button's accessible description, not just nearby text.
+    const describedBy = run.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent).toBe(REASON);
+  });
+
+  it("the fallback offer's run is refused too, with the same reason", () => {
+    const ports = renderBatch(auditedDenied("dcr.write"), REASON);
+    listOneTable();
+    const offer = buttonMatching(/download the arm request bodies/i)!;
+    expect(offer.disabled).toBe(true);
+    expect(offer.getAttribute("title")).toBe(REASON);
+    fireEvent.click(offer);
+    expect((ports.jobs as unknown as { create: ReturnType<typeof vi.fn> }).create).not.toHaveBeenCalled();
   });
 });
 

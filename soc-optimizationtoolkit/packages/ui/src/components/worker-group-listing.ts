@@ -100,20 +100,50 @@ export function streamGroupRows(state: WorkerGroupsState): readonly CriblGroupSu
 
 /**
  * Preselect a group once the listing lands: the saved default when it is in
- * the live list, else the first listed group - and never over a choice the
- * operator (or an earlier load) already made.
+ * the live list, else the first listed group.
+ *
+ * The pick stays AUTOMATIC until something else sets the group, and an
+ * automatic pick follows a preferred group that arrives later: the saved
+ * default comes from the appOptions read, which can answer after the listing
+ * (still loading, or unreadable until a Retry answered). Keeping the
+ * first-row pick made then sent a Run to rows[0] instead of the operator's
+ * saved group (DBT-180 review). A group chosen by hand - through the returned
+ * `chooseGroup`, even one equal to the automatic pick - or set by the screen
+ * itself is never replaced.
+ *
+ * Returns `chooseGroup`, the setter a picker's onChange should call so a hand
+ * choice is known as one.
  */
 export function useInitialWorkerGroup(
   state: WorkerGroupsState,
   preferred: string,
   setGroupId: (update: (current: string) => string) => void,
-): void {
+): (id: string) => void {
+  // The group this hook last picked, and whether the operator has chosen by
+  // hand since. Refs, because neither is rendered.
+  const autoPick = useRef<string | null>(null);
+  const chosenByHand = useRef(false);
+
   useEffect(() => {
     const rows = streamGroupRows(state);
-    if (rows.length === 0) return;
+    if (rows.length === 0 || chosenByHand.current) return;
     const pick = rows.some((g) => g.id === preferred) ? preferred : rows[0]!.id;
-    setGroupId((current) => (current !== "" ? current : pick));
+    setGroupId((current) => {
+      if (current === "" || current === autoPick.current) {
+        autoPick.current = pick;
+        return pick;
+      }
+      return current;
+    });
   }, [state, preferred, setGroupId]);
+
+  return useCallback(
+    (id: string) => {
+      chosenByHand.current = true;
+      setGroupId(() => id);
+    },
+    [setGroupId],
+  );
 }
 
 /**

@@ -274,7 +274,7 @@ function LiveArchitecturePanel({
   // (DBT-134), is WorkerGroupField's to render. Stream worker groups only.
   const workerGroups = useStreamWorkerGroups(cribl, { auto: false });
   const [groupId, setGroupId] = useState("");
-  useInitialWorkerGroup(workerGroups.state, "", setGroupId);
+  const chooseGroup = useInitialWorkerGroup(workerGroups.state, "", setGroupId);
   const [liveError, setLiveError] = useState("");
   const [loading, setLoading] = useState(false);
   const [snapshot, setSnapshot] = useState<LiveArchitectureSnapshot | null>(null);
@@ -391,7 +391,7 @@ function LiveArchitecturePanel({
               label="Worker group"
               options={groups.map((group) => ({ value: group.id, label: group.id }))}
               value={groupId}
-              onChange={setGroupId}
+              onChange={chooseGroup}
             />
           )}
         </WorkerGroupField>

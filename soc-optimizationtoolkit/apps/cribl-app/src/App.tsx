@@ -2,6 +2,7 @@ import { clearNotice } from './clear-notice';
 import { connectionIncompleteText, secretNotice as secretNoticeFor } from './connection-notices';
 import type { SecretProbe } from './connection-notices';
 import { JOURNEY_LINKS, SETUP_CONNECT_ANCHOR, SETUP_GITHUB_ANCHOR } from './journey-links';
+import { saveOperationOptions } from './options-save';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
@@ -47,8 +48,7 @@ import {
   beginOptionsRetry,
   optionsReadFailureLine,
   optionsReadFromSettled,
-  planOptionsSave,
-  settleOptionsSave,
+  optionsRunBlockedReason,
   resolveFramePhase,
   useCapabilityAudit,
   useConsolidatedPolling,
@@ -810,24 +810,18 @@ function App() {
   // settleOptionsSave keeps the read as it was, so the controlled toggle shows
   // the stored value again, and the notice says the change was not saved
   // (DBT-173). The dedicated Options screen was RETIRED (2026-07-14); this is
-  // the only options write the shell owns.
+  // the only options write the shell owns. The save itself lives in
+  // options-save.ts, where its refusal is pinned (DBT-188).
   const persistOperation = useCallback(
     (operation: OperationOptions) => {
-      const plan = planOptionsSave(optionsRead, { operation });
-      if (plan.kind === 'refused') {
-        setOptionsSaveNotice(plan.reason);
-        return;
-      }
-      setOptionsSaveNotice(null);
-      void (async () => {
-        const [result] = await Promise.allSettled([
-          appStateStore.set(APP_OPTIONS_KEY, plan.serialized),
-        ]);
-        // The read settles against the CURRENT state (another save may have
-        // landed meanwhile); the notice depends only on the PUT's result.
-        setOptionsRead((current) => settleOptionsSave(current, plan.serialized, result).read);
-        setOptionsSaveNotice(settleOptionsSave(optionsRead, plan.serialized, result).notice);
-      })();
+      void saveOperationOptions({
+        read: optionsRead,
+        operation,
+        store: appStateStore,
+        key: APP_OPTIONS_KEY,
+        setRead: setOptionsRead,
+        setNotice: setOptionsSaveNotice,
+      });
     },
     [optionsRead],
   );
@@ -2049,6 +2043,12 @@ function App() {
   ) : optionsSaveNotice !== null ? (
     <p className="connection-notice" role="status">{optionsSaveNotice}</p>
   ) : null;
+  // The Run refusal Onboard and Batch carry while that read has not answered
+  // (DBT-180, operator decision 2026-10-28): they deploy with the options
+  // handed to them, which are then the defaults, and a deploy writes real
+  // Azure and Cribl config. Undefined when the read answered. The screens
+  // show it beside their disabled Run; optionsNotice above holds the Retry.
+  const optionsRunRefusal = optionsRunBlockedReason(optionsRead) ?? undefined;
 
   // The Integrate route (legacy-flow-analysis.md single-page decision): THE
   // MVP centerpiece - the single-page Integrate flagship composing the built
@@ -2137,6 +2137,7 @@ function App() {
               initialTable={prefillTable}
               criblDefaults={appOptions.cribl}
               operationDefaults={appOptions.operation}
+              runDisabledReason={optionsRunRefusal}
               roleGuidance={ROLE_GUIDANCE}
             />
           </PortsProvider>
@@ -2187,6 +2188,7 @@ function App() {
               pacing={BATCH_PACING}
               operationDefaults={appOptions.operation}
               criblDefaults={appOptions.cribl}
+              runDisabledReason={optionsRunRefusal}
               // HON-7 wired the measured audit into this screen so its
               // dcr.write/table.write fallback offers could reach production.
               // D-3 moved the audit onto portsProviderProps above, so the wire
