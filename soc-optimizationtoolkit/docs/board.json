@@ -2404,19 +2404,60 @@
       "dependsOn": [],
       "id": "DBT-180",
       "title": "Onboard and Batch refuse to Run while the options read is unreadable",
-      "detail": "OPERATOR DECISION 2026-10-28 (on DBT-158): block Run while appOptions is unreadable or retrying. Today Onboard and Batch deploy with DEFAULT_APP_OPTIONS (App.tsx passes them ~1928 and ~1988) under the DBT-158 notice. FIX: derive a run gate from OptionsRead (packages/ui/src/frame/options-read.ts), disable Run with the reason and the Retry, pin it."
+      "detail": "OPERATOR DECISION 2026-10-28 (on DBT-158): block Run while appOptions is unreadable or retrying. Today Onboard and Batch deploy with DEFAULT_APP_OPTIONS (App.tsx passes them ~1928 and ~1988) under the DBT-158 notice. FIX: derive a run gate from OptionsRead (packages/ui/src/frame/options-read.ts), disable Run with the reason and the Retry, pin it.\n\nBUILT 2026-11-25 (pins): Onboard and Batch refuse Run with a reason (aria-describedby) while appOptions is loading, unreadable or retrying; a failed save does not block; absent (first run) runs. Review found Retry unlocked Run with the defaults-era worker group; fixed (automatic picks yield to the saved group, hand choices never overridden). Integrate's deploy is the follow-up card per the operator's 2026-11-25 decision. STILL OPEN: Live Preview check - with a refused appOptions GET, Run disabled with the reason, Retry unlocks it, saved worker group selected."
+    },
+    {
+      "id": "DBT-310",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "story",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [
+        "DBT-180"
+      ],
+      "priority": "now",
+      "title": "Integrate's deploy refuses to run while the options read is unreadable or retrying, as Onboard and Batch do",
+      "detail": "OPERATOR DECISION 2026-11-25 (asked after the DBT-180 review): block it too. Integrate passes criblDefaults and operationDefaults from appOptions into its deploys (destination naming, retention, createDCE and operation options; App.tsx ~2094 and integrate-screen.tsx deploy paths), so with the read unreadable 'Deploy everything' writes real config with defaults the operator did not choose. DBT-180 gated only Onboard and Batch, as its decision was worded. FIX: pass optionsRunBlockedReason to Integrate and disable every deploy action with the reason (aria-describedby hint) and the existing Retry; pin on the screen and on the frame."
     },
     {
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "id": "DBT-181",
       "title": "Five more KV calls swallow a refused read or write",
-      "detail": "FOUND 2026-10-28 by the DBT-175 implementer/reviewer (pre-existing unless said). integrate-screen.tsx:686-689 (selected-solution write, .catch(() => undefined)) and :757 (its restore read, which reads as no selection); mapping-review-hooks.ts:64 (learned-mappings read), :93-95 and :105-107 (persist and forget writes: approved edits silently not learned, Forget silently does nothing); siem-migration-screen.tsx:134 persist(); rbac-preflight-panel.tsx:275 void saveCapabilityAudit (deliberate and logged, but nothing on screen). Also use-vendor-column-order.ts:194-196/:208-210 can record a late refusal under a scope it no longer belongs to. FIX each per the DBT-159/175 pattern; pin each."
+      "detail": "FOUND 2026-10-28 by the DBT-175 implementer/reviewer (pre-existing unless said). integrate-screen.tsx:686-689 (selected-solution write, .catch(() => undefined)) and :757 (its restore read, which reads as no selection); mapping-review-hooks.ts:64 (learned-mappings read), :93-95 and :105-107 (persist and forget writes: approved edits silently not learned, Forget silently does nothing); siem-migration-screen.tsx:134 persist(); rbac-preflight-panel.tsx:275 void saveCapabilityAudit (deliberate and logged, but nothing on screen). Also use-vendor-column-order.ts:194-196/:208-210 can record a late refusal under a scope it no longer belongs to. FIX each per the DBT-159/175 pattern; pin each.\n\nDONE 2026-11-25: all five sites report a refused read or write; reviewed independently, which found and fixed Clear writing over unread decisions and a re-read dropping unsaved edits; learn/clear serialized; one shared useStoreRefusal hook for the latest-write and scope patterns. Follow-ups filed from the review.",
+      "verified": "pins"
+    },
+    {
+      "id": "DBT-311",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "next",
+      "title": "After a refused restore read, Integrate's first pick is treated as the initial pick and the stored solution's samples are not retired",
+      "detail": "FOUND 2026-11-25 by the independent review of DBT-181 (pre-existing). integrate-screen.tsx ~866-891: a refused selected-solution restore read leaves prevSolutionRef null, so the next pick takes the initial-pick branch and skips retiring samples tagged for the previously stored solution; they can carry over. The DBT-181 note says picking works as usual, which is only mostly true. FIX: treat an unreadable stored selection as 'unknown previous' and retire or flag solution-tagged samples on the first pick; pin it.",
+      "priorityWhy": "Conservative direction: nothing stored is overwritten, and it needs a refused KV read at the moment of restore followed by a pick of a different solution. The carried samples are visible in the sample list and can be removed."
+    },
+    {
+      "id": "DBT-312",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "next",
+      "title": "Two more KV calls swallow a refusal: the section-folding pin write and an adapter cleanup delete",
+      "detail": "FOUND 2026-11-25 by the independent review of DBT-181. components/section-folding/use-section-folding.ts:113 swallows a refused pin write ('Best effort'), so a pinned section silently does not stay pinned; apps/cribl-app/src/platform/adapters.ts:1783 swallows a cleanup kvDelete, so a leftover key is never reported. FIX per the DBT-159/175 pattern, or record why each is deliberately best-effort in a comment the next audit can see; pin each.",
+      "priorityWhy": "Neither loses operator data: one is a UI preference (section pinning) and the other a cleanup of a key the app owns. The DBT-181 sites wrote over or hid real data and came first."
     },
     {
       "epic": "DBT",
@@ -2503,13 +2544,14 @@
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "id": "DBT-188",
       "title": "DBT-158's shell wiring has no pin",
-      "detail": "FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce), adversarially verified. options-read.ts's decisions are pinned, but App.tsx's use of them is not: the notice on Integrate/Onboard/Batch (App.tsx ~1845, 1903, 1963), Retry re-reading only appOptions, persistOperation refusing, the DCE checkbox going read-only. A wiring regression would pass every test. FIX: a DOM pin of the frame with a refused appOptions read (DBT-180 adds the Run gate to the same path)."
+      "detail": "FOUND 2026-10-28 by the delta architecture audit (451ae85..bba48ce), adversarially verified. options-read.ts's decisions are pinned, but App.tsx's use of them is not: the notice on Integrate/Onboard/Batch (App.tsx ~1845, 1903, 1963), Retry re-reading only appOptions, persistOperation refusing, the DCE checkbox going read-only. A wiring regression would pass every test. FIX: a DOM pin of the frame with a refused appOptions read (DBT-180 adds the Run gate to the same path).\n\nDONE 2026-11-25: App.dom.test.tsx mounts the frame with a refused appOptions read (notice on Integrate/Onboard/Batch, Retry re-reads only appOptions, DCE toggle read-only, Run gate, saved worker group restored after Retry); persistOperation's refusal pinned through options-save.ts.",
+      "verified": "pins"
     },
     {
       "epic": "DBT",
@@ -2531,12 +2573,38 @@
       "epic": "DBT",
       "feature": "DBT-F1",
       "type": "bug",
-      "status": "in-progress",
+      "status": "done",
       "priority": "now",
       "settled": "settled",
       "dependsOn": [],
       "title": "The capture warning reads __inputId clauses, not the boolean structure around them",
-      "detail": "FOUND 2026-10-28 by the DBT-169 reviewer (all but one also in the base). captureFilterWarning (capture-filter.ts:220) finds clauses and ignores what surrounds them: (1) negation is silent - !(__inputId=='syslog:in_syslog') captures everything except the selected source; (2) a filter naming two inputs is silent - a || of two typed clauses, or ['http:in_http','syslog:in_syslog'].includes(__inputId), which a DBT-169 pin currently pins as silent; (3) endsWith(':in_syslog') gets the false 'references __inputId but not in_syslog' wording (new in DBT-169); (4) the reversed comparison 'syslog:in_syslog' == __inputId gets the different-source warning, and my__inputId==... is silent (no word boundary); (5) an id containing a double quote makes the app warn about its own filter (input-id.ts:95 reads no backslash escapes). FIX: warn on negation and on any clause naming another input; word-boundary the patterns; accept the reversed form; true wording for endsWith; repin the includes case."
+      "detail": "FOUND 2026-10-28 by the DBT-169 reviewer (all but one also in the base). captureFilterWarning (capture-filter.ts:220) finds clauses and ignores what surrounds them: (1) negation is silent - !(__inputId=='syslog:in_syslog') captures everything except the selected source; (2) a filter naming two inputs is silent - a || of two typed clauses, or ['http:in_http','syslog:in_syslog'].includes(__inputId), which a DBT-169 pin currently pins as silent; (3) endsWith(':in_syslog') gets the false 'references __inputId but not in_syslog' wording (new in DBT-169); (4) the reversed comparison 'syslog:in_syslog' == __inputId gets the different-source warning, and my__inputId==... is silent (no word boundary); (5) an id containing a double quote makes the app warn about its own filter (input-id.ts:95 reads no backslash escapes). FIX: warn on negation and on any clause naming another input; word-boundary the patterns; accept the reversed form; true wording for endsWith; repin the includes case.\n\nDONE 2026-11-25 (PR for DBT-180/181/190): the October commit rebased, reviewed independently twice; 6 more silent cases fixed in an adversarial pass (negated other source, template substitutions, comments, non-literal includes lists, __inputId in strings/regex/templates), then postfix ++/-- before /, __e.__inputId as the field, typeof-guard wording and sender prefixes. One namesInputIdField definition. Follow-ups filed from the review.",
+      "verified": "pins"
+    },
+    {
+      "id": "DBT-308",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "now",
+      "title": "A capture filter that matches none of a segmented source's events is silent: the capture looks like an empty source",
+      "detail": "FOUND 2026-11-25 by the independent review of DBT-190 (pre-existing, same on the base). For a segmented input type (syslog, http), __inputId carries <type>:<id>:<sender>, so an equality on '<type>:<id>' matches none of its events - input-id.ts says so itself. Yet `__inputId === 'syslog:in_syslog'`, `['syslog:in_syslog'].includes(__inputId)` and `__inputId.startsWith('syslog:in_syslog:') && __inputId.endsWith(':in_syslog')` draw no warning; matchInputIdFilter answers match. The operator sees an empty capture and concludes the source sends nothing. FIX: for a segmented type, an equality or literal list on the bare <type>:<id> (or a contradiction like the endsWith case) warns that the filter matches none of this source's events, with the startsWith form to use instead; pin each."
+    },
+    {
+      "id": "DBT-309",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "later",
+      "title": "With no source type, the capture warning says only 'type unknown' when the filter plainly names another source",
+      "detail": "FOUND 2026-11-25 by the independent review of DBT-190. With no type, `__inputId.startsWith('syslog:in_syslog:') || __inputId=='http:in_http'` gets the type-unknown message because it is checked before the other-source message. FIX: when another source is named, say that too.",
+      "priorityWhy": "Not silent: the operator is already told the filter cannot be checked, so nothing is trusted that should not be. Only the second reason is missing, and the typed case (the common one, since the app knows the type of every source it picks) already warns correctly."
     },
     {
       "id": "AZR-22",
