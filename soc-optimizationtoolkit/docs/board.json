@@ -1972,6 +1972,32 @@
       "detail": "FOUND 2026-11-25 by the independent review of PR #241 (DBT-306). classifyDiagnosticSettingRemoval refused a blank scope but still compared the recorded rule with sameArmId, so a record with ruleId \"\" matched a setting whose ruleId is \"\" (no Event Hub destination) and proved ownership. The writer always records namespaceRuleResourceId(...), never blank, so only a hand-edited or damaged KV record reaches it. FIXED: a blank recorded rule is not-proven with its own reason, for both Activity Log and Entra ID; pin written first and seen failing. Same PR: the heat-map design doc goes back to Proposed (the review noted Living would exempt its unbuilt phases 2-5 from expiry)."
     },
     {
+      "id": "DBT-315",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "story",
+      "status": "done",
+      "priority": "now",
+      "settled": "settled",
+      "dependsOn": [],
+      "verified": "pins",
+      "title": "Remove two dead core exports: criblUiBaseFromLeaderUrl and sameDeletions",
+      "detail": "FOUND 2026-11-25 by the architecture audit of 857b05b8..9eb2fca7 (both pre-existing). criblUiBaseFromLeaderUrl (domain/live-architecture) derived the Cribl UI base from a configured leader URL for the local shell retired by ADR-0002; the cloud shell derives it from the embedding page's origin (App.tsx), so only its own test called it. sameDeletions (domain/onboarding-teardown) compared two whole teardown plans; applySourceTeardown instead re-reads and re-plans before EACH deletion and stops on a changed verdict, which is the stronger form of config-plane rule 3, so only its test called it. Both removed with their pins and index exports; packages/core and packages/ui CONTEXT.md updated. Every other unused-looking export in the range is used inside its own module and exported for tests."
+    },
+    {
+      "id": "DBT-316",
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "priority": "next",
+      "settled": "settled",
+      "dependsOn": [],
+      "title": "Teardown forgets an object it confirmed as already gone if it reappears before Apply",
+      "detail": "SUSPECTED 2026-11-25 by the review of DBT-315 (pre-existing since AZR-105). applySourceTeardown re-reads and re-plans only the steps it will DELETE. A step the confirmed plan marked already-gone is reported already-gone without a fresh read (onboarding-teardown.ts ~626-631), and recordsAfterTeardown drops its record. If the object was re-created in between (e.g. a concurrent re-onboard of the same source in another tab) and committed, the app forgets a live object it may own. Nothing is deleted, so the 'nothing goes without confirmation' rule holds; the cost is an orphaned record. FIX: re-check already-gone steps in apply (one GET each), and keep the record (with a 'reappeared - not removed' result) when the object exists again; pin it.",
+      "priorityWhy": "Not reproduced, and it never deletes anything: the worst case is a lost record of a live object, recoverable by re-onboarding. It needs the object re-created between the confirm and Apply, a narrow window."
+    },
+    {
       "id": "DBT-303",
       "epic": "DBT",
       "feature": "DBT-F1",

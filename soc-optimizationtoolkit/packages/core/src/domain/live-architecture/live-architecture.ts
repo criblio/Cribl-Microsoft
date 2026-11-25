@@ -165,25 +165,6 @@ const UI_PAGES = {
   packs: "/p",
 } as const;
 
-/**
- * The leader UI base for a configured leader URL: trims, strips trailing
- * slashes, and appends the /stream product prefix for Cribl.Cloud
- * workspaces (on-prem leaders serve the Stream UI at the root). Blank or
- * malformed input yields undefined - the caller simply keeps doc links.
- */
-export function criblUiBaseFromLeaderUrl(leaderUrl: string): string | undefined {
-  const trimmed = leaderUrl.trim().replace(/\/+$/, "");
-  if (trimmed === "") {
-    return undefined;
-  }
-  try {
-    const host = new URL(trimmed).hostname;
-    return host.endsWith(".cribl.cloud") ? `${trimmed}/stream` : trimmed;
-  } catch {
-    return undefined;
-  }
-}
-
 /** Replace the generic doc links with the node's own Cribl UI page. */
 function withResourceLink(
   info: DiagramNodeInfo,

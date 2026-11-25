@@ -581,13 +581,6 @@ export function teardownDeletions(steps: readonly TeardownStep[]): TeardownStep[
   return steps.filter((s) => s.verdict.kind === "delete");
 }
 
-/** Whether two plans would delete exactly the same objects in the same order. */
-export function sameDeletions(a: readonly TeardownStep[], b: readonly TeardownStep[]): boolean {
-  const x = teardownDeletions(a);
-  const y = teardownDeletions(b);
-  return x.length === y.length && x.every((s, i) => s.kind === y[i]?.kind && s.id === y[i]?.id);
-}
-
 /** An object as the confirm names it. */
 export function describeTeardownObject(step: Pick<TeardownStep, "kind" | "id">, groupId: string): string {
   switch (step.kind) {

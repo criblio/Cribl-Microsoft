@@ -10,7 +10,6 @@ import {
   BREAKER_CONFIGURABLE_INPUT_TYPES,
   buildLiveDiagram,
   classifyBreaker,
-  criblUiBaseFromLeaderUrl,
   installedPackIds,
   isAzureCriblType,
   isAzureInput,
@@ -1065,17 +1064,6 @@ describe("routing-table explode (2026-07-30)", () => {
 });
 
 describe("Cribl UI resource links (2026-07-29)", () => {
-  it("derives the UI base from a leader URL (cloud gets /stream)", () => {
-    expect(criblUiBaseFromLeaderUrl("https://main-acme.cribl.cloud")).toBe(
-      "https://main-acme.cribl.cloud/stream",
-    );
-    expect(criblUiBaseFromLeaderUrl("http://leader.internal:9000/")).toBe(
-      "http://leader.internal:9000",
-    );
-    expect(criblUiBaseFromLeaderUrl("  ")).toBeUndefined();
-    expect(criblUiBaseFromLeaderUrl("not a url")).toBeUndefined();
-  });
-
   it("with uiBase, every live node links to ITS page in the Cribl UI", () => {
     const base = "http://leader.internal:9000";
     const { diagram } = buildLiveDiagram(jobsSnapshot(), {
