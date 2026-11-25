@@ -2607,6 +2607,32 @@
       "priorityWhy": "Not silent: the operator is already told the filter cannot be checked, so nothing is trusted that should not be. Only the second reason is missing, and the typed case (the common one, since the app knows the type of every source it picks) already warns correctly."
     },
     {
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "next",
+      "id": "DBT-313",
+      "title": "Capture warning residuals after DBT-190: optional-bracket __e, sender equality, guard wording, fast-path comments",
+      "detail": "FOUND 2026-11-25 by the final re-review of the DBT-180/181/190 PR. All CONFIRMED by running them. (1) `__e?.['__inputId']` is not read as the field, so a correct filter gets 'does not mention __inputId ... EVERY source' (filter-structure.ts INPUT_ID_FIELD / eventMemberLength allow `?.` only before a name). (2) The sender fix covers only startsWith: `__inputId=='syslog:in_syslog:10.0.0.1'`, a literal list of senders and `!=` a sender still warn that another source may be captured. (3) `typeof __inputId === 'string' || <other source>` lets every source through but gets the weaker other-source wording; `typeof __inputId !== 'string'` captures nothing and gets the same (probably pre-existing). (4) The fast path runs namesInputIdField on raw text and the tree on comment-stripped code, so `__e /*x*/ .__inputId==...` gets the wrong wording (contrived). FIX each with a pin first.",
+      "priorityWhy": "None is silent about a mixed capture, which is what DBT-190 closed: each either over-warns or picks the weaker of two true warnings, so the operator is told to look at a filter that is fine or told less than they could be. The silent-empty-capture case DBT-308 outranks them."
+    },
+    {
+      "epic": "DBT",
+      "feature": "DBT-F1",
+      "type": "bug",
+      "status": "backlog",
+      "settled": "settled",
+      "dependsOn": [],
+      "priority": "next",
+      "id": "DBT-314",
+      "title": "Learned-mappings and column-order residuals after DBT-181: Clear during the initial load, column order's read note, chain robustness",
+      "detail": "FOUND 2026-11-25 by the final re-review of the DBT-180/181/190 PR. (1) CONFIRMED: a Clear while the initial learned-mappings load is in flight empties the store but the load then merges the stored decisions back on screen (mapping-review-hooks.ts ~156-162, ~220-238): screen shows and replays [OLD], store holds []. Pre-existing race, now under a 'one store call at a time' comment that does not cover it. (2) CONFIRMED: column order's successful remember does not clear the read note (use-vendor-column-order.ts ~208, clears is [remember, forget]), unlike learned mappings. (3) SUSPECTED, not reachable with KvContentCache: the learned chain links have no catch, so a synchronous throw from the cache or a load that never settles silently stops every later learn/clear. (4) SUSPECTED: switching solution A->B->A while A's write is in flight can hide this session's stored edit and let a new learn overwrite it, because the new chain does not wait for the old one. Also noted, harmless: in worker-group-listing.ts a screen-set group equal to the automatic pick yields to a late preferred group; Integrate's capture-group effect restores it after one render. FIX (1)-(4) with pins first.",
+      "priorityWhy": "(1) needs a Clear inside the first load's round trip after an Approve, which needs an analysis to exist first; (2) leaves a stale note while the order is in fact saved; (3) and (4) are not reachable with the shipped async adapter or need a solution switch mid-write. None writes defaults over read data, which is what DBT-181 closed."
+    },
+    {
       "id": "AZR-22",
       "epic": "AZR",
       "feature": "AZR-F9",
