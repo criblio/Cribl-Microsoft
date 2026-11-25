@@ -53,7 +53,7 @@ import {
   HIGH_CONFIDENCE_DISCRIMINATOR_COUNT,
 } from "../sample-parsing/discriminators";
 import type { FilterNode } from "./filter-structure";
-import { readFilterStructure } from "./filter-structure";
+import { readFilterStructure, structureNamesInputId } from "./filter-structure";
 import type { InputIdRef, InputIdTest } from "./input-id";
 import { inputIdValue, matchInputIdFilter, readInputIdTest } from "./input-id";
 
@@ -237,9 +237,10 @@ export function captureFilterWarning(
   if (filter.trim() === "") {
     return "An empty filter captures every event from every source in the worker group.";
   }
+  const absent = `This filter does not mention __inputId, so it captures from EVERY source in the worker group - not just "${inputId}". Add ${inputPredicate(inputId)} unless that is what you want.`;
   // Word-bounded: `my__inputId` is another name (DBT-190).
   if (!/(?<![\w$])__inputId(?![\w$])/.test(filter)) {
-    return `This filter does not mention __inputId, so it captures from EVERY source in the worker group - not just "${inputId}". Add ${inputPredicate(inputId)} unless that is what you want.`;
+    return absent;
   }
   const value = inputType === undefined ? undefined : inputIdValue({ type: inputType, id: inputId });
   const write =
@@ -250,6 +251,11 @@ export function captureFilterWarning(
   const tree = readFilterStructure(filter);
   if (tree === null) {
     return unchecked;
+  }
+  // The word alone is not the field: `e.__inputId`, `'__inputId'` and
+  // `/__inputId/` read something else (DBT-190 review).
+  if (!structureNamesInputId(tree)) {
+    return absent;
   }
   const facts: Facts = {
     namesSelf: false,
@@ -262,10 +268,10 @@ export function captureFilterWarning(
   };
   const ref: SelectedInput = { id: inputId, type: inputType };
   const r = reach(tree, ref, false, facts);
-  if (r.others === "no" && (r.self === "yes" || r.self === "maybe")) {
+  if (r.others === "none" && (r.self === "yes" || r.self === "maybe")) {
     return null;
   }
-  const mixed = r.others !== "no";
+  const mixed = r.others !== "none";
   if (facts.negatesSelf) {
     return `This filter negates its __inputId test for "${inputId}", so it captures from other sources rather than only this one. ${write} without the negation.`;
   }
@@ -309,13 +315,40 @@ type Pass = "no" | "legacy" | "maybe" | "yes";
 
 const RANK: Readonly<Record<Pass, number>> = { no: 0, legacy: 1, maybe: 2, yes: 3 };
 
-/** Whether events from the selected source, and from any other, can pass. */
-interface Reach {
-  self: Pass;
-  others: Pass;
+/**
+ * How many OTHER sources' events can pass. Not a {@link Pass}, because the
+ * other sources are many and `!` has to know which claim it is negating
+ * (DBT-190 review): a test naming one other source lets SOME others through,
+ * and its negation lets the rest through - not none. Folding that as `yes`
+ * made `!(__inputId=='<another source>')` silent while it captured every
+ * other source.
+ *   none    - certainly no other source's events;
+ *   all     - certainly every other source's events;
+ *   partial - anything in between, or not known.
+ */
+type Others = "none" | "partial" | "all";
+
+function negateOthers(o: Others): Others {
+  return o === "none" ? "all" : o === "all" ? "none" : "partial";
 }
 
-const ANYTHING: Reach = { self: "maybe", others: "maybe" };
+/** `&&` of two answers: none wins, all is the identity. */
+function andOthers(a: Others, b: Others): Others {
+  return a === "none" || b === "none" ? "none" : a === "all" ? b : b === "all" ? a : "partial";
+}
+
+/** `||` of two answers: all wins, none is the identity. */
+function orOthers(a: Others, b: Others): Others {
+  return a === "all" || b === "all" ? "all" : a === "none" ? b : b === "none" ? a : "partial";
+}
+
+/** Whether events from the selected source, and from the others, can pass. */
+interface Reach {
+  self: Pass;
+  others: Others;
+}
+
+const ANYTHING: Reach = { self: "maybe", others: "partial" };
 
 /** What the fold saw on the way, so the warning can say WHY. */
 interface Facts {
@@ -347,7 +380,7 @@ function pick(a: Pass, b: Pass, higher: boolean): Pass {
 function combine(parts: readonly Reach[], higher: boolean): Reach {
   return parts.reduce((acc, r) => ({
     self: pick(acc.self, r.self, higher),
-    others: pick(acc.others, r.others, higher),
+    others: (higher ? orOthers : andOthers)(acc.others, r.others),
   }));
 }
 
@@ -369,7 +402,7 @@ function reach(node: FilterNode, ref: SelectedInput, negated: boolean, facts: Fa
       );
     case "not": {
       const r = reach(node.item, ref, !negated, facts);
-      return { self: negate(r.self), others: negate(r.others) };
+      return { self: negate(r.self), others: negateOthers(r.others) };
     }
     case "operand": {
       if (!node.namesInputId) {
@@ -401,7 +434,7 @@ function testReach(test: InputIdTest, ref: SelectedInput, negated: boolean, fact
   if (!polarity) {
     facts.otherNames.push(...named);
   }
-  return own ? { self: negate(r.self), others: negate(r.others) } : r;
+  return own ? { self: negate(r.self), others: negateOthers(r.others) } : r;
 }
 
 /**
@@ -418,7 +451,7 @@ function positiveReach(
 ): Reach {
   const other = (name: string): Reach => {
     named.push(name);
-    return { self: "no", others: "yes" };
+    return { self: "no", others: "partial" };
   };
   const unknown = (): Reach => {
     facts.typeUnknown = true;
@@ -426,9 +459,9 @@ function positiveReach(
   };
   switch (test.kind) {
     case "guard":
-      return test.holds ? { self: "yes", others: "yes" } : { self: "no", others: "no" };
+      return test.holds ? { self: "yes", others: "all" } : { self: "no", others: "none" };
     case "segment":
-      return test.id === ref.id ? { self: "yes", others: "no" } : other(test.id);
+      return test.id === ref.id ? { self: "yes", others: "none" } : other(test.id);
     case "suffix": {
       const takes =
         ref.type === undefined
@@ -443,7 +476,7 @@ function positiveReach(
         return other(test.value);
       }
       facts.suffix ||= !polarity;
-      return { self: "yes", others: "yes" };
+      return { self: "yes", others: "partial" };
     }
     case "clause": {
       const clause = test.clause;
@@ -452,21 +485,21 @@ function positiveReach(
         return combine(
           clause.ids.map((v) => {
             if (v === ref.id) {
-              return { self: "legacy", others: "no" };
+              return { self: "legacy", others: "none" };
             }
             if (ref.type === undefined) {
               return v.split(":")[1] === ref.id ? unknown() : other(v);
             }
             return matchInputIdFilter({ kind: "inputs", ids: [v] }, { type: ref.type, id: ref.id }) ===
               "match"
-              ? { self: "yes", others: "no" }
+              ? { self: "yes", others: "none" }
               : other(v);
           }),
           true,
         );
       }
       if (clause.kind === "all") {
-        return { self: "yes", others: "yes" };
+        return { self: "yes", others: "all" };
       }
       if (ref.type === undefined) {
         return unknown();
@@ -474,16 +507,16 @@ function positiveReach(
       const typed: InputIdRef = { type: ref.type, id: ref.id };
       const how = matchInputIdFilter(clause, typed);
       if (how === "legacy") {
-        return { self: "legacy", others: "no" };
+        return { self: "legacy", others: "none" };
       }
       if (how === "none") {
         return other(clause.value);
       }
       if (clause.value.startsWith(`${inputIdValue(typed)}:`)) {
-        return { self: "yes", others: "no" };
+        return { self: "yes", others: "none" };
       }
       facts.broad ||= !polarity;
-      return { self: "yes", others: "yes" };
+      return { self: "yes", others: "partial" };
     }
   }
 }

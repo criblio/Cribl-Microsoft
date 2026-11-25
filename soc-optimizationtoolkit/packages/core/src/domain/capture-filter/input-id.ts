@@ -10,7 +10,8 @@
  * captureFilterWarning) asks here too, and this file owns the `__inputId`
  * clause grammar all three read with: parseInputIdClause for a whole route
  * filter (live-architecture parseRouteFilterInputs wraps it) and
- * findInputIdClauses for clauses inside a larger capture filter.
+ * readInputIdTest for each operand filter-structure.ts splits a capture
+ * filter into (DBT-190).
  *
  * THE VALUE IS `<type>:<id>`, optionally followed by further `:` segments
  * (syslog adds the sender). capture-filter.ts inputPredicate records that as
@@ -156,7 +157,13 @@ const LITERAL = String.raw`(?<q>['"\x60])(?<body>(?:\\[\s\S]|(?!\k<q>)[^\\])*)\k
  */
 const EQUALITY = String.raw`__inputId\s*===?\s*${LITERAL}`;
 const EQUALITY_REVERSED = String.raw`${LITERAL}\s*===?\s*__inputId`;
-const LIST = String.raw`\[(?<list>[^\]]+)\]\.includes\(\s*__inputId\s*\)`;
+/**
+ * A list holds ONLY literals (DBT-190 review). It was `[^\]]+` and listIds
+ * kept just the literals in it, so `['<this source>', other]` read as naming
+ * this source alone, and an id holding `]` was not read at all.
+ */
+const LIST_ITEM = String.raw`(?:'(?:\\[\s\S]|[^'\\])*'|"(?:\\[\s\S]|[^"\\])*"|\x60(?:\\[\s\S]|[^\x60\\])*\x60)`;
+const LIST = String.raw`\[\s*(?<list>${LIST_ITEM}(?:\s*,\s*${LIST_ITEM})*)\s*,?\s*\]\.includes\(\s*__inputId\s*\)`;
 const PREFIX = String.raw`__inputId\.startsWith\(\s*${LITERAL}\s*\)`;
 
 /**

@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { readFilterStructure } from "./filter-structure";
+import { readFilterStructure, structureNamesInputId } from "./filter-structure";
 
 const op = (text: string, namesInputId = false) => ({ kind: "operand", text, namesInputId });
 
@@ -54,6 +54,38 @@ describe("readFilterStructure", () => {
       kind: "and",
       items: [op("x"), op("a ? b : c")],
     });
+  });
+
+  it("drops comments, so an operator inside one is not read (DBT-190 review)", () => {
+    expect(readFilterStructure("a /* || b */ && c // || d")).toEqual({
+      kind: "and",
+      items: [op("a"), op("c")],
+    });
+    // A quote inside a comment no longer opens a string that hides a real ||.
+    expect(readFilterStructure("a /* don't */ || b")).toEqual({ kind: "or", items: [op("a"), op("b")] });
+  });
+
+  it("scans template substitutions as code (DBT-190 review)", () => {
+    expect(readFilterStructure("f(`${'`'}`) || b")).toEqual({
+      kind: "or",
+      items: [op("f(`${'`'}`)"), op("b")],
+    });
+    expect(readFilterStructure("`${`a`}||b` && c")).toEqual({
+      kind: "and",
+      items: [op("`${`a`}||b`"), op("c")],
+    });
+    // __inputId read in a substitution marks the operand; as literal text it does not.
+    expect(readFilterStructure("`${__inputId}` == 'x'")).toEqual(op("`${__inputId}` == 'x'", true));
+    expect(readFilterStructure("`__inputId` == 'x'")).toEqual(op("`__inputId` == 'x'"));
+  });
+
+  it("names the field only as a name (structureNamesInputId)", () => {
+    for (const filter of ["e.__inputId == 'x'", "_raw.includes('__inputId')", "/__inputId/.test(_raw)", "a /* __inputId */"]) {
+      const tree = readFilterStructure(filter);
+      expect(tree === null ? null : structureNamesInputId(tree)).toBe(false);
+    }
+    const tree = readFilterStructure("a && !(b || __inputId == 'x')");
+    expect(tree === null ? null : structureNamesInputId(tree)).toBe(true);
   });
 
   it("tolerates an unclosed group as one opaque operand", () => {

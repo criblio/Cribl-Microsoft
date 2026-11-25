@@ -126,6 +126,18 @@ describe("parseInputIdClause / readInputIdTest", () => {
     expect(parseInputIdClause("__inputId==`syslog:${x}`")).toBeNull();
   });
 
+  it("reads an includes list only when it holds nothing but literals (DBT-190 review)", () => {
+    // The list grammar kept the literals of `[...]` and dropped the rest, so a
+    // list with a variable in it read as naming the literals alone.
+    expect(parseInputIdClause("['syslog:a', other].includes(__inputId)")).toBeNull();
+    expect(parseInputIdClause("['syslog:a', ...more].includes(__inputId)")).toBeNull();
+    expect(parseInputIdClause("[].includes(__inputId)")).toBeNull();
+    expect(parseInputIdClause("['syslog:a]b', 'c',].includes(__inputId)")).toEqual({
+      kind: "inputs",
+      ids: ["syslog:a]b", "c"],
+    });
+  });
+
   it("does not read a mismatched quote or an inequality as a clause", () => {
     expect(parseInputIdClause("__inputId=='a\"")).toBeNull();
     expect(parseInputIdClause("__inputId!='a'")).toBeNull();

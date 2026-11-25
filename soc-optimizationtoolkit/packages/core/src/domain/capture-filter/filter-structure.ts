@@ -8,10 +8,12 @@
  * as the plain clause - silent, while the capture took a mixture.
  *
  * NOT A JAVASCRIPT PARSER, and it does not evaluate anything. It tokenizes
- * just enough - string, template and regex literals, brackets, identifiers -
- * that a `||` inside `/a||b/` or `') || ('` is not read as an operator, then
- * splits on the three boolean operators by precedence. Anything else is an
- * operand it leaves whole.
+ * just enough - string, template and regex literals, comments, brackets,
+ * identifiers - that a `||` inside `/a||b/`, `') || ('` or a comment is not
+ * read as an operator, then splits on the three boolean operators by
+ * precedence. Anything else is an operand it leaves whole. A template whose
+ * `${}` reads `__inputId` marks its operand as naming the field, so the
+ * warning says it could not check it rather than that it is absent.
  *
  * WHEN IT CANNOT TELL, IT SAYS SO (null) rather than guess. A ternary, `??`,
  * comma or assignment binds LOOSER than `||`, so a filter using one outside
@@ -40,7 +42,15 @@ interface Token {
   text: string;
   start: number;
   end: number;
+  /**
+   * A template literal whose `${}` substitution mentions `__inputId`: the
+   * field is read there, in a form nothing here decodes (DBT-190 review).
+   */
+  substitutesInputId?: boolean;
 }
+
+/** `__inputId` as a name: not part of a longer one, not a property. */
+const INPUT_ID_NAME = /(?<![\w$.])__inputId(?![\w$])/;
 
 /** Longest first, so `===` is not read as `==` then `=`. */
 const PUNCTUATORS = [
@@ -69,6 +79,58 @@ function scanQuoted(text: string, start: number): number {
     i += text[i] === "\\" ? 2 : 1;
   }
   return Math.min(i + 1, text.length);
+}
+
+/** The end of a comment starting at `start` (`//` to the line end, or `/* *\/`). */
+function scanComment(text: string, start: number): number {
+  if (text[start + 1] === "/") {
+    const newline = text.indexOf("\n", start);
+    return newline === -1 ? text.length : newline;
+  }
+  const close = text.indexOf("*/", start + 2);
+  return close === -1 ? text.length : close + 2;
+}
+
+/**
+ * The end of a template literal starting at `start`, and whether a `${}`
+ * substitution in it mentions `__inputId`. A substitution is code: its
+ * strings, nested templates and comments are scanned so a quote or backtick
+ * inside one does not end the template early (DBT-190 review: `${'`'}` ended
+ * it, and the quote after swallowed a real `||`).
+ */
+function scanTemplate(text: string, start: number): { end: number; substitutesInputId: boolean } {
+  let i = start + 1;
+  let substitutesInputId = false;
+  while (i < text.length && text[i] !== "`") {
+    if (text[i] === "\\") {
+      i += 2;
+      continue;
+    }
+    if (text[i] !== "$" || text[i + 1] !== "{") {
+      i += 1;
+      continue;
+    }
+    const open = i + 2;
+    let depth = 1;
+    i = open;
+    while (i < text.length && depth > 0) {
+      const c = text[i];
+      if (c === "'" || c === '"') {
+        i = scanQuoted(text, i);
+      } else if (c === "`") {
+        const inner = scanTemplate(text, i);
+        substitutesInputId ||= inner.substitutesInputId;
+        i = inner.end;
+      } else if (c === "/" && (text[i + 1] === "/" || text[i + 1] === "*")) {
+        i = scanComment(text, i);
+      } else {
+        depth += c === "{" ? 1 : c === "}" ? -1 : 0;
+        i += 1;
+      }
+    }
+    substitutesInputId ||= INPUT_ID_NAME.test(text.slice(open, i - 1));
+  }
+  return { end: Math.min(i + 1, text.length), substitutesInputId };
 }
 
 /** The end of a regex literal starting at `start`, flags included. */
@@ -118,9 +180,21 @@ function tokenize(text: string): Token[] {
     }
     const start = i;
     let kind: Token["kind"];
-    if (c === "'" || c === '"' || c === "`") {
+    let substitutesInputId = false;
+    if (c === "/" && (text[i + 1] === "/" || text[i + 1] === "*")) {
+      // A comment, never a regex (one cannot start with `/` or `*`), and not
+      // code: an operator inside it is not one (DBT-190 review).
+      i = scanComment(text, i);
+      continue;
+    }
+    if (c === "'" || c === '"') {
       kind = "string";
       i = scanQuoted(text, i);
+    } else if (c === "`") {
+      kind = "string";
+      const template = scanTemplate(text, i);
+      i = template.end;
+      substitutesInputId = template.substitutesInputId;
     } else if (c === "/" && regexMayStart(tokens[tokens.length - 1])) {
       kind = "regex";
       i = scanRegex(text, i);
@@ -139,7 +213,7 @@ function tokenize(text: string): Token[] {
       const multi = PUNCTUATORS.find((p) => text.startsWith(p, i));
       i += multi?.length ?? 1;
     }
-    tokens.push({ kind, text: text.slice(start, i), start, end: i });
+    tokens.push({ kind, text: text.slice(start, i), start, end: i, substitutesInputId });
   }
   return tokens;
 }
@@ -283,6 +357,7 @@ class Parser {
       if (this.tokens[i].text === "__inputId" && previous !== "." && previous !== "?.") {
         namesInputId = true;
       }
+      namesInputId ||= this.tokens[i].substitutesInputId === true;
     }
     const text = this.source.slice(this.tokens[start].start, this.tokens[this.pos - 1].end);
     return { node: { kind: "operand", text, namesInputId }, loose, binary };
@@ -306,6 +381,22 @@ class Parser {
       }
     }
     return -1;
+  }
+}
+
+/**
+ * Does any operand name the `__inputId` FIELD? A property (`e.__inputId`), a
+ * longer name, or the word inside a string, regex or comment does not.
+ */
+export function structureNamesInputId(node: FilterNode): boolean {
+  switch (node.kind) {
+    case "and":
+    case "or":
+      return node.items.some(structureNamesInputId);
+    case "not":
+      return structureNamesInputId(node.item);
+    case "operand":
+      return node.namesInputId;
   }
 }
 
