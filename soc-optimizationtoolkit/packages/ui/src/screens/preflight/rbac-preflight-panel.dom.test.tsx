@@ -85,6 +85,10 @@ describe("RbacPreflightPanel - a refused capability-audit write (DBT-181)", () =
     const text = unsaved()[0].textContent ?? "";
     expect(text).toContain("KV write refused (403)");
     expect(text).toMatch(/could not be saved/);
+    // The note renders ABOVE the two sides, so it must not point "above" at
+    // them (DBT-181 review B1).
+    expect(text).toMatch(/This check's results stand/);
+    expect(text).not.toMatch(/above/);
     // The report itself still rendered: the write never blocks it.
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
   });

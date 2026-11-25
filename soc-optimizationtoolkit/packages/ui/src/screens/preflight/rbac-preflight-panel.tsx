@@ -366,9 +366,9 @@ export function RbacPreflightPanel({
       </p>
       {auditSaveError !== "" && (
         <p className="field-hint preflight-audit-unsaved" role="status">
-          This check's record could not be saved ({auditSaveError}). The results
-          above stand, but the app will not remember them and may measure
-          again at next launch.
+          This check's record could not be saved ({auditSaveError}). This
+          check's results stand, but the app will not remember them and may
+          measure again at next launch.
         </p>
       )}
 

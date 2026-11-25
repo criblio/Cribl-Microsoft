@@ -87,6 +87,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openWhen } from "../../components/open-when";
+import { useStoreRefusal } from "../../components/use-store-refusal";
 import {
   DEFAULT_OPERATION_OPTIONS,
   artifactsToOffer,
@@ -595,14 +596,12 @@ export function IntegrateScreen({
   // A REFUSED selection store is said, not swallowed (DBT-181). Since DBT-145 a
   // refused KV call throws: a refused restore READ looked like no selection
   // ever made, and a refused WRITE lost the selection across the next reload
-  // with nothing said. Only the LATEST write's answer counts (the generation),
-  // so an older pick refused late claims nothing about the one now shown.
+  // with nothing said. Only the LATEST write's answer counts, so an older pick
+  // refused late claims nothing about the one now shown, and the latest
+  // success takes the note down (useStoreRefusal "latest").
   const [selectionReadError, setSelectionReadError] = useState("");
-  const [selectionWriteError, setSelectionWriteError] = useState<{
-    action: "save" | "clear";
-    reason: string;
-  } | null>(null);
-  const selectionWriteGenRef = useRef(0);
+  const { refusal: selectionWriteError, track: trackSelectionWrite } =
+    useStoreRefusal<"save" | "clear">("latest");
 
   // ---- Sample Data section (Unit 11) ------------------------------------
   // The section owns its own store IO and reports the tagged-sample count so
@@ -799,19 +798,9 @@ export function IntegrateScreen({
       // (DBT-181), for the latest write only.
       const cache = ports.contentCache;
       if (cache !== undefined) {
-        selectionWriteGenRef.current += 1;
-        const gen = selectionWriteGenRef.current;
-        void cache.set(SELECTED_SOLUTION_KEY, nextName ?? "").then(
-          () => {
-            if (gen === selectionWriteGenRef.current) setSelectionWriteError(null);
-          },
-          (err: unknown) => {
-            if (gen !== selectionWriteGenRef.current) return;
-            setSelectionWriteError({
-              action: nextName === null ? "clear" : "save",
-              reason: String(err),
-            });
-          },
+        void trackSelectionWrite(
+          cache.set(SELECTED_SOLUTION_KEY, nextName ?? ""),
+          nextName === null ? "clear" : "save",
         );
       }
       if (prevName === null || prevName === nextName) {
@@ -829,7 +818,7 @@ export function IntegrateScreen({
         setContentResetKey((k) => k + 1);
       })();
     },
-    [ports.samples, ports.contentCache],
+    [ports.samples, ports.contentCache, trackSelectionWrite],
   );
 
   /**

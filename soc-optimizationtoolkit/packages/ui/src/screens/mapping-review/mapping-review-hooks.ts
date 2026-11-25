@@ -22,6 +22,7 @@ import {
 import type { ContentCache, GapReport, LearnedMapping } from "@soc/core";
 import { mergeEnrichments } from "../pipeline-preview/pipeline-preview-state";
 import type { EnrichmentField } from "../pipeline-preview/pipeline-preview-state";
+import { useStoreRefusal } from "../../components/use-store-refusal";
 
 /** The subset of the review store the learned differ needs per report. */
 export type EffectiveMappingsOf = (report: GapReport) => ReadonlyArray<{
@@ -52,7 +53,9 @@ export function describeLearnedRefusal(refusal: LearnedRefusal): string {
         `Learned decisions for this solution could not be read ` +
         `(${refusal.reason}), so none are being replayed. Approving still ` +
         "applies your edits; they are saved only once the stored decisions " +
-        "can be read, so none are overwritten."
+        "can be read, so none are overwritten. Until then, Clear learned " +
+        "mappings clears only this session's edits and leaves the store " +
+        "untouched."
       );
     case "learn":
       return (
@@ -82,11 +85,21 @@ export function describeLearnedRefusal(refusal: LearnedRefusal): string {
  * the section to say, and only while the solution it was asked under is still
  * the current one, so a late answer from the last solution claims nothing.
  *
- * AN UNREAD STORE IS NOT WRITTEN OVER. After a refused load `learned` is empty
- * while the store may hold decisions, so writing merge([], fresh) would
- * replace them with only this Approve's edits. A learn after a refused load
- * re-reads first and merges over what it finds; still refused, it writes
- * nothing and says the edits were not saved.
+ * AN UNREAD STORE IS NOT WRITTEN OVER. Until the load answers - and for good
+ * after it is refused - `learned` holds only this session's edits while the
+ * store may hold decisions, so writing it would replace them. So:
+ *  - a learn waits for the load; after a refused load it re-reads first and
+ *    writes stored + every local edit (earlier unsaved ones included); still
+ *    refused, it writes nothing and says the edits were not saved;
+ *  - a Clear while the store is unread clears only this session's edits and
+ *    writes nothing (the read note says so).
+ *
+ * ONE STORE CALL AT A TIME. Every learn and clear runs on one promise chain
+ * that starts with the load, so two Approves can never read the same old
+ * value and race their writes. Which answer still counts, and when a note
+ * goes away, is useStoreRefusal's "scope" rule: a write's success clears its
+ * own kind of note (a learn also clears the read note it has now answered; a
+ * clear also clears an unsaved-learn note, whose edits it discarded).
  */
 export function useLearnedMappings(
   learnedCache: ContentCache | undefined,
@@ -100,49 +113,65 @@ export function useLearnedMappings(
   /** Forget every learned decision for this solution (store + state). */
   clearLearned: () => void;
   /**
-   * The last call the store REFUSED for this solution, or null while none has
-   * (DBT-181). Reset when the solution changes. Describe it with
-   * {@link describeLearnedRefusal}.
+   * The last call the store REFUSED for this solution, or null while none
+   * stands (DBT-181). Reset when the solution changes; a later success of the
+   * same kind clears it. Describe it with {@link describeLearnedRefusal}.
    */
   storeRefused: LearnedRefusal | null;
 } {
   const [learned, setLearned] = useState<LearnedMapping[]>([]);
-  const [storeRefused, setStoreRefused] = useState<LearnedRefusal | null>(null);
-  // The scope a write's late answer must still belong to: replaced whenever
-  // the solution (or store) changes, so a refusal from the last one is dropped.
-  const scopeRef = useRef<object>({});
-  // True while this scope's stored decisions are unknown (the load was
-  // refused): a learn must then read before it writes.
-  const unreadRef = useRef(false);
+  const {
+    refusal: storeRefused,
+    track,
+    refuse,
+    setRefusal,
+    reset,
+    pin,
+  } = useStoreRefusal<LearnedRefusal["action"]>("scope");
+  // The learned set as of now, for work queued on the chain (a closure would
+  // see the render it was made in).
+  const learnedRef = useRef<LearnedMapping[]>([]);
+  const apply = useCallback((next: LearnedMapping[]) => {
+    learnedRef.current = next;
+    setLearned(next);
+  }, []);
+  // True until the load answers, and for good after it is refused: the
+  // store's decisions are unknown, so nothing may be written over them.
+  const unreadRef = useRef(true);
+  // The load's refusal, so a local-only Clear can put the read note back.
+  const readReasonRef = useRef("");
+  // Every store call of this scope, in order, starting with the load.
+  const chainRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     let cancelled = false;
-    scopeRef.current = {};
-    unreadRef.current = false;
-    setLearned([]);
-    setStoreRefused(null);
+    reset();
+    unreadRef.current = true;
+    readReasonRef.current = "";
+    apply([]);
     if (learnedCache === undefined || solutionName === "") {
+      chainRef.current = Promise.resolve();
       return;
     }
-    void (async () => {
+    chainRef.current = (async () => {
       try {
         const raw = await learnedCache.get(learnedMappingsCacheKey(solutionName));
-        if (!cancelled) {
-          setLearned(parseLearnedMappings(raw));
-        }
+        if (cancelled) return;
+        unreadRef.current = false;
+        // Edits approved while the load was in flight win over what it read.
+        apply(mergeLearnedMappings(parseLearnedMappings(raw), learnedRef.current));
       } catch (err) {
         // A failed load only disables replay for this session - and is SAID
         // (DBT-181): stored decisions may exist that are not replaying.
-        if (!cancelled) {
-          unreadRef.current = true;
-          setStoreRefused({ action: "read", reason: String(err) });
-        }
+        if (cancelled) return;
+        readReasonRef.current = String(err);
+        refuse("read", err);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [learnedCache, solutionName]);
+  }, [learnedCache, solutionName, reset, refuse, apply]);
 
   const persistLearned = useCallback(
     (toLearn: readonly GapReport[], effectiveOf: EffectiveMappingsOf) => {
@@ -162,61 +191,52 @@ export function useLearnedMappings(
       if (fresh.length === 0) {
         return;
       }
+      // The edits apply now, whatever the store answers.
+      apply(mergeLearnedMappings(learnedRef.current, fresh));
       const key = learnedMappingsCacheKey(solutionName);
-      const scope = scopeRef.current;
-      const refuseLearn = (err: unknown) => {
-        if (scopeRef.current !== scope) return;
-        setStoreRefused({ action: "learn", reason: String(err) });
-      };
-      if (!unreadRef.current) {
-        const merged = mergeLearnedMappings(learned, fresh);
-        setLearned(merged);
-        void learnedCache.set(key, merged).catch(refuseLearn);
-        return;
-      }
-      // The load was refused: the edits apply now either way, but the store
-      // is written only over what it holds (see AN UNREAD STORE above).
-      setLearned((current) => mergeLearnedMappings(current, fresh));
-      void (async () => {
-        let stored: LearnedMapping[];
-        try {
-          stored = parseLearnedMappings(await learnedCache.get(key));
-        } catch (err) {
-          refuseLearn(err);
-          return;
+      const isCurrent = pin();
+      chainRef.current = chainRef.current.then(async () => {
+        if (!isCurrent()) return;
+        if (unreadRef.current) {
+          // See AN UNREAD STORE above: read before writing over it.
+          let stored: LearnedMapping[];
+          try {
+            stored = parseLearnedMappings(await learnedCache.get(key));
+          } catch (err) {
+            if (isCurrent()) refuse("learn", err);
+            return;
+          }
+          if (!isCurrent()) return;
+          unreadRef.current = false;
+          // Stored, then every local edit - earlier unsaved ones included.
+          apply(mergeLearnedMappings(stored, learnedRef.current));
         }
-        if (scopeRef.current !== scope) return;
-        unreadRef.current = false;
-        const merged = mergeLearnedMappings(stored, fresh);
-        setLearned(merged);
-        setStoreRefused(null);
-        try {
-          await learnedCache.set(key, merged);
-        } catch (err) {
-          refuseLearn(err);
-        }
-      })();
+        await track(learnedCache.set(key, learnedRef.current), "learn", ["learn", "read"]);
+      });
     },
-    [learnedCache, solutionName, learned],
+    [learnedCache, solutionName, apply, pin, refuse, track],
   );
 
   const clearLearned = useCallback(() => {
-    setLearned([]);
+    apply([]);
     if (learnedCache === undefined || solutionName === "") {
       return;
     }
-    const scope = scopeRef.current;
-    void learnedCache.set(learnedMappingsCacheKey(solutionName), []).then(
-      () => {
-        // Cleared: whatever was stored is now known to be nothing.
-        if (scopeRef.current === scope) unreadRef.current = false;
-      },
-      (err: unknown) => {
-        if (scopeRef.current !== scope) return;
-        setStoreRefused({ action: "forget", reason: String(err) });
-      },
-    );
-  }, [learnedCache, solutionName]);
+    const key = learnedMappingsCacheKey(solutionName);
+    const isCurrent = pin();
+    chainRef.current = chainRef.current.then(async () => {
+      if (!isCurrent()) return;
+      if (unreadRef.current) {
+        // Unread decisions are not erased: only this session's edits went,
+        // and with them any unsaved-learn note. The read note stands.
+        if (readReasonRef.current !== "") {
+          setRefusal({ action: "read", reason: readReasonRef.current });
+        }
+        return;
+      }
+      await track(learnedCache.set(key, []), "forget", ["forget", "learn"]);
+    });
+  }, [learnedCache, solutionName, apply, pin, setRefusal, track]);
 
   return { learned, persistLearned, clearLearned, storeRefused };
 }

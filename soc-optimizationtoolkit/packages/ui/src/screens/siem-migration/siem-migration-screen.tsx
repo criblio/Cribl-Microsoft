@@ -52,6 +52,7 @@ import type {
 import { usePorts } from "../../ports-context";
 import { buildSolutionDeepLink } from "../solution-browser/browser-state";
 import { InfoTip } from "../../components/info-tip";
+import { useStoreRefusal } from "../../components/use-store-refusal";
 import {
   SIEM_MIGRATION_PLAN_KEY,
   confidenceTone,
@@ -86,11 +87,10 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
   // The latest plan-cache WRITE the store refused, null while none has
   // (DBT-181): a refused save loses the bounce-back restore, a refused clear
   // leaves the old analysis to come back.
-  const [planWriteError, setPlanWriteError] = useState<{
-    action: "save" | "clear";
-    reason: string;
-  } | null>(null);
-  const persistGenRef = useRef(0);
+  // Only the latest write's answer counts, and its success takes the note
+  // down (useStoreRefusal "latest", shared with Integrate's selection).
+  const { refusal: planWriteError, track: trackPlanWrite } =
+    useStoreRefusal<"save" | "clear">("latest");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // LAZY per-solution rule enrichment (the 2026-07-14 stall fix: eager
@@ -146,28 +146,12 @@ export function SiemMigrationScreen({ onOpenIntegration }: SiemMigrationScreenPr
   const persist = useCallback(
     (next: MigrationPlan | null): Promise<boolean> => {
       if (cache === undefined) return Promise.resolve(true);
-      persistGenRef.current += 1;
-      const gen = persistGenRef.current;
-      return cache
-        .set(SIEM_MIGRATION_PLAN_KEY, next === null ? "" : serializeMigrationPlan(next))
-        .then(
-          () => {
-            if (gen !== persistGenRef.current) return false;
-            setPlanWriteError(null);
-            return true;
-          },
-          (err: unknown) => {
-            if (gen === persistGenRef.current) {
-              setPlanWriteError({
-                action: next === null ? "clear" : "save",
-                reason: String(err),
-              });
-            }
-            return false;
-          },
-        );
+      return trackPlanWrite(
+        cache.set(SIEM_MIGRATION_PLAN_KEY, next === null ? "" : serializeMigrationPlan(next)),
+        next === null ? "clear" : "save",
+      );
     },
-    [cache],
+    [cache, trackPlanWrite],
   );
 
   const analyze = useCallback(

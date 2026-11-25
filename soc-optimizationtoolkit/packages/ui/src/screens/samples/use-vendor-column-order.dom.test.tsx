@@ -417,4 +417,31 @@ describe("useVendorColumnOrder - a late refusal after a scope change (DBT-181)",
       reason: "Error: KV write refused (403)",
     });
   });
+
+  // DBT-181 review (A5): a note describes the store as it is NOW, so the next
+  // successful write of the same slot takes it down, as on Integrate and SIEM.
+  for (const call of ["remember", "forget"] as const) {
+    it(`a later successful ${call} clears the refusal`, async () => {
+      const inner = new FakeContentCache();
+      let refuse = true;
+      const cache = {
+        get: async (key: string) => inner.get(key),
+        set: async (key: string, value: unknown) => {
+          if (refuse) throw new Error("KV write refused (403)");
+          await inner.set(key, value);
+        },
+      } as unknown as ContentCache;
+      const { seen } = mountMovable(cache, "TRAFFIC");
+      await waitFor(() => expect(seen.current?.loading).toBe(false));
+      const ask = () => {
+        if (call === "remember") seen.current?.remember(operatorTraffic());
+        else seen.current?.forget();
+      };
+      act(ask);
+      await waitFor(() => expect(seen.current?.storeRefused?.action).toBe(call));
+      refuse = false;
+      act(ask);
+      await waitFor(() => expect(seen.current?.storeRefused).toBeNull());
+    });
+  }
 });
